@@ -12,10 +12,12 @@
 		"aspect_ratio": 1.77778,
 		"fov": 90.0,
 		"ipd": 0.065,
+		"convergence": 1.0,
 		"tab_enable": false,
 		"half_enable": true,
-		"super_sample": false,
+		"ss_enable": false,
 		"hdr_enable": false,
+		"ss_scale": 1.0,
 		"display_latency": 0.011,
 		"display_frequency": 60.0
 	}

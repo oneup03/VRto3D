@@ -17,7 +17,7 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 	my_hmd_device_ = std::make_unique< MockControllerDeviceDriver >();
 
 	// TrackedDeviceAdded returning true means we have had our device added to SteamVR.
-	if ( !vr::VRServerDriverHost()->TrackedDeviceAdded( my_hmd_device_->MyGetSerialNumber().c_str(), vr::TrackedDeviceClass_HMD, my_hmd_device_.get() ) )
+	if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3D-1234", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
 	{
 		DriverLog( "Failed to create hmd device!" );
 		return vr::VRInitError_Driver_Unknown;
@@ -50,15 +50,6 @@ bool MyDeviceProvider::ShouldBlockStandbyMode()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::RunFrame()
 {
-	//Now, process events that were submitted for this frame.
-	vr::VREvent_t vrevent{};
-	while ( vr::VRServerDriverHost()->PollNextEvent( &vrevent, sizeof( vr::VREvent_t ) ) )
-	{
-		if ( my_hmd_device_ != nullptr )
-		{
-			my_hmd_device_->MyProcessEvent( vrevent );
-		}
-	}
 }
 
 //-----------------------------------------------------------------------------

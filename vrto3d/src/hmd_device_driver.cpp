@@ -35,12 +35,14 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.aspect_ratio = vr::VRSettings()->GetFloat(stereo_display_settings_section, "aspect_ratio");
 	display_configuration.fov = vr::VRSettings()->GetFloat(stereo_display_settings_section, "fov");
 	display_configuration.ipd = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ipd");
+	display_configuration.convergence = vr::VRSettings()->GetFloat(stereo_display_settings_section, "convergence");
 
 	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
 	display_configuration.half_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "half_enable");
-	display_configuration.super_sample = vr::VRSettings()->GetBool(stereo_display_settings_section, "super_sample");
+	display_configuration.ss_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ss_enable");
 	display_configuration.hdr_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "hdr_enable");
 
+	display_configuration.ss_scale = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ss_scale");
 	display_configuration.display_latency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_latency");
 	display_configuration.display_frequency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_frequency");
 
@@ -61,8 +63,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: This is called by vrserver after our
-//  IServerTrackedDeviceProvider calls IVRServerDriverHost::TrackedDeviceAdded.
+// Purpose: Initialize all settings and notify SteamVR
 //-----------------------------------------------------------------------------
 vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 {
@@ -84,12 +85,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_.get()->GetConfig().hdr_enable);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_.get()->GetConfig().super_sample);
-
-	//Prop_FieldOfViewLeftDegrees_Float
-	//Prop_FieldOfViewRightDegrees_Float
-	//Prop_FieldOfViewTopDegrees_Float
-	//Prop_FieldOfViewBottomDegrees_Float
+	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_.get()->GetConfig().ss_enable);
 
 	// Miscellaneous settings
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
@@ -111,6 +107,21 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/touch", &my_input_handles_[ MyComponent_system_touch ] );
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/click", &my_input_handles_[ MyComponent_system_click ] );
 
+	// Set stereoscopic convergence
+	vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_WorldScale_Float, stereo_display_component_.get()->GetConfig().convergence);
+
+	// Set supersample scale
+	vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, stereo_display_component_.get()->GetConfig().ss_scale);
+	
+	// Miscellaneous settings
+	vr::VRSettings()->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, true);
+	vr::VRSettings()->SetFloat(vr::k_pch_Power_Section, vr::k_pch_Power_TurnOffScreensTimeout_Float, 86400.0f);
+	vr::VRSettings()->SetBool(vr::k_pch_Power_Section, vr::k_pch_Power_PauseCompositorOnStandby_Bool, false);
+	vr::VRSettings()->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_EnableDashboard_Bool, false);
+	vr::VRSettings()->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, false);
+	vr::VRSettings()->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MirrorViewVisibility_Bool, false);
+	vr::VRSettings()->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
+	
 	pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
 
 	return vr::VRInitError_None;
@@ -141,8 +152,7 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: This is never called by vrserver in recent OpenVR versions,
-// but is useful for giving data to vr::VRServerDriverHost::TrackedDevicePoseUpdated.
+// Purpose: Center position for Stereo 3D
 //-----------------------------------------------------------------------------
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
@@ -166,7 +176,6 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 
 	return pose;
 }
-
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
 	while ( is_active_ )
@@ -181,9 +190,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: This is called by vrserver when the device should enter standby mode.
-// The device should be put into whatever low power mode it has.
-// We don't really have anything to do here, so let's just log something.
+// Purpose: Stub for Standby mode
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::EnterStandby()
 {
@@ -191,15 +198,10 @@ void MockControllerDeviceDriver::EnterStandby()
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: This is called by vrserver when the device should deactivate.
-// This is typically at the end of a session
-// The device should free any resources it has allocated here.
+// Purpose: Shutdown process
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::Deactivate()
 {
-	// Let's join our pose thread that's running
-	// by first checking then setting is_active_ to false to break out
-	// of the while loop, if it's running, then call .join() on the thread
 	if ( is_active_.exchange( false ) )
 	{
 		pose_update_thread_.join();
@@ -207,25 +209,6 @@ void MockControllerDeviceDriver::Deactivate()
 
 	// unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
 	device_index_ = vr::k_unTrackedDeviceIndexInvalid;
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: This is called by our IServerTrackedDeviceProvider when it pops an event off the event queue.
-// It's not part of the ITrackedDeviceServerDriver interface, we created it ourselves.
-//-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::MyProcessEvent( const vr::VREvent_t &vrevent )
-{
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Our IServerTrackedDeviceProvider needs our serial number to add us to vrserver.
-// It's not part of the ITrackedDeviceServerDriver interface, we created it ourselves.
-//-----------------------------------------------------------------------------
-const std::string &MockControllerDeviceDriver::MyGetSerialNumber()
-{
-	return stereo_serial_number_;
 }
 
 //-----------------------------------------------------------------------------
@@ -271,13 +254,10 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
 	if (config_.tab_enable)
 	{
 		*pnX = 0;
-
 		// Each eye will have full width
 		*pnWidth = config_.window_width;
-
 		// Each eye will have half height
 		*pnHeight = config_.window_height / 2;
-
 		if (eEye == vr::Eye_Left)
 		{
 			// Left eye viewport on the top half of the window
@@ -294,13 +274,10 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
 	else
 	{
 		*pnY = 0;
-
 		// Each eye will have half width
 		*pnWidth = config_.window_width / 2;
-
 		// Each eye will have full height
 		*pnHeight = config_.window_height;
-
 		if (eEye == vr::Eye_Left)
 		{
 			// Left eye viewport on the left half of the window

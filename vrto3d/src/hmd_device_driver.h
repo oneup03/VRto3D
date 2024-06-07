@@ -30,12 +30,14 @@ struct StereoDisplayDriverConfiguration
 	float aspect_ratio;
 	float fov;
 	float ipd;
+	float convergence;
 
 	bool tab_enable;
 	bool half_enable;
-	bool super_sample;
+	bool ss_enable;
 	bool hdr_enable;
 
+	float ss_scale;
 	float display_latency;
 	float display_frequency;
 };
@@ -61,10 +63,7 @@ private:
 };
 
 //-----------------------------------------------------------------------------
-// Purpose: Represents a single tracked device in the system.
-// What this device actually is (controller, hmd) depends on what the
-// IServerTrackedDeviceProvider calls to TrackedDeviceAdded and the
-// properties within Activate() of the ITrackedDeviceServerDriver class.
+// Purpose: Represents a Mock HMD in the system
 //-----------------------------------------------------------------------------
 class MockControllerDeviceDriver : public vr::ITrackedDeviceServerDriver
 {
@@ -77,9 +76,6 @@ public:
 	vr::DriverPose_t GetPose() override;
 	void Deactivate() override;
 
-	// ----- Functions we declare ourselves below -----
-	const std::string &MyGetSerialNumber();
-	void MyProcessEvent( const vr::VREvent_t &vrevent );
 	void PoseUpdateThread();
 
 private:
