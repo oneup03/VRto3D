@@ -1,0 +1,22 @@
+{
+	"driver_vrto3d": {
+		"enable": true,
+		"serial_number": "Stereo3D-1234",
+		"model_number": "Stereo3D-1"
+	},
+	"vrto3d_display": {
+		"window_x": 0,
+		"window_y": 0,
+		"window_width": 1920,
+		"window_height": 1080,
+		"aspect_ratio": 1.77778,
+		"fov": 90.0,
+		"ipd": 0.065,
+		"tab_enable": false,
+		"half_enable": true,
+		"super_sample": false,
+		"hdr_enable": false,
+		"display_latency": 0.011,
+		"display_frequency": 60.0
+	}
+}
