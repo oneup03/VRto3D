@@ -1,14 +1,13 @@
 # VRto3D
 
-OpenVR Driver that can render in SbS or TaB 3D
-Currently targeting OpenVR 2.5.1
+OpenVR Driver that can render in SbS or TaB 3D.
+Currently targeting OpenVR 2.5.1.
 Only Windows was tested. It may build on Linux, but there are other solutions on Linux like MonadoVR.
 
 
 ## Configuration
 
-Modify the vrto3d\resources\settings\default.vrsettings
-for your setup:
+- Modify the `vrto3d\resources\settings\default.vrsettings` for your setup:
 
 | Field Name          | Type    | Description                                                                                 | Default Value |
 |---------------------|---------|---------------------------------------------------------------------------------------------|---------------|
@@ -31,26 +30,26 @@ for your setup:
 
 ## Installation
 
-Install SteamVR
-Download the latest release and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder.
-Run SteamVR
-Run a Room Setup. Choose `Standing Only` and on the Locate the Floor step, set your height in centimeters, nominally `170`
-Try launching a VR game
+- Install SteamVR
+- Download the latest release and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder.
+- Run SteamVR
+- Run a Room Setup. Choose `Standing Only` and on the Locate the Floor step, set your height in centimeters, nominally `170`
+- Try launching a VR game
 
 
 ## Notes
 
-You will need a multi-monitor setup. A virtual monitor should work, but will prove tricky. Something like [this](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/).  
-SteamVR may still complain about Room Setup or Direct Display mode, but these can be safely ignored.
-Overlays generally won't work on this virtual HMD.
-For most games, you will need to have the "spectator view" screen in focus for your inputs to register from mouse/keyboard/controller.
-Recommend using a XInput controller.
-This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is no headset movement or VR controller emulation.
+- You will need a multi-monitor setup. A virtual monitor should work, but will prove tricky. Something like [this](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/).  
+- SteamVR may still complain about Room Setup or Direct Display mode, but these can be safely ignored.
+- Overlays generally won't work on this virtual HMD.
+- For most games, you will need to have the "spectator view" screen in focus for your inputs to register from mouse/keyboard/controller.
+- Recommend using a XInput controller.
+- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is no headset movement or VR controller emulation.
 
 
 ## Building
 
-Clone the code and initialize submodules
-Open Solution in Visual Studio 2022
-Use the solution to build this driver
-Copy from the `output` folder to the `SteamVR` folder
+- Clone the code and initialize submodules
+- Open Solution in Visual Studio 2022
+- Use the solution to build this driver
+- Copy from the `output` folder to the `SteamVR` folder
