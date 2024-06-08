@@ -39,12 +39,16 @@ Only Windows was tested. It may build on Linux, but there are other solutions on
 
 ## Notes
 
-- You will need a multi-monitor setup. A virtual monitor should work, but will prove tricky. Something like [this](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/).  
+- You will need a multi-monitor setup. A virtual monitor will work, but will prove tricky. [Setting up this IDD one will do.](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/).  
+- Sunshine/Moonlight is compatible
 - SteamVR may still complain about Room Setup or Direct Display mode, but these can be safely ignored.
 - Overlays generally won't work on this virtual HMD.
 - For most games, you will need to have the "spectator view" screen in focus for your inputs to register from mouse/keyboard/controller.
 - Recommend using a XInput controller.
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is no headset movement or VR controller emulation.
+- OpenXR games/mods seem to be more likely to work and be stable
+- HDR doesn't seem to work currently
+- Several mods/games may override your supersample and convergence (worldsize) settings
 
 
 ## Building
