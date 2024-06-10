@@ -41,7 +41,7 @@ Only Windows was tested. It may build on Linux, but there are other solutions on
 
 - You will need a multi-monitor setup. A virtual monitor will work, but will prove tricky. [Setting up this IDD one will do.](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/).  
 - Sunshine/Moonlight is compatible
-- SteamVR may still complain about Room Setup or Direct Display mode, but these can be safely ignored.
+- SteamVR may still complain about Direct Display mode, but this can be safely ignored.
 - Overlays generally won't work on this virtual HMD.
 - For most games, you will need to have the "spectator view" screen in focus for your inputs to register from mouse/keyboard/controller.
 - Recommend using a XInput controller.

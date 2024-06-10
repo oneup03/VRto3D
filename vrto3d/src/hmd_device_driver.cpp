@@ -3,7 +3,10 @@
 
 #include "driverlog.h"
 #include "vrmath.h"
-#include <string.h>
+#include <string>
+#include <sstream>
+#include <ctime>
+#include <iomanip>
 
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
@@ -84,8 +87,72 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRProperties()->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_.get()->GetConfig().display_latency);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
+	vr::VRProperties()->SetBoolProperty(container, vr::Prop_HasDriverDirectModeComponent_Bool, true);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_.get()->GetConfig().hdr_enable);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_.get()->GetConfig().ss_enable);
+
+	// Set the chaperone JSON property
+	// Get the current time
+	std::time_t t = std::time(nullptr);
+	std::tm tm;
+	localtime_s(&tm, &t);
+	// Construct the JSON string with variables
+	std::stringstream ss;
+	ss << R"(
+        {
+           "jsonid" : "chaperone_info",
+           "universes" : [
+              {
+                 "collision_bounds" : [
+                    [
+                       [ -1.0, 0.0, -1.0 ],
+                       [ -1.0, 3.0, -1.0 ],
+                       [ -1.0, 3.0, 1.0 ],
+                       [ -1.0, 0.0, 1.0 ]
+                    ],
+                    [
+                       [ -1.0, 0.0, 1.0 ],
+                       [ -1.0, 3.0, 1.0 ],
+                       [ 1.0, 3.0, 1.0 ],
+                       [ 1.0, 0.0, 1.0 ]
+                    ],
+                    [
+                       [ 1.0, 0.0, 1.0 ],
+                       [ 1.0, 3.0, 1.0 ],
+                       [ 1.0, 3.0, -1.0 ],
+                       [ 1.0, 0.0, -1.0 ]
+                    ],
+                    [
+                       [ 1.0, 0.0, -1.0 ],
+                       [ 1.0, 3.0, -1.0 ],
+                       [ -1.0, 3.0, -1.0 ],
+                       [ -1.0, 0.0, -1.0 ]
+                    ]
+                 ],
+                 "play_area" : [ 2.0, 2.0 ],
+                 "seated" : {
+                    "translation" : [ 0.0, 0.0, 0.0 ],
+                    "yaw" : 0.0
+                 },
+                 "standing" : {
+                    "translation" : [ 0.0, 0.0, 0.0 ],
+                    "yaw" : 0.0
+                 },
+                 "time" : ")" << std::put_time(&tm, "%a %b %d %H:%M:%S %Y") << R"(",
+                 "universeID" : "64"
+              }
+           ],
+           "version" : 5
+        }
+        )";
+	// Convert the stringstream to a string
+	std::string chaperoneJson = ss.str();
+	// Set the chaperone JSON property
+	vr::VRProperties()->SetStringProperty(container, vr::Prop_DriverProvidedChaperoneJson_String, chaperoneJson.c_str());
+	vr::VRProperties()->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
+
+
+
 
 	// Miscellaneous settings
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
@@ -183,6 +250,12 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
 		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
 
+		vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
+		//vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, sin(frame_number_ * 0.01) * 0.1f + 1.0f);
+
+
+		//vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_WorldScale_Float, sin(frame_number_ * 0.1) * 1.0f + 1.0f);
+
 		// Update our pose every five milliseconds.
 		// In reality, you should update the pose whenever you have new data from your device.
 		std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
@@ -210,6 +283,20 @@ void MockControllerDeviceDriver::Deactivate()
 	// unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
 	device_index_ = vr::k_unTrackedDeviceIndexInvalid;
 }
+
+
+//-----------------------------------------------------------------------------
+// Purpose: This is called by our IServerTrackedDeviceProvider when its RunFrame() method gets called.
+// It's not part of the ITrackedDeviceServerDriver interface, we created it ourselves.
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::MyRunFrame()
+{
+	frame_number_++;
+
+	
+	// update our inputs here
+}
+
 
 //-----------------------------------------------------------------------------
 // DISPLAY DRIVER METHOD DEFINITIONS

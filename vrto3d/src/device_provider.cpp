@@ -50,6 +50,11 @@ bool MyDeviceProvider::ShouldBlockStandbyMode()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::RunFrame()
 {
+	// call our devices to run a frame
+	if (my_hmd_device_ != nullptr)
+	{
+		my_hmd_device_->MyRunFrame();
+	}
 }
 
 //-----------------------------------------------------------------------------

@@ -76,6 +76,7 @@ public:
 	vr::DriverPose_t GetPose() override;
 	void Deactivate() override;
 
+	void MyRunFrame();
 	void PoseUpdateThread();
 
 private:
@@ -87,6 +88,7 @@ private:
 	std::array< vr::VRInputComponentHandle_t, MyComponent_MAX > my_input_handles_{};
 	std::atomic< bool > is_active_;
 	std::atomic< uint32_t > device_index_;
+	std::atomic< int > frame_number_;
 
 	std::thread pose_update_thread_;
 };
