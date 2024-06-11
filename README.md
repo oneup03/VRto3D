@@ -17,8 +17,8 @@ Only Windows was tested. It may build on Linux, but there are other solutions on
 | `window_height`     | `int`   | The height of the application window.                                                       | `1080`        |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`     |
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`        |
-| `ipd`               | `float` | The inter-pupillary distance (IPD) in meters.                                               | `0.065`       |
-| `convergence`       | `float` | The distance at which the left and right images converge.                                   | `1.0`         |
+| `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.065`       |
+| `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.0`         |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`       |
 | `half_enable`       | `bool`  | Enable or disable half SbS/TaB 3D output.                                                   | `true`        |
 | `ss_enable`         | `bool`  | Enable or disable supersampling.                                                            | `false`       |
@@ -33,7 +33,6 @@ Only Windows was tested. It may build on Linux, but there are other solutions on
 - Install SteamVR
 - Download the latest release and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder.
 - Run SteamVR
-- Run a Room Setup. Choose `Standing Only` and on the Locate the Floor step, set your height in centimeters, nominally `170`
 - Try launching a VR game
 
 
@@ -46,9 +45,9 @@ Only Windows was tested. It may build on Linux, but there are other solutions on
 - For most games, you will need to have the "spectator view" screen in focus for your inputs to register from mouse/keyboard/controller.
 - Recommend using a XInput controller.
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is no headset movement or VR controller emulation.
-- OpenXR games/mods seem to be more likely to work and be stable
+- OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
 - HDR doesn't seem to work currently
-- Several mods/games may override your supersample and convergence (worldsize) settings
+- Several mods/games may override your supersample and other settings
 
 
 ## Building
