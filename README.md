@@ -51,6 +51,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
 - HDR doesn't seem to work currently
 - Several mods/games may override your supersample and other settings
+- DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not
 - Depth and Convergence are saved to your `Steam\config\steamvr.vrsettings` when SteamVR is closed. There are only global settings, no per-game ones.
 
 
