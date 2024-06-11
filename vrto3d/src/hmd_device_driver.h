@@ -58,7 +58,7 @@ public:
 	void GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight ) override;
 	StereoDisplayDriverConfiguration GetConfig();
 	void AdjustDepth(float delta, uint32_t device_index);
-	void AdjustConvergence(float delta);
+	void AdjustConvergence(float delta, uint32_t device_index);
 	float GetDepth();
 	float GetConvergence();
 
@@ -93,7 +93,6 @@ private:
 	std::array< vr::VRInputComponentHandle_t, MyComponent_MAX > my_input_handles_{};
 	std::atomic< bool > is_active_;
 	std::atomic< uint32_t > device_index_;
-	std::atomic< int > frame_number_;
 
 	std::thread pose_update_thread_;
 };

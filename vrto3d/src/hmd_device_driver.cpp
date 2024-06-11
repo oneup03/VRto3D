@@ -215,7 +215,7 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Center position for Stereo 3D
+// Purpose: Static Pose, Depth and Convergence Hotkeys
 //-----------------------------------------------------------------------------
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
@@ -256,11 +256,11 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		}
 		// Ctrl+F5 Decrease Convergence
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
-			stereo_display_component_->AdjustConvergence(-0.001f);
+			stereo_display_component_->AdjustConvergence(-0.001f, device_index_);
 		}
 		// Ctrl+F6 Increase Convergence
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
-			stereo_display_component_->AdjustConvergence(0.001f);
+			stereo_display_component_->AdjustConvergence(0.001f, device_index_);
 		}
 
 		// Update our pose every 30 milliseconds.
@@ -458,11 +458,31 @@ void StereoDisplayComponent::AdjustDepth(float delta, uint32_t device_index)
 //-----------------------------------------------------------------------------
 // Purpose: To update the Convergence value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustConvergence(float delta)
+void StereoDisplayComponent::AdjustConvergence(float delta, uint32_t device_index)
 {
 	float cur_conv = GetConvergence();
 	float new_conv = cur_conv + delta;
 	while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
+
+	float left, right, top, bottom;
+	vr::HmdRect2_t eyeLeft, eyeRight;
+
+	GetProjectionRaw(vr::Eye_Left, &left, &right, &top, &bottom);
+	eyeLeft.vTopLeft.v[0] = left;
+	eyeLeft.vTopLeft.v[1] = top;
+	eyeLeft.vBottomRight.v[0] = right;
+	eyeLeft.vBottomRight.v[1] = bottom;
+
+	GetProjectionRaw(vr::Eye_Right, &left, &right, &top, &bottom);
+	eyeRight.vTopLeft.v[0] = left;
+	eyeRight.vTopLeft.v[1] = top;
+	eyeRight.vBottomRight.v[0] = right;
+	eyeRight.vBottomRight.v[1] = bottom;
+
+	vr::VREvent_Data_t temp;
+
+	vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index, eyeLeft, eyeRight);
+	vr::VRServerDriverHost()->VendorSpecificEvent(device_index, vr::VREvent_LensDistortionChanged, temp, 0.0f);
 }
 
 
