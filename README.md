@@ -62,4 +62,4 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Define `STEAM_PATH` environment variable with the path to your main Steam folder
 - Open Solution in Visual Studio 2022
 - Use the solution to build this driver
-- Copy from the `output` folder to the `SteamVR` folder
+- Build output is automatically copied to your `SteamVR\drivers` folder

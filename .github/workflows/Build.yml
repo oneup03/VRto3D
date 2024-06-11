@@ -15,8 +15,7 @@ jobs:
 
     - name: Clone repo and submodule
       run: |
-        git clone https://github.com/${{github.repository}}.git .
-        git clone https://github.com/ValveSoftware/openvr.git external/openvr
+        git clone --recurse-submodules https://github.com/${{github.repository}}.git .
 
     - name: Get current date, commit hash and count
       run: |
