@@ -2,7 +2,7 @@
 
 OpenVR Driver that can render in SbS or TaB 3D.
 Currently targeting OpenVR 2.5.1.
-Only Windows was tested. It may build on Linux, but there are other solutions on Linux like MonadoVR.
+Windows-only solution, but there are other solutions on Linux like MonadoVR.
 
 
 ## Configuration
