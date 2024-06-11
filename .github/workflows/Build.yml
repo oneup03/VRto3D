@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+env:
+  SOLUTION_FILE_PATH: .
+  BUILD_CONFIGURATION: Release
+
+jobs:
+  Win64:
+    runs-on: windows-2022
+    steps:
+
+    - name: Clone repo and submodule
+      run: |
+        git clone https://github.com/${{github.repository}}.git .
+        git clone https://github.com/ValveSoftware/openvr.git external/openvr
+
+    - name: Get current date, commit hash and count
+      run: |
+        echo "CurrentDate=$(date +'%Y-%m-%d')" >> $env:GITHUB_ENV
+        echo "CommitHashShort=$(git rev-parse --short=7 HEAD)" >> $env:GITHUB_ENV
+        echo "CommitCount=$(git rev-list --count $env:GITHUB_REF_NAME)" >> $env:GITHUB_ENV
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Restore NuGet packages
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Build
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Compress artifacts
+      uses: vimtor/action-zip@v1.1
+      with:
+        files: output/drivers/ README.md
+        dest: "output/${{github.event.repository.name}}.zip"
+
+    - name: GitHub pre-release
+      uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{secrets.GITHUB_TOKEN}}"
+        automatic_release_tag: "latest"
+        prerelease: true
+        title: "[${{env.CurrentDate}}] ${{github.event.repository.name}} r${{env.CommitCount}}@${{env.CommitHashShort}}"
+        files: "output/${{github.event.repository.name}}.zip"
