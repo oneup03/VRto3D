@@ -17,10 +17,11 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `window_height`     | `int`   | The height of the application window.                                                       | `1080`        |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`     |
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`        |
-| `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`       |
+| `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`         |
 | `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.1`         |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`       |
 | `half_enable`       | `bool`  | Enable or disable half SbS/TaB 3D output.                                                   | `true`        |
+| `reverse_enable`    | `bool`  | Flip Left and Right eyes.                                                                   | `false`       |
 | `ss_enable`         | `bool`  | Enable or disable supersampling.                                                            | `false`       |
 | `hdr_enable`        | `bool`  | Enable or disable HDR rendering.                                                            | `false`       |
 | `ss_scale`          | `float` | The supersampling scale factor.                                                             | `1.0`         |
@@ -58,6 +59,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 ## Building
 
 - Clone the code and initialize submodules
+- Define `STEAM_PATH` environment variable with the path to your main Steam folder
 - Open Solution in Visual Studio 2022
 - Use the solution to build this driver
 - Copy from the `output` folder to the `SteamVR` folder

@@ -15,6 +15,7 @@
 		"convergence": 0.1,
 		"tab_enable": false,
 		"half_enable": true,
+		"reverse_enable": false,
 		"ss_enable": false,
 		"hdr_enable": false,
 		"ss_scale": 1.0,

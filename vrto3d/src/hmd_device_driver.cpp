@@ -43,6 +43,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
 	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
 	display_configuration.half_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "half_enable");
+	display_configuration.reverse_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "reverse_enable");
 	display_configuration.ss_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ss_enable");
 	display_configuration.hdr_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "hdr_enable");
 
@@ -333,6 +334,10 @@ void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, 
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pnX, uint32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
+	if (config_.reverse_enable)
+	{
+		eEye = static_cast<vr::EVREye>(!static_cast<bool> (eEye));
+	}
 	// Use Top and Bottom Rendering
 	if (config_.tab_enable)
 	{

@@ -6,6 +6,7 @@ on:
 env:
   SOLUTION_FILE_PATH: .
   BUILD_CONFIGURATION: Release
+  STEAM_PATH: temp
 
 jobs:
   Win64:
