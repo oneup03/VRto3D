@@ -7,6 +7,7 @@
 #include <sstream>
 #include <ctime>
 #include <iomanip>
+#include <windows.h>
 
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
@@ -212,6 +213,7 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 		pchResponseBuffer[ 0 ] = 0;
 }
 
+
 //-----------------------------------------------------------------------------
 // Purpose: Center position for Stereo 3D
 //-----------------------------------------------------------------------------
@@ -243,18 +245,26 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 	{
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
 		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
+		
+		// Ctrl+F3 Decrease Depth
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
+			stereo_display_component_->AdjustDepth(-0.001f, device_index_);
+		}
+		// Ctrl+F4 Increase Depth
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
+			stereo_display_component_->AdjustDepth(0.001f, device_index_);
+		}
+		// Ctrl+F5 Decrease Convergence
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
+			stereo_display_component_->AdjustConvergence(-0.001f);
+		}
+		// Ctrl+F6 Increase Convergence
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
+			stereo_display_component_->AdjustConvergence(0.001f);
+		}
 
-		vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
-		//vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, sin(frame_number_ * 0.01) * 0.1f + 1.0f);
-
-		//vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserHeadToEyeDepthMeters_Float, sin(frame_number_ * 0.01) * 0.1f + 1.0f);
-
-
-		//vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_WorldScale_Float, sin(frame_number_ * 0.1) * 1.0f + 1.0f);
-
-		// Update our pose every five milliseconds.
-		// In reality, you should update the pose whenever you have new data from your device.
-		std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
+		// Update our pose every 30 milliseconds.
+		std::this_thread::sleep_for( std::chrono::milliseconds( 30 ) );
 	}
 }
 
@@ -276,21 +286,11 @@ void MockControllerDeviceDriver::Deactivate()
 		pose_update_thread_.join();
 	}
 
+	vr::VRSettings()->SetFloat(stereo_display_settings_section, "depth", stereo_display_component_.get()->GetDepth());
+	vr::VRSettings()->SetFloat(stereo_display_settings_section, "convergence", stereo_display_component_.get()->GetConvergence());
+
 	// unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
 	device_index_ = vr::k_unTrackedDeviceIndexInvalid;
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: This is called by our IServerTrackedDeviceProvider when its RunFrame() method gets called.
-// It's not part of the ITrackedDeviceServerDriver interface, we created it ourselves.
-//-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::MyRunFrame()
-{
-	frame_number_++;
-
-	
-	// update our inputs here
 }
 
 
@@ -299,7 +299,7 @@ void MockControllerDeviceDriver::MyRunFrame()
 //-----------------------------------------------------------------------------
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
-	: config_( config )
+	: config_( config ), depth_(config.depth), convergence_(config.convergence)
 {
 }
 
@@ -385,18 +385,21 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
 	// Calculate the vertical FOV in radians
 	float verFovRadians = tan(atan(horFovRadians / config_.aspect_ratio));
 
+	// Get convergence value
+	float convergence = GetConvergence();
+
 	// Calculate the raw projection values
 	*pfTop = -verFovRadians;
 	*pfBottom = verFovRadians;
 
 	// Adjust the frustum based on the eye
 	if (eEye == vr::Eye_Left) {
-		*pfLeft = -horFovRadians + config_.convergence;
-		*pfRight = horFovRadians + config_.convergence;
+		*pfLeft = -horFovRadians + convergence;
+		*pfRight = horFovRadians + convergence;
 	}
 	else {
-		*pfLeft = -horFovRadians - config_.convergence;
-		*pfRight = horFovRadians - config_.convergence;
+		*pfLeft = -horFovRadians - convergence;
+		*pfRight = horFovRadians - convergence;
 	}
 }
 
@@ -436,4 +439,46 @@ void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32
 StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 {
 	return config_;
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: To update the Depth value
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustDepth(float delta, uint32_t device_index)
+{
+	float cur_depth = GetDepth();
+	float new_depth = cur_depth + delta;
+	while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
+	vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index);
+	vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: To update the Convergence value
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustConvergence(float delta)
+{
+	float cur_conv = GetConvergence();
+	float new_conv = cur_conv + delta;
+	while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Get Depth value
+//-----------------------------------------------------------------------------
+float StereoDisplayComponent::GetDepth()
+{
+	return depth_.load(std::memory_order_relaxed);
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Get Convergence value
+//-----------------------------------------------------------------------------
+float StereoDisplayComponent::GetConvergence()
+{
+	return convergence_.load(std::memory_order_relaxed);
 }

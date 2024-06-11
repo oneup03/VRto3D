@@ -57,9 +57,15 @@ public:
 	bool ComputeInverseDistortion(vr::HmdVector2_t* pResult, vr::EVREye eEye, uint32_t unChannel, float fU, float fV) override;
 	void GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight ) override;
 	StereoDisplayDriverConfiguration GetConfig();
+	void AdjustDepth(float delta, uint32_t device_index);
+	void AdjustConvergence(float delta);
+	float GetDepth();
+	float GetConvergence();
 
 private:
 	StereoDisplayDriverConfiguration config_;
+	std::atomic< float > depth_;
+	std::atomic< float > convergence_;
 };
 
 //-----------------------------------------------------------------------------
@@ -76,7 +82,6 @@ public:
 	vr::DriverPose_t GetPose() override;
 	void Deactivate() override;
 
-	void MyRunFrame();
 	void PoseUpdateThread();
 
 private:
