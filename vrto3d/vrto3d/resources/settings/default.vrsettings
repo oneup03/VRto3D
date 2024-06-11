@@ -11,7 +11,7 @@
 		"window_height": 1080,
 		"aspect_ratio": 1.77778,
 		"fov": 90.0,
-		"ipd": 0.065,
+		"depth": 0.065,
 		"convergence": 1.0,
 		"tab_enable": false,
 		"half_enable": true,

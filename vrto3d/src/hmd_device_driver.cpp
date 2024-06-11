@@ -37,7 +37,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
 	display_configuration.aspect_ratio = vr::VRSettings()->GetFloat(stereo_display_settings_section, "aspect_ratio");
 	display_configuration.fov = vr::VRSettings()->GetFloat(stereo_display_settings_section, "fov");
-	display_configuration.ipd = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ipd");
+	display_configuration.depth = vr::VRSettings()->GetFloat(stereo_display_settings_section, "depth");
 	display_configuration.convergence = vr::VRSettings()->GetFloat(stereo_display_settings_section, "convergence");
 
 	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
@@ -81,13 +81,13 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRProperties()->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
 
 	// Display settings
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_.get()->GetConfig().ipd);
+	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_.get()->GetConfig().depth);
 	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
 	vr::VRProperties()->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_.get()->GetConfig().display_frequency);
 	vr::VRProperties()->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_.get()->GetConfig().display_latency);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
-	vr::VRProperties()->SetBoolProperty(container, vr::Prop_HasDriverDirectModeComponent_Bool, true);
+	vr::VRProperties()->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_.get()->GetConfig().hdr_enable);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_.get()->GetConfig().ss_enable);
 
@@ -151,9 +151,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRProperties()->SetStringProperty(container, vr::Prop_DriverProvidedChaperoneJson_String, chaperoneJson.c_str());
 	vr::VRProperties()->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
 
-
-
-
 	// Miscellaneous settings
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DeviceIsWireless_Bool, false);
@@ -174,14 +171,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/touch", &my_input_handles_[ MyComponent_system_touch ] );
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/click", &my_input_handles_[ MyComponent_system_click ] );
 
-	// Set stereoscopic convergence
-	vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_WorldScale_Float, stereo_display_component_.get()->GetConfig().convergence);
-
 	// Set supersample scale
 	vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, stereo_display_component_.get()->GetConfig().ss_scale);
 	
 	// Miscellaneous settings
-	vr::VRSettings()->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, true);
+	vr::VRSettings()->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);
 	vr::VRSettings()->SetFloat(vr::k_pch_Power_Section, vr::k_pch_Power_TurnOffScreensTimeout_Float, 86400.0f);
 	vr::VRSettings()->SetBool(vr::k_pch_Power_Section, vr::k_pch_Power_PauseCompositorOnStandby_Bool, false);
 	vr::VRSettings()->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_EnableDashboard_Bool, false);
@@ -252,6 +246,8 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 
 		vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
 		//vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, sin(frame_number_ * 0.01) * 0.1f + 1.0f);
+
+		//vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserHeadToEyeDepthMeters_Float, sin(frame_number_ * 0.01) * 0.1f + 1.0f);
 
 
 		//vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_WorldScale_Float, sin(frame_number_ * 0.1) * 1.0f + 1.0f);
@@ -379,7 +375,7 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: To inform the compositor what the projection parameters are for this HMD.
+// Purpose: Utilize the desired FoV, Aspect Ratio, and Convergence settings
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, float *pfRight, float *pfTop, float *pfBottom )
 {
@@ -390,10 +386,20 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
 	float verFovRadians = 2 * atan(tan(horFovRadians / 2) / config_.aspect_ratio);
 
 	// Calculate the raw projection values
-	*pfLeft = -tan(horFovRadians / 2);
-	*pfRight = tan(horFovRadians / 2);
+	float left = -tan(horFovRadians / 2);
+	float right = tan(horFovRadians / 2);
 	*pfTop = -tan(verFovRadians / 2);
 	*pfBottom = tan(verFovRadians / 2);
+
+	// Adjust the frustum based on the eye
+	if (eEye == vr::Eye_Left) {
+		*pfLeft = left + config_.convergence;
+		*pfRight = right + config_.convergence;
+	}
+	else {
+		*pfLeft = left - config_.convergence;
+		*pfRight = right - config_.convergence;
+	}
 }
 
 //-----------------------------------------------------------------------------

@@ -29,7 +29,7 @@ struct StereoDisplayDriverConfiguration
 
 	float aspect_ratio;
 	float fov;
-	float ipd;
+	float depth;
 	float convergence;
 
 	bool tab_enable;
