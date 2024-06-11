@@ -108,6 +108,8 @@
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(SolutionDir)output\drivers\$(ProjectName)\bin" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)\bin" /S /Y /I</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -130,6 +132,8 @@
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(SolutionDir)output\drivers\$(ProjectName)\bin" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)\bin" /S /Y /I</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -148,6 +152,8 @@
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(SolutionDir)output\drivers\$(ProjectName)\bin" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)\bin" /S /Y /I</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -170,6 +176,8 @@
     </Link>
     <PostBuildEvent>
       <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(ProjectDir)$(ProjectName)" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)" /S /Y /I</Command>
+	  <Command>XCOPY "$(SolutionDir)output\drivers\$(ProjectName)\bin" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\$(ProjectName)\bin" /S /Y /I</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
