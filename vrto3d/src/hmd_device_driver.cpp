@@ -380,25 +380,23 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
 void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, float *pfRight, float *pfTop, float *pfBottom )
 {
 	// Convert horizontal FOV from degrees to radians
-	float horFovRadians = config_.fov * (M_PI / 180.0f);
+	float horFovRadians = tan((config_.fov * (M_PI / 180.0f)) / 2);
 
 	// Calculate the vertical FOV in radians
-	float verFovRadians = 2 * atan(tan(horFovRadians / 2) / config_.aspect_ratio);
+	float verFovRadians = tan(atan(horFovRadians / config_.aspect_ratio));
 
 	// Calculate the raw projection values
-	float left = -tan(horFovRadians / 2);
-	float right = tan(horFovRadians / 2);
-	*pfTop = -tan(verFovRadians / 2);
-	*pfBottom = tan(verFovRadians / 2);
+	*pfTop = -verFovRadians;
+	*pfBottom = verFovRadians;
 
 	// Adjust the frustum based on the eye
 	if (eEye == vr::Eye_Left) {
-		*pfLeft = left + config_.convergence;
-		*pfRight = right + config_.convergence;
+		*pfLeft = -horFovRadians + config_.convergence;
+		*pfRight = horFovRadians + config_.convergence;
 	}
 	else {
-		*pfLeft = left - config_.convergence;
-		*pfRight = right - config_.convergence;
+		*pfLeft = -horFovRadians - config_.convergence;
+		*pfRight = horFovRadians - config_.convergence;
 	}
 }
 
