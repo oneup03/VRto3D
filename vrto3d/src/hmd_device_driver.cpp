@@ -463,24 +463,11 @@ void StereoDisplayComponent::AdjustConvergence(float delta, uint32_t device_inde
 	float cur_conv = GetConvergence();
 	float new_conv = cur_conv + delta;
 	while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
-
-	float left, right, top, bottom;
+	// Regenerate the Projection
 	vr::HmdRect2_t eyeLeft, eyeRight;
-
-	GetProjectionRaw(vr::Eye_Left, &left, &right, &top, &bottom);
-	eyeLeft.vTopLeft.v[0] = left;
-	eyeLeft.vTopLeft.v[1] = top;
-	eyeLeft.vBottomRight.v[0] = right;
-	eyeLeft.vBottomRight.v[1] = bottom;
-
-	GetProjectionRaw(vr::Eye_Right, &left, &right, &top, &bottom);
-	eyeRight.vTopLeft.v[0] = left;
-	eyeRight.vTopLeft.v[1] = top;
-	eyeRight.vBottomRight.v[0] = right;
-	eyeRight.vBottomRight.v[1] = bottom;
-
+	GetProjectionRaw(vr::Eye_Left, &eyeLeft.vTopLeft.v[0], &eyeLeft.vBottomRight.v[0], &eyeLeft.vTopLeft.v[1], &eyeLeft.vBottomRight.v[1]);
+	GetProjectionRaw(vr::Eye_Right, &eyeRight.vTopLeft.v[0], &eyeRight.vBottomRight.v[0], &eyeRight.vTopLeft.v[1], &eyeRight.vBottomRight.v[1]);
 	vr::VREvent_Data_t temp;
-
 	vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index, eyeLeft, eyeRight);
 	vr::VRServerDriverHost()->VendorSpecificEvent(device_index, vr::VREvent_LensDistortionChanged, temp, 0.0f);
 }
