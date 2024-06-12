@@ -51,6 +51,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.user_store_key.resize(display_configuration.num_user_settings);
 	display_configuration.user_depth.resize(display_configuration.num_user_settings);
 	display_configuration.user_convergence.resize(display_configuration.num_user_settings);
+	display_configuration.user_hold.resize(display_configuration.num_user_settings);
+	display_configuration.was_held.resize(display_configuration.num_user_settings);
 	for (int i = 0; i < display_configuration.num_user_settings; i++)
 	{
 		char user_key[1024];
@@ -64,6 +66,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 		display_configuration.user_depth[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
 		temp = "user_convergence" + std::to_string(i + 1);
 		display_configuration.user_convergence[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
+		temp = "user_hold" + std::to_string(i + 1);
+		display_configuration.user_hold[i] = vr::VRSettings()->GetBool(stereo_display_settings_section, temp.c_str());
 	}
 
 	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
@@ -71,6 +75,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.reverse_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "reverse_enable");
 	display_configuration.ss_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ss_enable");
 	display_configuration.hdr_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "hdr_enable");
+	display_configuration.depth_gauge = vr::VRSettings()->GetBool(stereo_display_settings_section, "depth_gauge");
 
 	display_configuration.ss_scale = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ss_scale");
 	display_configuration.display_latency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_latency");
@@ -117,6 +122,14 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_->GetConfig().hdr_enable);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_->GetConfig().ss_enable);
+	if (stereo_display_component_->GetConfig().depth_gauge)
+	{
+		vr::VRProperties()->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
+	}
+	else
+	{
+		vr::VRProperties()->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 0.0f);
+	}
 
 	// Set the chaperone JSON property
 	// Get the current time
@@ -273,14 +286,14 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 	while ( is_active_ )
 	{
 		// Get the state of the first controller (index 0)
-		DWORD dwResult = XInputGetState(0, &state);
-		if (dwResult == ERROR_SUCCESS) {
-			// Controller is connected
-			// Check the state of the buttons
-			if (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) {
-				stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
-			}
-		}
+		//DWORD dwResult = XInputGetState(0, &state);
+		//if (dwResult == ERROR_SUCCESS) {
+		//	// Controller is connected
+		//	// Check the state of the buttons
+		//	if (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) {
+		//		stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
+		//	}
+		//}
 
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
 		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
@@ -303,19 +316,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		}
 
 		// Check User binds
-		for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
-		{
-			if (GetAsyncKeyState(stereo_display_component_->GetConfig().user_load_key[i]) & 0x8000)
-			{
-				stereo_display_component_->AdjustDepth(stereo_display_component_->GetConfig().user_depth[i], false, device_index_);
-				stereo_display_component_->AdjustConvergence(stereo_display_component_->GetConfig().user_convergence[i], false, device_index_);
-			}
-
-			if (GetAsyncKeyState(stereo_display_component_->GetConfig().user_store_key[i]) & 0x8000)
-			{
-				stereo_display_component_->SaveUserSetting(i);
-			}
-		}
+		stereo_display_component_->CheckUserSettings(device_index_);
 
 		// Update our pose every 30 milliseconds.
 		std::this_thread::sleep_for( std::chrono::milliseconds( 30 ) );
@@ -552,10 +553,37 @@ float StereoDisplayComponent::GetConvergence()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Store current Depth and Convergence into user setting i
+// Purpose: Check User Settings and act on them
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::SaveUserSetting(int i)
+void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 {
-	config_.user_depth[i] = GetDepth();
-	config_.user_convergence[i] = GetConvergence();
+	for (int i = 0; i < config_.num_user_settings; i++)
+	{
+		// Load stored convergence
+		if (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000)
+		{
+			// Used for holding a setting briefly
+			if (config_.user_hold[i] && !config_.was_held[i])
+			{
+				prev_depth_ = GetDepth();
+				prev_conv_ = GetConvergence();
+				config_.was_held[i] = true;
+			}
+			AdjustDepth(config_.user_depth[i], false, device_index);
+			AdjustConvergence(config_.user_convergence[i], false, device_index);
+		}
+		// Release depth&convergence back to normal
+		else if (config_.user_hold[i] && config_.was_held[i])
+		{
+			config_.was_held[i] = false;
+			AdjustDepth(prev_depth_, false, device_index);
+			AdjustConvergence(prev_conv_, false, device_index);
+		}
+		// Store current depth&convergence to user setting
+		if (GetAsyncKeyState(config_.user_store_key[i]) & 0x8000)
+		{
+			config_.user_depth[i] = GetDepth();
+			config_.user_convergence[i] = GetConvergence();
+		}
+	}
 }

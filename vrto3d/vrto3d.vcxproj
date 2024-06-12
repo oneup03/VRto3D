@@ -198,6 +198,11 @@
       <Project>{89689a91-fb38-4893-ba67-3d6f45eb2712}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\.github\workflows\Build.yml" />
+    <None Include="..\README.md" />
+    <None Include="vrto3d\resources\settings\default.vrsettings" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

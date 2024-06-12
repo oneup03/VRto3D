@@ -18,17 +18,25 @@
 		"reverse_enable": false,
 		"ss_enable": false,
 		"hdr_enable": false,
+		"depth_gauge": false,
 		"ss_scale": 1.0,
 		"display_latency": 0.011,
 		"display_frequency": 60.0,
-		"num_user_settings": 2,
+		"num_user_settings": 3,
 		"user_load_key1": "0x61",
 		"user_store_key1": "0x64",
-		"user_depth1": 0.5,
+		"user_depth1": 1.0,
 		"user_convergence1": 0.1,
+		"user_hold1": true,
 		"user_load_key2": "0x62",
 		"user_store_key2": "0x65",
 		"user_depth2": 0.1,
-		"user_convergence2": 0.5
+		"user_convergence2": 0.5,
+		"user_hold2": false,
+		"user_load_key3": "0x63",
+		"user_store_key3": "0x66",
+		"user_depth3": 0.5,
+		"user_convergence3": 0.1,
+		"user_hold3": false
 	}
 }

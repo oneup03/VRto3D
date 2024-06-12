@@ -38,12 +38,15 @@ struct StereoDisplayDriverConfiguration
 	std::vector<int32_t> user_store_key;
 	std::vector<float> user_depth;
 	std::vector<float> user_convergence;
+	std::vector<bool> user_hold;
+	std::vector<bool> was_held;
 
 	bool tab_enable;
 	bool half_enable;
 	bool reverse_enable;
 	bool ss_enable;
 	bool hdr_enable;
+	bool depth_gauge;
 
 	float ss_scale;
 	float display_latency;
@@ -69,12 +72,15 @@ public:
 	void AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index);
 	float GetDepth();
 	float GetConvergence();
-	void SaveUserSetting(int i);
+	void CheckUserSettings(uint32_t device_index);
 
 private:
 	StereoDisplayDriverConfiguration config_;
 	std::atomic< float > depth_;
 	std::atomic< float > convergence_;
+
+	float prev_depth_;
+	float prev_conv_;
 };
 
 //-----------------------------------------------------------------------------
