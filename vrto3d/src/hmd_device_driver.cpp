@@ -1,6 +1,6 @@
 //============ Copyright (c) Valve Corporation, All rights reserved. ============
 #include "hmd_device_driver.h"
-#include "VirtualKeyMappings.h"
+#include "key_mappings.h"
 
 #include "driverlog.h"
 #include "vrmath.h"
@@ -353,6 +353,14 @@ void MockControllerDeviceDriver::Deactivate()
 
 	vr::VRSettings()->SetFloat(stereo_display_settings_section, "depth", stereo_display_component_->GetDepth());
 	vr::VRSettings()->SetFloat(stereo_display_settings_section, "convergence", stereo_display_component_->GetConvergence());
+
+	for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
+	{
+		std::string temp = "user_depth" + std::to_string(i + 1);
+		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_depth[i]);
+		temp = "user_convergence" + std::to_string(i + 1);
+		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_convergence[i]);
+	}
 
 	// unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
 	device_index_ = vr::k_unTrackedDeviceIndexInvalid;
