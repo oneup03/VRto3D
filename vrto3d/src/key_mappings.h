@@ -78,8 +78,8 @@ static std::unordered_map<std::string, int> VirtualKeyMappings = {
     {"VK_F24", VK_F24},
 };
 // XInput gamepad buttons
-#define XINPUT_GAMEPAD_LEFT_TRIGGER  0xCAFE
-#define XINPUT_GAMEPAD_RIGHT_TRIGGER 0xCAFF
+#define XINPUT_GAMEPAD_LEFT_TRIGGER  0x10000
+#define XINPUT_GAMEPAD_RIGHT_TRIGGER 0x20000
 static std::unordered_map<std::string, int> XInputMappings = {
     {"XINPUT_GAMEPAD_A", XINPUT_GAMEPAD_A},
     {"XINPUT_GAMEPAD_B", XINPUT_GAMEPAD_B},
