@@ -597,9 +597,14 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 				prev_depth_ = GetDepth();
 				prev_conv_ = GetConvergence();
 				config_.was_held[i] = true;
+				AdjustDepth(config_.user_depth[i], false, device_index);
+				AdjustConvergence(config_.user_convergence[i], false, device_index);
 			}
-			AdjustDepth(config_.user_depth[i], false, device_index);
-			AdjustConvergence(config_.user_convergence[i], false, device_index);
+			else if (!config_.was_held[i])
+			{
+				AdjustDepth(config_.user_depth[i], false, device_index);
+				AdjustConvergence(config_.user_convergence[i], false, device_index);
+			}
 		}
 		// Release depth&convergence back to normal
 		else if (config_.user_hold[i] && config_.was_held[i])
