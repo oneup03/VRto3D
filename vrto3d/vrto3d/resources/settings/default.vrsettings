@@ -20,6 +20,15 @@
 		"hdr_enable": false,
 		"ss_scale": 1.0,
 		"display_latency": 0.011,
-		"display_frequency": 60.0
+		"display_frequency": 60.0,
+		"num_user_settings": 2,
+		"user_load_key1": "0x61",
+		"user_store_key1": "0x64",
+		"user_depth1": 0.5,
+		"user_convergence1": 0.1,
+		"user_load_key2": "0x62",
+		"user_store_key2": "0x65",
+		"user_depth2": 0.1,
+		"user_convergence2": 0.5
 	}
 }

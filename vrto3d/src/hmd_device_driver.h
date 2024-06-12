@@ -7,6 +7,7 @@
 #include "openvr_driver.h"
 #include <atomic>
 #include <thread>
+#include <vector>
 
 enum MyComponent
 {
@@ -31,6 +32,12 @@ struct StereoDisplayDriverConfiguration
 	float fov;
 	float depth;
 	float convergence;
+
+	int32_t num_user_settings;
+	std::vector<int32_t> user_load_key;
+	std::vector<int32_t> user_store_key;
+	std::vector<float> user_depth;
+	std::vector<float> user_convergence;
 
 	bool tab_enable;
 	bool half_enable;
@@ -58,10 +65,11 @@ public:
 	bool ComputeInverseDistortion(vr::HmdVector2_t* pResult, vr::EVREye eEye, uint32_t unChannel, float fU, float fV) override;
 	void GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight ) override;
 	StereoDisplayDriverConfiguration GetConfig();
-	void AdjustDepth(float delta, uint32_t device_index);
-	void AdjustConvergence(float delta, uint32_t device_index);
+	void AdjustDepth(float new_depth, bool is_delta, uint32_t device_index);
+	void AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index);
 	float GetDepth();
 	float GetConvergence();
+	void SaveUserSetting(int i);
 
 private:
 	StereoDisplayDriverConfiguration config_;

@@ -8,6 +8,10 @@
 #include <ctime>
 #include <iomanip>
 #include <windows.h>
+#include <Xinput.h>
+
+// Link the XInput library
+#pragma comment(lib, "XInput.lib")
 
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
@@ -40,6 +44,27 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.fov = vr::VRSettings()->GetFloat(stereo_display_settings_section, "fov");
 	display_configuration.depth = vr::VRSettings()->GetFloat(stereo_display_settings_section, "depth");
 	display_configuration.convergence = vr::VRSettings()->GetFloat(stereo_display_settings_section, "convergence");
+
+	// Read user binds
+	display_configuration.num_user_settings = vr::VRSettings()->GetInt32(stereo_display_settings_section, "num_user_settings");
+	display_configuration.user_load_key.resize(display_configuration.num_user_settings);
+	display_configuration.user_store_key.resize(display_configuration.num_user_settings);
+	display_configuration.user_depth.resize(display_configuration.num_user_settings);
+	display_configuration.user_convergence.resize(display_configuration.num_user_settings);
+	for (int i = 0; i < display_configuration.num_user_settings; i++)
+	{
+		char user_key[1024];
+		std::string temp = "user_load_key" + std::to_string(i + 1);
+		vr::VRSettings()->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		display_configuration.user_load_key[i] = std::stoi(std::string(user_key), nullptr, 16);
+		temp = "user_store_key" + std::to_string(i + 1);
+		vr::VRSettings()->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		display_configuration.user_store_key[i] = std::stoi(std::string(user_key), nullptr, 16);
+		temp = "user_depth" + std::to_string(i + 1);
+		display_configuration.user_depth[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
+		temp = "user_convergence" + std::to_string(i + 1);
+		display_configuration.user_convergence[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
+	}
 
 	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
 	display_configuration.half_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "half_enable");
@@ -83,15 +108,15 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRProperties()->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
 
 	// Display settings
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_.get()->GetConfig().depth);
+	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
 	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_.get()->GetConfig().display_frequency);
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_.get()->GetConfig().display_latency);
+	vr::VRProperties()->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency);
+	vr::VRProperties()->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
 	vr::VRProperties()->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_.get()->GetConfig().hdr_enable);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_.get()->GetConfig().ss_enable);
+	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_->GetConfig().hdr_enable);
+	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_->GetConfig().ss_enable);
 
 	// Set the chaperone JSON property
 	// Get the current time
@@ -174,7 +199,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/click", &my_input_handles_[ MyComponent_system_click ] );
 
 	// Set supersample scale
-	vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, stereo_display_component_.get()->GetConfig().ss_scale);
+	vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, stereo_display_component_->GetConfig().ss_scale);
 	
 	// Miscellaneous settings
 	vr::VRSettings()->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);
@@ -242,26 +267,54 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 }
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
+	XINPUT_STATE state;
+	ZeroMemory(&state, sizeof(XINPUT_STATE));
+
 	while ( is_active_ )
 	{
+		// Get the state of the first controller (index 0)
+		DWORD dwResult = XInputGetState(0, &state);
+		if (dwResult == ERROR_SUCCESS) {
+			// Controller is connected
+			// Check the state of the buttons
+			if (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) {
+				stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
+			}
+		}
+
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
 		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
 		
 		// Ctrl+F3 Decrease Depth
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
-			stereo_display_component_->AdjustDepth(-0.001f, device_index_);
+			stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
 		}
 		// Ctrl+F4 Increase Depth
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
-			stereo_display_component_->AdjustDepth(0.001f, device_index_);
+			stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
 		}
 		// Ctrl+F5 Decrease Convergence
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
-			stereo_display_component_->AdjustConvergence(-0.001f, device_index_);
+			stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
 		}
 		// Ctrl+F6 Increase Convergence
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
-			stereo_display_component_->AdjustConvergence(0.001f, device_index_);
+			stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
+		}
+
+		// Check User binds
+		for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
+		{
+			if (GetAsyncKeyState(stereo_display_component_->GetConfig().user_load_key[i]) & 0x8000)
+			{
+				stereo_display_component_->AdjustDepth(stereo_display_component_->GetConfig().user_depth[i], false, device_index_);
+				stereo_display_component_->AdjustConvergence(stereo_display_component_->GetConfig().user_convergence[i], false, device_index_);
+			}
+
+			if (GetAsyncKeyState(stereo_display_component_->GetConfig().user_store_key[i]) & 0x8000)
+			{
+				stereo_display_component_->SaveUserSetting(i);
+			}
 		}
 
 		// Update our pose every 30 milliseconds.
@@ -287,8 +340,8 @@ void MockControllerDeviceDriver::Deactivate()
 		pose_update_thread_.join();
 	}
 
-	vr::VRSettings()->SetFloat(stereo_display_settings_section, "depth", stereo_display_component_.get()->GetDepth());
-	vr::VRSettings()->SetFloat(stereo_display_settings_section, "convergence", stereo_display_component_.get()->GetConvergence());
+	vr::VRSettings()->SetFloat(stereo_display_settings_section, "depth", stereo_display_component_->GetDepth());
+	vr::VRSettings()->SetFloat(stereo_display_settings_section, "convergence", stereo_display_component_->GetConvergence());
 
 	// unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
 	device_index_ = vr::k_unTrackedDeviceIndexInvalid;
@@ -450,10 +503,11 @@ StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 //-----------------------------------------------------------------------------
 // Purpose: To update the Depth value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustDepth(float delta, uint32_t device_index)
+void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_t device_index)
 {
 	float cur_depth = GetDepth();
-	float new_depth = cur_depth + delta;
+	if (is_delta)
+		new_depth += cur_depth;
 	while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
 	vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index);
 	vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
@@ -463,10 +517,11 @@ void StereoDisplayComponent::AdjustDepth(float delta, uint32_t device_index)
 //-----------------------------------------------------------------------------
 // Purpose: To update the Convergence value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustConvergence(float delta, uint32_t device_index)
+void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index)
 {
 	float cur_conv = GetConvergence();
-	float new_conv = cur_conv + delta;
+	if (is_delta)
+		new_conv += cur_conv;
 	while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
 	// Regenerate the Projection
 	vr::HmdRect2_t eyeLeft, eyeRight;
@@ -493,4 +548,14 @@ float StereoDisplayComponent::GetDepth()
 float StereoDisplayComponent::GetConvergence()
 {
 	return convergence_.load(std::memory_order_relaxed);
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Store current Depth and Convergence into user setting i
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::SaveUserSetting(int i)
+{
+	config_.user_depth[i] = GetDepth();
+	config_.user_convergence[i] = GetConvergence();
 }
