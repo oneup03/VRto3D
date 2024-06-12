@@ -40,6 +40,8 @@ struct StereoDisplayDriverConfiguration
 	std::vector<float> user_convergence;
 	std::vector<bool> user_hold;
 	std::vector<bool> was_held;
+	std::vector<bool> load_xinput;
+	std::vector<bool> store_xinput;
 
 	bool tab_enable;
 	bool half_enable;

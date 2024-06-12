@@ -192,6 +192,7 @@
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
     <ClInclude Include="src\device_provider.h" />
+    <ClInclude Include="src\VirtualKeyMappings.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\utils\driverlog\util_driverlog.vcxproj">
