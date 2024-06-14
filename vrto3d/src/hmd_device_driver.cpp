@@ -50,12 +50,15 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.num_user_settings = vr::VRSettings()->GetInt32(stereo_display_settings_section, "num_user_settings");
 	display_configuration.user_load_key.resize(display_configuration.num_user_settings);
 	display_configuration.user_store_key.resize(display_configuration.num_user_settings);
+	display_configuration.user_key_type.resize(display_configuration.num_user_settings);
 	display_configuration.user_depth.resize(display_configuration.num_user_settings);
 	display_configuration.user_convergence.resize(display_configuration.num_user_settings);
-	display_configuration.user_hold.resize(display_configuration.num_user_settings);
+	display_configuration.prev_depth.resize(display_configuration.num_user_settings);
+	display_configuration.prev_convergence.resize(display_configuration.num_user_settings);
 	display_configuration.was_held.resize(display_configuration.num_user_settings);
 	display_configuration.load_xinput.resize(display_configuration.num_user_settings);
 	display_configuration.store_xinput.resize(display_configuration.num_user_settings);
+	display_configuration.sleep_count.resize(display_configuration.num_user_settings);
 	for (int i = 0; i < display_configuration.num_user_settings; i++)
 	{
 		char user_key[1024];
@@ -65,7 +68,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 			display_configuration.user_load_key[i] = VirtualKeyMappings[user_key];
 			display_configuration.load_xinput[i] = false;
 		}
-		else if (XInputMappings.find(user_key) != VirtualKeyMappings.end()) {
+		else if (XInputMappings.find(user_key) != XInputMappings.end()) {
 			display_configuration.user_load_key[i] = XInputMappings[user_key];
 			display_configuration.load_xinput[i] = true;
 		}
@@ -75,16 +78,19 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 			display_configuration.user_store_key[i] = VirtualKeyMappings[user_key];
 			display_configuration.store_xinput[i] = false;
 		}
-		else if (XInputMappings.find(user_key) != VirtualKeyMappings.end()) {
+		else if (XInputMappings.find(user_key) != XInputMappings.end()) {
 			display_configuration.user_store_key[i] = XInputMappings[user_key];
 			display_configuration.store_xinput[i] = true;
+		}
+		temp = "user_key_type" + std::to_string(i + 1);
+		vr::VRSettings()->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		if (KeyBindTypes.find(user_key) != KeyBindTypes.end()) {
+			display_configuration.user_key_type[i] = KeyBindTypes[user_key];
 		}
 		temp = "user_depth" + std::to_string(i + 1);
 		display_configuration.user_depth[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
 		temp = "user_convergence" + std::to_string(i + 1);
 		display_configuration.user_convergence[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
-		temp = "user_hold" + std::to_string(i + 1);
-		display_configuration.user_hold[i] = vr::VRSettings()->GetBool(stereo_display_settings_section, temp.c_str());
 	}
 
 	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
@@ -318,18 +324,33 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
 			stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
 		}
-
-		// Ctrl+F3 Decrease Depth
-		if ((GetAsyncKeyState(VK_PAD_LTRIGGER) & 0x8000)) {
-			stereo_display_component_->AdjustDepth(-0.1f, true, device_index_);
+		// Ctrl+F7 Store Depth & Convergence values
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000)) {
+			SaveDepthConv();
 		}
-		
 
 		// Check User binds
 		stereo_display_component_->CheckUserSettings(device_index_);
 
 		// Update our pose every 30 milliseconds.
-		std::this_thread::sleep_for( std::chrono::milliseconds( 30 ) );
+		std::this_thread::sleep_for( std::chrono::milliseconds( 15 ) );
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Save Depth and Convergence to Steam\config\steamvr.vrsettings
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::SaveDepthConv()
+{
+	vr::VRSettings()->SetFloat(stereo_display_settings_section, "depth", stereo_display_component_->GetDepth());
+	vr::VRSettings()->SetFloat(stereo_display_settings_section, "convergence", stereo_display_component_->GetConvergence());
+
+	for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
+	{
+		std::string temp = "user_depth" + std::to_string(i + 1);
+		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_depth[i]);
+		temp = "user_convergence" + std::to_string(i + 1);
+		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_convergence[i]);
 	}
 }
 
@@ -349,17 +370,6 @@ void MockControllerDeviceDriver::Deactivate()
 	if ( is_active_.exchange( false ) )
 	{
 		pose_update_thread_.join();
-	}
-
-	vr::VRSettings()->SetFloat(stereo_display_settings_section, "depth", stereo_display_component_->GetDepth());
-	vr::VRSettings()->SetFloat(stereo_display_settings_section, "convergence", stereo_display_component_->GetConvergence());
-
-	for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
-	{
-		std::string temp = "user_depth" + std::to_string(i + 1);
-		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_depth[i]);
-		temp = "user_convergence" + std::to_string(i + 1);
-		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_convergence[i]);
 	}
 
 	// unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
@@ -575,55 +585,78 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 {
-	XINPUT_STATE state;
-	ZeroMemory(&state, sizeof(XINPUT_STATE));
-	// Get the state of the first controller (index 0)
-	DWORD dwResult = XInputGetState(0, &state);
+    XINPUT_STATE state;
+    ZeroMemory(&state, sizeof(XINPUT_STATE));
+    // Get the state of the first controller (index 0)
+    DWORD dwResult = XInputGetState(0, &state);
 
-	for (int i = 0; i < config_.num_user_settings; i++)
-	{
-		// Load stored convergence
-		if ((config_.load_xinput[i] && dwResult == ERROR_SUCCESS &&
-			((config_.user_load_key[i] == XINPUT_GAMEPAD_LEFT_TRIGGER &&
-				state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-				|| (config_.user_load_key[i] == XINPUT_GAMEPAD_RIGHT_TRIGGER &&
-					state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-				|| (state.Gamepad.wButtons & config_.user_load_key[i])))
-			|| (!config_.load_xinput[i] && (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000)))
-		{
-			// Used for holding a setting briefly
-			if (config_.user_hold[i] && !config_.was_held[i])
+    for (int i = 0; i < config_.num_user_settings; i++)
+    {
+        // Decrement the sleep count if it's greater than zero
+        if (config_.sleep_count[i] > 0)
+            config_.sleep_count[i]--;
+
+        bool keyPressed = (config_.load_xinput[i] && dwResult == ERROR_SUCCESS &&
+            ((config_.user_load_key[i] == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+            || (config_.user_load_key[i] == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+            || (state.Gamepad.wButtons & config_.user_load_key[i])))
+            || (!config_.load_xinput[i] && (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000));
+
+        // Load stored convergence
+        if (keyPressed)
+        {
+            if (config_.user_key_type[i] == HOLD && !config_.was_held[i])
+            {
+                config_.prev_depth[i] = GetDepth();
+                config_.prev_convergence[i] = GetConvergence();
+                config_.was_held[i] = true;
+                AdjustDepth(config_.user_depth[i], false, device_index);
+                AdjustConvergence(config_.user_convergence[i], false, device_index);
+            }
+			else if (config_.user_key_type[i] == TOGGLE && config_.sleep_count[i] < 1)
 			{
-				prev_depth_ = GetDepth();
-				prev_conv_ = GetConvergence();
-				config_.was_held[i] = true;
-				AdjustDepth(config_.user_depth[i], false, device_index);
-				AdjustConvergence(config_.user_convergence[i], false, device_index);
+				config_.sleep_count[i] = 100;
+				if (GetDepth() == config_.user_depth[i] && GetConvergence() == config_.user_convergence[i])
+				{
+					// If the current state matches the user settings, revert to the previous state
+					AdjustDepth(config_.prev_depth[i], false, device_index);
+					AdjustConvergence(config_.prev_convergence[i], false, device_index);
+				}
+				else
+				{
+					// Save the current state and apply the user settings
+					config_.prev_depth[i] = GetDepth();
+					config_.prev_convergence[i] = GetConvergence();
+					AdjustDepth(config_.user_depth[i], false, device_index);
+					AdjustConvergence(config_.user_convergence[i], false, device_index);
+				}
 			}
-			else if (!config_.was_held[i])
-			{
-				AdjustDepth(config_.user_depth[i], false, device_index);
-				AdjustConvergence(config_.user_convergence[i], false, device_index);
-			}
-		}
-		// Release depth&convergence back to normal
-		else if (config_.user_hold[i] && config_.was_held[i])
-		{
-			config_.was_held[i] = false;
-			AdjustDepth(prev_depth_, false, device_index);
-			AdjustConvergence(prev_conv_, false, device_index);
-		}
-		// Store current depth&convergence to user setting
-		if ((config_.store_xinput[i] && dwResult == ERROR_SUCCESS &&
-			((config_.user_store_key[i] == XINPUT_GAMEPAD_LEFT_TRIGGER &&
-				state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-				|| (config_.user_store_key[i] == XINPUT_GAMEPAD_RIGHT_TRIGGER &&
-					state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-				|| (state.Gamepad.wButtons & config_.user_store_key[i])))
-			|| (!config_.store_xinput[i] && (GetAsyncKeyState(config_.user_store_key[i]) & 0x8000)))
-		{
-			config_.user_depth[i] = GetDepth();
-			config_.user_convergence[i] = GetConvergence();
-		}
-	}
+            else if (config_.user_key_type[i] == SWITCH)
+            {
+                AdjustDepth(config_.user_depth[i], false, device_index);
+                AdjustConvergence(config_.user_convergence[i], false, device_index);
+            }
+        }
+        // Release depth & convergence back to normal for HOLD key type
+        else if (config_.user_key_type[i] == HOLD && config_.was_held[i])
+        {
+            config_.was_held[i] = false;
+            AdjustDepth(config_.prev_depth[i], false, device_index);
+            AdjustConvergence(config_.prev_convergence[i], false, device_index);
+        }
+
+        // Store current depth & convergence to user setting
+        bool storeKeyPressed = (config_.store_xinput[i] && dwResult == ERROR_SUCCESS &&
+            ((config_.user_store_key[i] == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+            || (config_.user_store_key[i] == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+            || (state.Gamepad.wButtons & config_.user_store_key[i])))
+            || (!config_.store_xinput[i] && (GetAsyncKeyState(config_.user_store_key[i]) & 0x8000));
+
+        if (storeKeyPressed)
+        {
+            config_.user_depth[i] = GetDepth();
+            config_.user_convergence[i] = GetConvergence();
+        }
+    }
 }
+

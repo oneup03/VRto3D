@@ -36,12 +36,15 @@ struct StereoDisplayDriverConfiguration
 	int32_t num_user_settings;
 	std::vector<int32_t> user_load_key;
 	std::vector<int32_t> user_store_key;
+	std::vector<int32_t> user_key_type;
 	std::vector<float> user_depth;
 	std::vector<float> user_convergence;
-	std::vector<bool> user_hold;
+	std::vector<float> prev_depth;
+	std::vector<float> prev_convergence;
 	std::vector<bool> was_held;
 	std::vector<bool> load_xinput;
 	std::vector<bool> store_xinput;
+	std::vector<int32_t> sleep_count;
 
 	bool tab_enable;
 	bool half_enable;
@@ -80,9 +83,6 @@ private:
 	StereoDisplayDriverConfiguration config_;
 	std::atomic< float > depth_;
 	std::atomic< float > convergence_;
-
-	float prev_depth_;
-	float prev_conv_;
 };
 
 //-----------------------------------------------------------------------------
@@ -100,6 +100,7 @@ public:
 	void Deactivate() override;
 
 	void PoseUpdateThread();
+	void SaveDepthConv();
 
 private:
 	std::unique_ptr< StereoDisplayComponent > stereo_display_component_;

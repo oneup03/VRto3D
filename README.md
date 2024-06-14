@@ -31,9 +31,9 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `num_user_settings` | `int`   | The number of user settings defined below.                                                  | `3`            |
 | `user_load_key#`    | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to load user setting # (replace # with integer number)                | `"VK_NUMPAD1"` |
 | `user_store_key#`   | `string`| The Virtual-Key Code to store user setting # (replace # with integer number)                | `"VK_NUMPAD4"` |
+| `user_key_type#`    | `string`| The store key's behavior ("switch" "toggle" "hold")                                         | `"switch"`     |
 | `user_depth#`       | `float` | The depth value for user setting # (replace # with integer number)                          | `0.5`          |
 | `user_convergence#` | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.1`          |
-| `user_hold#`        | `bool`  | User setting # (replace # with integer number) requires holding the button                  | `false`        |
 
 
 ## Installation
@@ -45,6 +45,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Try launching a VR game
 - Adjust Depth with `Ctrl+F3` and `Ctrl+F4`
 - Adjust Convergence with `Ctrl+F5` and `Ctrl+F6`
+- Save all Depth & Convergence settings with `Ctrl+F7`
 
 
 ## Notes
@@ -57,15 +58,19 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Recommend using a XInput controller
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is no headset movement or VR controller emulation
 - OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
+	- Select the OpenXR toggle in UEVR GUI
+	- Delete openvr_api.dll for REFramework
 - HDR doesn't seem to work currently
 - Several mods/games may override your supersample and other settings
 - DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not
 - Depth and Convergence are saved to your `Steam\config\steamvr.vrsettings` when SteamVR is closed. There are only global settings, no per-game ones.
 - User Depth and Convergence Binds
-	- The `num_user_settings` field must match the number of user defined configurations
+	- The `num_user_settings` field must match the number of user defined configurations - as many as you want
 	- Each configuration's Field Names should end with an integer, starting from 1
 	- A Load key and a Store key can be configured to load and save Depth and Convergence settings for a configuration set
-	- All User Depth and Convergence settings will be saved to `Steam\config\steamvr.vrsettings` when SteamVR is closed
+	- The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the user and current every 1.5s, or `"hold"` the user setting until the key is released
+	- The Store key will update your user Depth and Convergence setting to the current value
+	- Changed values are saved to `Steam\config\steamvr.vrsettings` if you press `Ctrl+F7`
 	- If a User Depth and Convergence setting is in `Steam\config\steamvr.vrsettings` then it will override `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings`
 
 

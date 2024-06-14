@@ -98,5 +98,14 @@ static std::unordered_map<std::string, int> XInputMappings = {
     {"XINPUT_GAMEPAD_LEFT_THUMB", XINPUT_GAMEPAD_LEFT_THUMB},
     {"XINPUT_GAMEPAD_RIGHT_THUMB", XINPUT_GAMEPAD_RIGHT_THUMB}
 };
+//Key Bind Types
+#define SWITCH 1
+#define TOGGLE 2
+#define HOLD   3
+static std::unordered_map<std::string, int> KeyBindTypes = {
+    {"switch", SWITCH},
+    {"toggle", TOGGLE},
+    {"hold", HOLD}
+};
 
 #endif // VIRTUAL_KEY_MAPPINGS_H

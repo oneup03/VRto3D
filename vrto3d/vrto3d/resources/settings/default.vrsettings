@@ -25,18 +25,18 @@
 		"num_user_settings": 3,
 		"user_load_key1": "VK_NUMPAD1",
 		"user_store_key1": "VK_NUMPAD4",
+		"user_key_type1": "switch",
 		"user_depth1": 0.5,
 		"user_convergence1": 0.1,
-		"user_hold1": false,
-		"user_load_key2": "VK_NUMPAD2",
+		"user_load_key2": "XINPUT_GAMEPAD_START",
 		"user_store_key2": "VK_NUMPAD5",
+		"user_key_type2": "toggle",
 		"user_depth2": 0.1,
-		"user_convergence2": 0.5,
-		"user_hold2": false,
+		"user_convergence2": 0.02,
 		"user_load_key3": "XINPUT_GAMEPAD_LEFT_TRIGGER",
 		"user_store_key3": "VK_NUMPAD6",
-		"user_depth3": 1.0,
-		"user_convergence3": 0.1,
-		"user_hold3": true
+		"user_key_type3": "hold",
+		"user_depth3": 0.25,
+		"user_convergence3": 0.02
 	}
 }
