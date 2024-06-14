@@ -28,6 +28,9 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `ss_scale`          | `float` | The supersample scale.                                                                      | `1.0`          |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
+| `ctrl_enable`       | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
+| `ctrl_deadzone`     | `float` | Controller Deadzone                                                                         | `0.05`         |
+| `ctrl_sensitivity`  | `float` | Controller Sensitivity                                                                      | `1.0`          |
 | `num_user_settings` | `int`   | The number of user settings defined below.                                                  | `3`            |
 | `user_load_key#`    | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to load user setting # (replace # with integer number)                | `"VK_NUMPAD1"` |
 | `user_store_key#`   | `string`| The Virtual-Key Code to store user setting # (replace # with integer number)                | `"VK_NUMPAD4"` |
@@ -56,10 +59,11 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Overlays generally won't work on this virtual HMD
 - For most games, you will need to have the "spectator view" screen in focus for your inputs to register from mouse/keyboard/controller
 - Recommend using a XInput controller
-- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is no headset movement or VR controller emulation
+- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only headset pitch emulation and no VR controller emulation
 - OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
 	- Select the OpenXR toggle in UEVR GUI
 	- Delete openvr_api.dll for REFramework
+- Optional HMD pitch emulation can be turned on to help with games or mods that prevent you from adjusting the game camera's pitch with a controller/mouse (maps to XInput right stick Y-axis)
 - HDR doesn't seem to work currently
 - Several mods/games may override your supersample and other settings
 - DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not

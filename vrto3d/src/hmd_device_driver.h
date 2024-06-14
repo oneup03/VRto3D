@@ -33,6 +33,21 @@ struct StereoDisplayDriverConfiguration
 	float depth;
 	float convergence;
 
+	bool tab_enable;
+	bool half_enable;
+	bool reverse_enable;
+	bool ss_enable;
+	bool hdr_enable;
+	bool depth_gauge;
+
+	float ss_scale;
+	float display_latency;
+	float display_frequency;
+
+	bool ctrl_enable;
+	float ctrl_deadzone;
+	float ctrl_sensitivity;
+
 	int32_t num_user_settings;
 	std::vector<int32_t> user_load_key;
 	std::vector<int32_t> user_store_key;
@@ -45,17 +60,6 @@ struct StereoDisplayDriverConfiguration
 	std::vector<bool> load_xinput;
 	std::vector<bool> store_xinput;
 	std::vector<int32_t> sleep_count;
-
-	bool tab_enable;
-	bool half_enable;
-	bool reverse_enable;
-	bool ss_enable;
-	bool hdr_enable;
-	bool depth_gauge;
-
-	float ss_scale;
-	float display_latency;
-	float display_frequency;
 };
 
 class StereoDisplayComponent : public vr::IVRDisplayComponent
@@ -78,6 +82,7 @@ public:
 	float GetDepth();
 	float GetConvergence();
 	void CheckUserSettings(uint32_t device_index);
+	void AdjustPitch(vr::HmdQuaternion_t& qRotation, float& currentPitch);
 
 private:
 	StereoDisplayDriverConfiguration config_;

@@ -46,6 +46,34 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.depth = vr::VRSettings()->GetFloat(stereo_display_settings_section, "depth");
 	display_configuration.convergence = vr::VRSettings()->GetFloat(stereo_display_settings_section, "convergence");
 
+	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
+	display_configuration.half_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "half_enable");
+	display_configuration.reverse_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "reverse_enable");
+	display_configuration.ss_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ss_enable");
+	display_configuration.hdr_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "hdr_enable");
+	display_configuration.depth_gauge = vr::VRSettings()->GetBool(stereo_display_settings_section, "depth_gauge");
+
+	display_configuration.ss_scale = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ss_scale");
+	display_configuration.display_latency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_latency");
+	display_configuration.display_frequency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_frequency");
+
+	int32_t half_width = display_configuration.half_enable ? 1 : 2;
+	if (display_configuration.tab_enable)
+	{
+		display_configuration.render_width = display_configuration.window_width;
+		display_configuration.render_height = display_configuration.window_height / half_width;
+	}
+	else
+	{
+		display_configuration.render_width = display_configuration.window_width / half_width;
+		display_configuration.render_height = display_configuration.window_height;
+	}
+
+	// Controller settings
+	display_configuration.ctrl_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ctrl_enable");
+	display_configuration.ctrl_deadzone = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
+	display_configuration.ctrl_sensitivity = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
+
 	// Read user binds
 	display_configuration.num_user_settings = vr::VRSettings()->GetInt32(stereo_display_settings_section, "num_user_settings");
 	display_configuration.user_load_key.resize(display_configuration.num_user_settings);
@@ -91,29 +119,6 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 		display_configuration.user_depth[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
 		temp = "user_convergence" + std::to_string(i + 1);
 		display_configuration.user_convergence[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
-	}
-
-	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
-	display_configuration.half_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "half_enable");
-	display_configuration.reverse_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "reverse_enable");
-	display_configuration.ss_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ss_enable");
-	display_configuration.hdr_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "hdr_enable");
-	display_configuration.depth_gauge = vr::VRSettings()->GetBool(stereo_display_settings_section, "depth_gauge");
-
-	display_configuration.ss_scale = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ss_scale");
-	display_configuration.display_latency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_latency");
-	display_configuration.display_frequency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_frequency");
-
-	int32_t half_width = display_configuration.half_enable ? 1 : 2;
-	if (display_configuration.tab_enable)
-	{
-		display_configuration.render_width = display_configuration.window_width;
-		display_configuration.render_height = display_configuration.window_height / half_width;
-	}
-	else
-	{
-		display_configuration.render_width = display_configuration.window_width / half_width;
-		display_configuration.render_height = display_configuration.window_height;
 	}
 
 	// Instantiate our display component
@@ -277,10 +282,12 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Static Pose, Depth and Convergence Hotkeys
+// Purpose: Static Pose with pitch adjustment, Depth and Convergence Hotkeys
 //-----------------------------------------------------------------------------
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
+	static float currentPitch = 0.0f; // Keep track of the current pitch
+
 	vr::DriverPose_t pose = { 0 };
 
 	pose.qWorldFromDriverRotation.w = 1.f;
@@ -299,10 +306,17 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 	// For HMDs we want to apply rotation/motion prediction
 	pose.shouldApplyHeadModel = false;
 
+	// Adjust pitch based on controller input
+	if (stereo_display_component_->GetConfig().ctrl_enable)
+	{
+		stereo_display_component_->AdjustPitch(pose.qRotation, currentPitch);
+	}
+
 	return pose;
 }
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
+	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
 	while ( is_active_ )
 	{
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
@@ -332,8 +346,8 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		// Check User binds
 		stereo_display_component_->CheckUserSettings(device_index_);
 
-		// Update our pose every 30 milliseconds.
-		std::this_thread::sleep_for( std::chrono::milliseconds( 15 ) );
+		// Update our pose ~ every frame
+		std::this_thread::sleep_for( std::chrono::milliseconds(sleep_time));
 	}
 }
 
@@ -660,3 +674,41 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     }
 }
 
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust HMD Pitch using XInput Right Stick YAxis
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustPitch(vr::HmdQuaternion_t& qRotation, float& currentPitch)
+{
+	XINPUT_STATE state;
+	ZeroMemory(&state, sizeof(XINPUT_STATE));
+	DWORD dwResult = XInputGetState(0, &state);
+
+	if (dwResult == ERROR_SUCCESS)
+	{
+		SHORT sThumbRY = state.Gamepad.sThumbRY;
+		float normalizedY = sThumbRY / 32767.0f;
+
+		// Apply deadzone
+		if (std::abs(normalizedY) < config_.ctrl_deadzone)
+		{
+			normalizedY = 0.0f;
+		}
+		else
+		{
+			if (normalizedY > 0)
+				normalizedY = (normalizedY - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+			else
+				normalizedY = (normalizedY + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+		}
+
+		// Scale Pitch
+		currentPitch += (normalizedY * config_.ctrl_sensitivity);
+		if (currentPitch > 90.0f) currentPitch = 90.0f;
+		if (currentPitch < -90.0f) currentPitch = -90.0f;
+
+		// Adjust quaternion
+		vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, DEG_TO_RAD(currentPitch), 0);
+		qRotation = HmdQuaternion_Normalize(qRotation * pitchQuaternion);
+	}
+}
