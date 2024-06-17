@@ -36,7 +36,7 @@ jobs:
     - name: Compress artifacts
       uses: vimtor/action-zip@v1.1
       with:
-        files: output/drivers/ README.md
+        files: output/drivers/ README.md LICENSE
         dest: "output/${{github.event.repository.name}}.zip"
 
     - name: GitHub pre-release
