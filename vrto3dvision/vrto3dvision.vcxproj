@@ -190,9 +190,9 @@
     <ClCompile Include="src\hmd_driver_factory.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\vrto3d\src\key_mappings.h" />
     <ClInclude Include="src\hmd_device_driver.h" />
     <ClInclude Include="src\device_provider.h" />
-    <ClInclude Include="src\key_mappings.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\utils\driverlog\util_driverlog.vcxproj">
