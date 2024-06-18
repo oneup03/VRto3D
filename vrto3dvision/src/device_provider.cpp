@@ -12,7 +12,7 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with <Your Project Name>. If not, see <http://www.gnu.org/licenses/>.
+ * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 #include "device_provider.h"
 
@@ -29,10 +29,10 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 	VR_INIT_SERVER_DRIVER_CONTEXT( pDriverContext );
 
 	// First, initialize our hmd, which we'll later pass OpenVR a pointer to.
-	my_hmd_device_ = std::make_unique< MockControllerDeviceDriver >();
+	my_hmd_device_ = std::make_unique< OVR_3DV_Driver >();
 
 	// TrackedDeviceAdded returning true means we have had our device added to SteamVR.
-	if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3D-1234", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
+	if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3DV-5678", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
 	{
 		DriverLog( "Failed to create hmd device!" );
 		return vr::VRInitError_Driver_Unknown;

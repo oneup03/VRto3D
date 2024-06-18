@@ -12,7 +12,7 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with <Your Project Name>. If not, see <http://www.gnu.org/licenses/>.
+ * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 #include "device_provider.h"
 #include "openvr_driver.h"

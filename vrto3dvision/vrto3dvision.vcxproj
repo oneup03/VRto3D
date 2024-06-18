@@ -185,13 +185,15 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\hmd_device_driver.cpp" />
+    <ClCompile Include="src\3dv_device_driver.cpp" />
+    <ClCompile Include="src\D3D11_tex.cpp" />
     <ClCompile Include="src\device_provider.cpp" />
     <ClCompile Include="src\hmd_driver_factory.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\vrto3d\src\key_mappings.h" />
-    <ClInclude Include="src\hmd_device_driver.h" />
+    <ClInclude Include="src\3dv_device_driver.h" />
+    <ClInclude Include="src\D3D11_tex.h" />
     <ClInclude Include="src\device_provider.h" />
   </ItemGroup>
   <ItemGroup>

@@ -12,13 +12,13 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with <Your Project Name>. If not, see <http://www.gnu.org/licenses/>.
+ * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 #pragma once
 
 #include <memory>
 
-#include "hmd_device_driver.h"
+#include "3dv_device_driver.h"
 #include "openvr_driver.h"
 
 // make sure your class is publicly inheriting vr::IServerTrackedDeviceProvider!
@@ -37,5 +37,5 @@ public:
 	void Cleanup() override;
 
 private:
-	std::unique_ptr<MockControllerDeviceDriver> my_hmd_device_;
+	std::unique_ptr<OVR_3DV_Driver> my_hmd_device_;
 };
