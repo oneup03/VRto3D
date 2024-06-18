@@ -46,6 +46,8 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed
 - Run SteamVR
 - Try launching a VR game
+- Drag everything besides the heaadset view to your second monitor
+- Make the game's window in focus on your second monitor for control input to work
 - Adjust Depth with `Ctrl+F3` and `Ctrl+F4`
 - Adjust Convergence with `Ctrl+F5` and `Ctrl+F6`
 - Save all Depth & Convergence settings with `Ctrl+F7`
@@ -53,7 +55,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 
 ## Notes
 
-- You will need a multi-monitor setup. A virtual monitor will work, but will prove tricky. [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/)
+- You will need a multi-monitor setup in extended mode. A virtual monitor will work, but will prove tricky. [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/)
 - Sunshine/Moonlight is compatible
 - SteamVR may still complain about Direct Display mode, but this can be safely ignored
 - Overlays generally won't work on this virtual HMD
