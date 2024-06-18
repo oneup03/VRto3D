@@ -38,11 +38,13 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	// Keep track of whether Activate() has been called
 	is_active_ = false;
 
+	auto* vrs = vr::VRSettings();
+
 	char model_number[ 1024 ];
-	vr::VRSettings()->GetString( stereo_main_settings_section, "model_number", model_number, sizeof( model_number ) );
+	vrs->GetString( stereo_main_settings_section, "model_number", model_number, sizeof( model_number ) );
 	stereo_model_number_ = model_number;
 	char serial_number[ 1024 ];
-	vr::VRSettings()->GetString( stereo_main_settings_section, "serial_number", serial_number, sizeof( serial_number ) );
+	vrs->GetString( stereo_main_settings_section, "serial_number", serial_number, sizeof( serial_number ) );
 	stereo_serial_number_ = serial_number;
 
 	DriverLog( "VRto3D Model Number: %s", stereo_model_number_.c_str() );
@@ -50,27 +52,27 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
 	// Display settings
 	StereoDisplayDriverConfiguration display_configuration{};
-	display_configuration.window_x = vr::VRSettings()->GetInt32( stereo_display_settings_section, "window_x" );
-	display_configuration.window_y = vr::VRSettings()->GetInt32( stereo_display_settings_section, "window_y" );
+	display_configuration.window_x = vrs->GetInt32( stereo_display_settings_section, "window_x" );
+	display_configuration.window_y = vrs->GetInt32( stereo_display_settings_section, "window_y" );
 
-	display_configuration.window_width = vr::VRSettings()->GetInt32( stereo_display_settings_section, "window_width" );
-	display_configuration.window_height = vr::VRSettings()->GetInt32( stereo_display_settings_section, "window_height" );
+	display_configuration.window_width = vrs->GetInt32( stereo_display_settings_section, "window_width" );
+	display_configuration.window_height = vrs->GetInt32( stereo_display_settings_section, "window_height" );
 
-	display_configuration.aspect_ratio = vr::VRSettings()->GetFloat(stereo_display_settings_section, "aspect_ratio");
-	display_configuration.fov = vr::VRSettings()->GetFloat(stereo_display_settings_section, "fov");
-	display_configuration.depth = vr::VRSettings()->GetFloat(stereo_display_settings_section, "depth");
-	display_configuration.convergence = vr::VRSettings()->GetFloat(stereo_display_settings_section, "convergence");
+	display_configuration.aspect_ratio = vrs->GetFloat(stereo_display_settings_section, "aspect_ratio");
+	display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
+	display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
+	display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
 
-	display_configuration.tab_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "tab_enable");
-	display_configuration.half_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "half_enable");
-	display_configuration.reverse_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "reverse_enable");
-	display_configuration.ss_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ss_enable");
-	display_configuration.hdr_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "hdr_enable");
-	display_configuration.depth_gauge = vr::VRSettings()->GetBool(stereo_display_settings_section, "depth_gauge");
+	display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
+	display_configuration.half_enable = vrs->GetBool(stereo_display_settings_section, "half_enable");
+	display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
+	display_configuration.ss_enable = vrs->GetBool(stereo_display_settings_section, "ss_enable");
+	display_configuration.hdr_enable = vrs->GetBool(stereo_display_settings_section, "hdr_enable");
+	display_configuration.depth_gauge = vrs->GetBool(stereo_display_settings_section, "depth_gauge");
 
-	display_configuration.ss_scale = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ss_scale");
-	display_configuration.display_latency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_latency");
-	display_configuration.display_frequency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_frequency");
+	display_configuration.ss_scale = vrs->GetFloat(stereo_display_settings_section, "ss_scale");
+	display_configuration.display_latency = vrs->GetFloat(stereo_display_settings_section, "display_latency");
+	display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
 
 	int32_t half_width = display_configuration.half_enable ? 1 : 2;
 	if (display_configuration.tab_enable)
@@ -85,12 +87,12 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	}
 
 	// Controller settings
-	display_configuration.ctrl_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ctrl_enable");
-	display_configuration.ctrl_deadzone = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
-	display_configuration.ctrl_sensitivity = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
+	display_configuration.ctrl_enable = vrs->GetBool(stereo_display_settings_section, "ctrl_enable");
+	display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
+	display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
 
 	// Read user binds
-	display_configuration.num_user_settings = vr::VRSettings()->GetInt32(stereo_display_settings_section, "num_user_settings");
+	display_configuration.num_user_settings = vrs->GetInt32(stereo_display_settings_section, "num_user_settings");
 	display_configuration.user_load_key.resize(display_configuration.num_user_settings);
 	display_configuration.user_store_key.resize(display_configuration.num_user_settings);
 	display_configuration.user_key_type.resize(display_configuration.num_user_settings);
@@ -106,7 +108,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	{
 		char user_key[1024];
 		std::string temp = "user_load_key" + std::to_string(i + 1);
-		vr::VRSettings()->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
 		if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
 			display_configuration.user_load_key[i] = VirtualKeyMappings[user_key];
 			display_configuration.load_xinput[i] = false;
@@ -116,7 +118,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 			display_configuration.load_xinput[i] = true;
 		}
 		temp = "user_store_key" + std::to_string(i + 1);
-		vr::VRSettings()->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
 		if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
 			display_configuration.user_store_key[i] = VirtualKeyMappings[user_key];
 			display_configuration.store_xinput[i] = false;
@@ -126,7 +128,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 			display_configuration.store_xinput[i] = true;
 		}
 		temp = "user_key_type" + std::to_string(i + 1);
-		vr::VRSettings()->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
 		if (KeyBindTypes.find(user_key) != KeyBindTypes.end()) {
 			display_configuration.user_key_type[i] = KeyBindTypes[user_key];
 		}
@@ -149,29 +151,31 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	is_active_ = true;
 
 	// A list of properties available is contained in vr::ETrackedDeviceProperty.
-	vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer( device_index_ );
-	vr::VRProperties()->SetStringProperty( container, vr::Prop_ModelNumber_String, stereo_model_number_.c_str() );
-	vr::VRProperties()->SetStringProperty( container, vr::Prop_ManufacturerName_String, "VRto3D");
-	vr::VRProperties()->SetStringProperty( container, vr::Prop_TrackingFirmwareVersion_String, "1.0");
-	vr::VRProperties()->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
+	auto* vrp = vr::VRProperties();
+	auto* vrs = vr::VRSettings();
+	vr::PropertyContainerHandle_t container = vrp->TrackedDeviceToPropertyContainer( device_index_ );
+	vrp->SetStringProperty( container, vr::Prop_ModelNumber_String, stereo_model_number_.c_str() );
+	vrp->SetStringProperty( container, vr::Prop_ManufacturerName_String, "VRto3D");
+	vrp->SetStringProperty( container, vr::Prop_TrackingFirmwareVersion_String, "1.0");
+	vrp->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
 
 	// Display settings
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency);
-	vr::VRProperties()->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_->GetConfig().hdr_enable);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_->GetConfig().ss_enable);
+	vrp->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
+	vrp->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
+	vrp->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency);
+	vrp->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
+	vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
+	vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_->GetConfig().hdr_enable);
+	vrp->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_->GetConfig().ss_enable);
 	if (stereo_display_component_->GetConfig().depth_gauge)
 	{
-		vr::VRProperties()->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
+		vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
 	}
 	else
 	{
-		vr::VRProperties()->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 0.0f);
+		vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 0.0f);
 	}
 
 	// Set the chaperone JSON property
@@ -231,22 +235,24 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	// Convert the stringstream to a string
 	std::string chaperoneJson = ss.str();
 	// Set the chaperone JSON property
-	vr::VRProperties()->SetStringProperty(container, vr::Prop_DriverProvidedChaperoneJson_String, chaperoneJson.c_str());
-	vr::VRProperties()->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
+	vrp->SetStringProperty(container, vr::Prop_DriverProvidedChaperoneJson_String, chaperoneJson.c_str());
+	vrp->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
+	vrs->SetInt32(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_Style_Int32, vr::COLLISION_BOUNDS_STYLE_NONE);
+	vrs->SetBool(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_GroundPerimeterOn_Bool, false);
 
 	// Miscellaneous settings
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DeviceIsWireless_Bool, false);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DeviceIsCharging_Bool, false);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_ContainsProximitySensor_Bool, false);
-	vr::VRProperties()->SetBoolProperty( container, vr::Prop_DeviceCanPowerOff_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_DeviceIsWireless_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_DeviceIsCharging_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_ContainsProximitySensor_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_DeviceCanPowerOff_Bool, false);
 
 	// Now let's set up our inputs
 	// This tells the UI what to show the user for bindings for this controller,
 	// As well as what default bindings should be for legacy apps.
 	// Note, we can use the wildcard {<driver_name>} to match the root folder location
 	// of our driver.
-	vr::VRProperties()->SetStringProperty( container, vr::Prop_InputProfilePath_String, "{vrto3d}/input/vrto3d_profile.json" );
+	vrp->SetStringProperty( container, vr::Prop_InputProfilePath_String, "{vrto3d}/input/vrto3d_profile.json" );
 
 	// Let's set up handles for all of our components.
 	// Even though these are also defined in our input profile,
@@ -255,16 +261,16 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/click", &my_input_handles_[ MyComponent_system_click ] );
 
 	// Set supersample scale
-	vr::VRSettings()->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, stereo_display_component_->GetConfig().ss_scale);
+	vrs->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, stereo_display_component_->GetConfig().ss_scale);
 	
 	// Miscellaneous settings
-	vr::VRSettings()->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);
-	vr::VRSettings()->SetFloat(vr::k_pch_Power_Section, vr::k_pch_Power_TurnOffScreensTimeout_Float, 86400.0f);
-	vr::VRSettings()->SetBool(vr::k_pch_Power_Section, vr::k_pch_Power_PauseCompositorOnStandby_Bool, false);
-	vr::VRSettings()->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_EnableDashboard_Bool, false);
-	vr::VRSettings()->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, false);
-	vr::VRSettings()->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MirrorViewVisibility_Bool, false);
-	vr::VRSettings()->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
+	vrs->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);
+	vrs->SetFloat(vr::k_pch_Power_Section, vr::k_pch_Power_TurnOffScreensTimeout_Float, 86400.0f);
+	vrs->SetBool(vr::k_pch_Power_Section, vr::k_pch_Power_PauseCompositorOnStandby_Bool, false);
+	vrs->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_EnableDashboard_Bool, false);
+	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, false);
+	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MirrorViewVisibility_Bool, false);
+	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
 	
 	pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
 
@@ -272,8 +278,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: If you're an HMD, this is where you would return an implementation
-// of vr::IVRDisplayComponent, vr::IVRVirtualDisplay or vr::IVRDirectModeComponent.
+// Purpose: Return StereoDisplayComponent as vr::IVRDisplayComponent
 //-----------------------------------------------------------------------------
 void *MockControllerDeviceDriver::GetComponent( const char *pchComponentNameAndVersion )
 {
@@ -297,7 +302,7 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Static Pose with pitch adjustment, Depth and Convergence Hotkeys
+// Purpose: Static Pose with pitch adjustment
 //-----------------------------------------------------------------------------
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
@@ -329,6 +334,11 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 
 	return pose;
 }
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Update HMD position, Depth, Convergence, and user binds
+//-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
 	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
