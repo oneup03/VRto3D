@@ -52,8 +52,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
 	// Display settings
 	StereoDisplayDriverConfiguration display_configuration{};
-	display_configuration.window_x = vrs->GetInt32( stereo_display_settings_section, "window_x" );
-	display_configuration.window_y = vrs->GetInt32( stereo_display_settings_section, "window_y" );
+	display_configuration.window_x = 0;
+	display_configuration.window_y = 0;
 
 	display_configuration.window_width = vrs->GetInt32( stereo_display_settings_section, "window_width" );
 	display_configuration.window_height = vrs->GetInt32( stereo_display_settings_section, "window_height" );
@@ -66,11 +66,9 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
 	display_configuration.half_enable = vrs->GetBool(stereo_display_settings_section, "half_enable");
 	display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
-	display_configuration.ss_enable = vrs->GetBool(stereo_display_settings_section, "ss_enable");
 	display_configuration.hdr_enable = vrs->GetBool(stereo_display_settings_section, "hdr_enable");
 	display_configuration.depth_gauge = vrs->GetBool(stereo_display_settings_section, "depth_gauge");
 
-	display_configuration.ss_scale = vrs->GetFloat(stereo_display_settings_section, "ss_scale");
 	display_configuration.display_latency = vrs->GetFloat(stereo_display_settings_section, "display_latency");
 	display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
 
@@ -168,7 +166,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
 	vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_->GetConfig().hdr_enable);
-	vrp->SetBoolProperty( container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, stereo_display_component_->GetConfig().ss_enable);
 	if (stereo_display_component_->GetConfig().depth_gauge)
 	{
 		vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
@@ -259,9 +256,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	// We need to get handles to them to update the inputs.
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/touch", &my_input_handles_[ MyComponent_system_touch ] );
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/click", &my_input_handles_[ MyComponent_system_click ] );
-
-	// Set supersample scale
-	vrs->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, stereo_display_component_->GetConfig().ss_scale);
 	
 	// Miscellaneous settings
 	vrs->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);

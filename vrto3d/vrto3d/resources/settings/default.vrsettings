@@ -5,8 +5,6 @@
 		"model_number": "Stereo3D-1"
 	},
 	"vrto3d_display": {
-		"window_x": 0,
-		"window_y": 0,
 		"window_width": 1920,
 		"window_height": 1080,
 		"aspect_ratio": 1.77778,
@@ -16,10 +14,8 @@
 		"tab_enable": false,
 		"half_enable": true,
 		"reverse_enable": false,
-		"ss_enable": false,
 		"hdr_enable": false,
 		"depth_gauge": false,
-		"ss_scale": 1.0,
 		"display_latency": 0.011,
 		"display_frequency": 60.0,
 		"ctrl_enable": false,

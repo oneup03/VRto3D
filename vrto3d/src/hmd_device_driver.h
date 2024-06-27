@@ -51,11 +51,9 @@ struct StereoDisplayDriverConfiguration
 	bool tab_enable;
 	bool half_enable;
 	bool reverse_enable;
-	bool ss_enable;
 	bool hdr_enable;
 	bool depth_gauge;
 
-	float ss_scale;
 	float display_latency;
 	float display_frequency;
 
