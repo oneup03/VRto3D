@@ -141,7 +141,7 @@ private:
 	std::string stereo_model_number_;
 	std::string stereo_serial_number_;
 
-	bool    m_generateVSync{ true };
+	bool    m_generateVSync{ false };
 
 	RenderHelper              m_renderHelper;
 	std::vector<TextureSet *> m_texSets;

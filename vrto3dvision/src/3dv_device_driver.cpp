@@ -544,6 +544,10 @@ void OVR_3DV_Driver::Deactivate()
     m_runVSyncThread = false;
     m_vSyncThread.join();
   }
+  if (is_active_.exchange(false))
+  {
+      pose_update_thread_.join();
+  }
 
     device_index_ = vr::k_unTrackedDeviceIndexInvalid;
 }
