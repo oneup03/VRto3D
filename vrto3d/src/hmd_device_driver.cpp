@@ -219,7 +219,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     "yaw" : 0.0
                  },
                  "standing" : {
-                    "translation" : [ 0.0, 0.0, 0.0 ],
+                    "translation" : [ 0.0, 1.0, 0.0 ],
                     "yaw" : 0.0
                  },
                  "time" : ")" << std::put_time(&tm, "%a %b %d %H:%M:%S %Y") << R"(",

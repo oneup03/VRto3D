@@ -52,6 +52,9 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 
 ## Notes
 
+- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only headset pitch emulation and no VR controller emulation
+- Configuring controller bindings in SteamVR settings may allow a few more games to be compatible
+- Check the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
 - You will need a multi-display setup in extended mode
 - The primary display will be where the "Headset" window is located
 - The secondary display will need to have the game's main window in focus for control input from your mouse/keyboard/controller to work
@@ -63,9 +66,9 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Use Windows shortcut keys to move windowed programs around `Win + Left/Right Keys`
 - Use Windows shortcut keys to move fullscreen programs around `Shift + Win + Left/Right`
 - SteamVR may still complain about Direct Display mode, but this can be safely ignored
+- Exiting SteamVR will "restart" Steam - this is normal
 - Overlays generally won't work on this virtual HMD
 - Recommend using a XInput controller
-- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only headset pitch emulation and no VR controller emulation
 - OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
 	- Select the OpenXR toggle in UEVR GUI
 	- Delete openvr_api.dll for REFramework
