@@ -7,6 +7,7 @@
 	"vrto3d_display": {
 		"window_width": 1920,
 		"window_height": 1080,
+		"hmd_height": 1.0,
 		"aspect_ratio": 1.77778,
 		"fov": 90.0,
 		"depth": 0.5,
@@ -18,7 +19,8 @@
 		"depth_gauge": false,
 		"display_latency": 0.011,
 		"display_frequency": 60.0,
-		"ctrl_enable": false,
+		"pitch_enable": false,
+		"yaw_enable": false,
 		"ctrl_deadzone": 0.05,
 		"ctrl_sensitivity": 1.0,
 		"num_user_settings": 3,

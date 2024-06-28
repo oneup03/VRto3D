@@ -43,6 +43,8 @@ struct StereoDisplayDriverConfiguration
 	int32_t render_width;
 	int32_t render_height;
 
+	float hmd_height;
+
 	float aspect_ratio;
 	float fov;
 	float depth;
@@ -57,7 +59,8 @@ struct StereoDisplayDriverConfiguration
 	float display_latency;
 	float display_frequency;
 
-	bool ctrl_enable;
+	bool pitch_enable;
+	bool yaw_enable;
 	float ctrl_deadzone;
 	float ctrl_sensitivity;
 
@@ -95,7 +98,8 @@ public:
 	float GetDepth();
 	float GetConvergence();
 	void CheckUserSettings(uint32_t device_index);
-	void AdjustPitch(vr::HmdQuaternion_t& qRotation, float& currentPitch);
+	void AdjustPitch(float& currentPitch);
+	void AdjustYaw(float& currentYaw);
 
 private:
 	StereoDisplayDriverConfiguration config_;

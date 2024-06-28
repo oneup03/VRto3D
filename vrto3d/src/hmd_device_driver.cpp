@@ -58,6 +58,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.window_width = vrs->GetInt32( stereo_display_settings_section, "window_width" );
 	display_configuration.window_height = vrs->GetInt32( stereo_display_settings_section, "window_height" );
 
+	display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
+
 	display_configuration.aspect_ratio = vrs->GetFloat(stereo_display_settings_section, "aspect_ratio");
 	display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
 	display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
@@ -85,7 +87,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	}
 
 	// Controller settings
-	display_configuration.ctrl_enable = vrs->GetBool(stereo_display_settings_section, "ctrl_enable");
+	display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");
+	display_configuration.yaw_enable = vrs->GetBool(stereo_display_settings_section, "yaw_enable");
 	display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
 	display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
 
@@ -215,7 +218,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                  ],
                  "play_area" : [ 2.0, 2.0 ],
                  "seated" : {
-                    "translation" : [ 0.0, 0.0, 0.0 ],
+                    "translation" : [ 0.0, 0.5, 0.0 ],
                     "yaw" : 0.0
                  },
                  "standing" : {
@@ -301,16 +304,17 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
 	static float currentPitch = 0.0f; // Keep track of the current pitch
+	static float currentYaw = 0.0f; // Keep track of the current yaw
 
 	vr::DriverPose_t pose = { 0 };
 
-	pose.qWorldFromDriverRotation.w = 1.f;
-	pose.qDriverFromHeadRotation.w = 1.f;
+	pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
+	pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
 
-	pose.qRotation.w = 1.f;
+	pose.qRotation = HmdQuaternion_Identity;
 
 	pose.vecPosition[ 0 ] = 0.0f;
-	pose.vecPosition[ 1 ] = 1.0f;
+	pose.vecPosition[ 1 ] = stereo_display_component_->GetConfig().hmd_height;
 	pose.vecPosition[ 2 ] = 0.0f;
 
 	pose.poseIsValid = true;
@@ -321,10 +325,23 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 	pose.shouldApplyHeadModel = false;
 
 	// Adjust pitch based on controller input
-	if (stereo_display_component_->GetConfig().ctrl_enable)
+	if (stereo_display_component_->GetConfig().pitch_enable)
 	{
-		stereo_display_component_->AdjustPitch(pose.qRotation, currentPitch);
+		stereo_display_component_->AdjustPitch(currentPitch);
 	}
+
+	// Adjust yaw based on controller input
+	if (stereo_display_component_->GetConfig().yaw_enable)
+	{
+		stereo_display_component_->AdjustYaw(currentYaw);
+	}
+
+	// Recompose the rotation quaternion from pitch and yaw
+	vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, DEG_TO_RAD(currentPitch), 0);
+	vr::HmdQuaternion_t yawQuaternion = HmdQuaternion_FromEulerAngles(0, 0, DEG_TO_RAD(currentYaw));
+
+	// Combine pitch and yaw quaternions
+	pose.qRotation = HmdQuaternion_Normalize(yawQuaternion * pitchQuaternion);
 
 	return pose;
 }
@@ -697,7 +714,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 //-----------------------------------------------------------------------------
 // Purpose: Adjust HMD Pitch using XInput Right Stick YAxis
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustPitch(vr::HmdQuaternion_t& qRotation, float& currentPitch)
+void StereoDisplayComponent::AdjustPitch(float& currentPitch)
 {
 	XINPUT_STATE state;
 	ZeroMemory(&state, sizeof(XINPUT_STATE));
@@ -725,9 +742,43 @@ void StereoDisplayComponent::AdjustPitch(vr::HmdQuaternion_t& qRotation, float& 
 		currentPitch += (normalizedY * config_.ctrl_sensitivity);
 		if (currentPitch > 90.0f) currentPitch = 90.0f;
 		if (currentPitch < -90.0f) currentPitch = -90.0f;
+	}
+}
 
-		// Adjust quaternion
-		vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, DEG_TO_RAD(currentPitch), 0);
-		qRotation = HmdQuaternion_Normalize(qRotation * pitchQuaternion);
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust HMD Yaw using XInput Right Stick XAxis
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustYaw(float& currentYaw)
+{
+	XINPUT_STATE state;
+	ZeroMemory(&state, sizeof(XINPUT_STATE));
+	DWORD dwResult = XInputGetState(0, &state);
+
+	if (dwResult == ERROR_SUCCESS)
+	{
+		SHORT sThumbRX = state.Gamepad.sThumbRX;
+		float normalizedX = sThumbRX / 32767.0f;
+
+		// Apply deadzone
+		if (std::abs(normalizedX) < config_.ctrl_deadzone)
+		{
+			normalizedX = 0.0f;
+		}
+		else
+		{
+			if (normalizedX > 0)
+				normalizedX = (normalizedX - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+			else
+				normalizedX = (normalizedX + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+		}
+
+		// Scale Yaw
+		float yawAdjustment = -normalizedX * config_.ctrl_sensitivity;
+
+		// Apply the incremental yaw adjustment to the current yaw
+		currentYaw += yawAdjustment;
+		if (currentYaw > 180.0f) currentYaw -= 360.0f;
+		if (currentYaw < -180.0f) currentYaw += 360.0f;
 	}
 }

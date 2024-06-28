@@ -13,6 +13,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
 | `window_width`      | `int`   | The width of the application window.                                                        | `1920`         |
 | `window_height`     | `int`   | The height of the application window.                                                       | `1080`         |
+| `hmd_height`        | `float` | The height of the simulated HMD.                                                            | `1.0`          |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`         |
 | `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`          |
@@ -24,7 +25,8 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
-| `ctrl_enable`       | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
+| `pitch_enable`      | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
+| `yaw_enable`        | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
 | `ctrl_deadzone`     | `float` | Controller Deadzone                                                                         | `0.05`         |
 | `ctrl_sensitivity`  | `float` | Controller Sensitivity                                                                      | `1.0`          |
 | `num_user_settings` | `int`   | The number of user settings defined below.                                                  | `3`            |
@@ -70,10 +72,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Overlays generally won't work on this virtual HMD
 - Recommend using a XInput controller
 - OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
-	- Select the OpenXR toggle in UEVR GUI
-	- Delete openvr_api.dll for REFramework
-- Optional HMD pitch emulation can be turned on to help with games or mods that prevent you from adjusting the game camera's pitch with a controller/mouse (maps to XInput right stick Y-axis)
-	- REFramework lua files can be modified to remove the pitch lock. Search for `Stop the player from rotating the camera vertically` and remove the block of code from the `if` to its `end`
+- Optional HMD pitch and yaw emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
 - HDR doesn't seem to work currently
 - Several mods/games may override your settings
 - DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not
