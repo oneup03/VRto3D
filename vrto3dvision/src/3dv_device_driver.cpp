@@ -60,9 +60,6 @@ OVR_3DV_Driver::OVR_3DV_Driver()
     DriverLog("VRto3DVision Serial Number: %s", stereo_serial_number_.c_str());
 
     // Display settings
-    config_.window_x = vr::VRSettings()->GetInt32(stereo_display_settings_section, "window_x");
-    config_.window_y = vr::VRSettings()->GetInt32(stereo_display_settings_section, "window_y");
-
     config_.window_width = vr::VRSettings()->GetInt32(stereo_display_settings_section, "window_width");
     config_.window_height = vr::VRSettings()->GetInt32(stereo_display_settings_section, "window_height");
     config_.render_width = config_.window_width;
@@ -75,10 +72,8 @@ OVR_3DV_Driver::OVR_3DV_Driver()
     depth_ = config_.depth;
     convergence_ = config_.convergence;
 
-    config_.ss_enable = vr::VRSettings()->GetBool(stereo_display_settings_section, "ss_enable");
     config_.depth_gauge = vr::VRSettings()->GetBool(stereo_display_settings_section, "depth_gauge");
 
-    config_.ss_scale = vr::VRSettings()->GetFloat(stereo_display_settings_section, "ss_scale");
     config_.display_latency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_latency");
     config_.display_frequency = vr::VRSettings()->GetFloat(stereo_display_settings_section, "display_frequency");
 
@@ -420,7 +415,6 @@ vr::EVRInitError OVR_3DV_Driver::Activate( vr::TrackedDeviceIndex_t unObjectId )
     vrp->SetBoolProperty(container, vr::Prop_DisplayDebugMode_Bool, true);
     vrp->SetBoolProperty(container, vr::Prop_HasDriverDirectModeComponent_Bool, true);
     vrp->SetBoolProperty(container, vr::Prop_HasDisplayComponent_Bool, true);
-    vrp->SetBoolProperty(container, vr::Prop_Hmd_AllowSupersampleFiltering_Bool, config_.ss_enable);
     if (config_.depth_gauge)
     {
         vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
@@ -498,9 +492,6 @@ vr::EVRInitError OVR_3DV_Driver::Activate( vr::TrackedDeviceIndex_t unObjectId )
     vrp->SetBoolProperty(container, vr::Prop_DeviceIsCharging_Bool, false);
     vrp->SetBoolProperty(container, vr::Prop_ContainsProximitySensor_Bool, false);
     vrp->SetBoolProperty(container, vr::Prop_DeviceCanPowerOff_Bool, false);
-
-    // Set supersample scale
-    vrs->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleScale_Float, config_.ss_scale);
 
     // Miscellaneous settings
     vrs->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, true);
@@ -776,8 +767,8 @@ void OVR_3DV_Driver::Present( vr::SharedTextureHandle_t syncTexture ) {}
 //-----------------------------------------------------------------------------
 void OVR_3DV_Driver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight)
 {
-    *pnX = config_.window_x;
-    *pnY = config_.window_y;
+    *pnX = 0;
+    *pnY = 0;
     *pnWidth = config_.window_width;
     *pnHeight = config_.window_height;
 }
@@ -816,18 +807,10 @@ void OVR_3DV_Driver::GetRecommendedRenderTargetSize(uint32_t* pnWidth, uint32_t*
 //-----------------------------------------------------------------------------
 void OVR_3DV_Driver::GetEyeOutputViewport( vr::EVREye eEye, uint32_t * pnX, uint32_t * pnY, uint32_t * pnWidth, uint32_t * pnHeight )
 {
+  *pnX      = 0;
   *pnY      = 0;
   *pnWidth  = config_.render_width;
   *pnHeight = config_.render_height;
-
-  if ( eEye == vr::Eye_Left )
-  {
-    *pnX = 0;
-  }
-  else
-  {
-    *pnX = config_.render_width / 2;
-  }
 }
 
 

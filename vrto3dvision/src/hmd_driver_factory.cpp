@@ -28,7 +28,33 @@
 #error "Unsupported Platform."
 #endif
 
-MyDeviceProvider device_provider;
+
+class OVR_WatchdogDriver : public vr::IVRWatchdogProvider
+{
+public:
+	OVR_WatchdogDriver()
+	{
+		m_pWatchdogThread = nullptr;
+	}
+
+	virtual vr::EVRInitError Init(vr::IVRDriverContext* pDriverContext);
+	virtual void             Cleanup();
+
+private:
+	std::thread* m_pWatchdogThread;
+};
+
+vr::EVRInitError OVR_WatchdogDriver::Init(vr::IVRDriverContext* pDriverContext)
+{
+	VR_INIT_WATCHDOG_DRIVER_CONTEXT(pDriverContext);
+	return vr::VRInitError_None;
+}
+
+void OVR_WatchdogDriver::Cleanup() {}
+
+
+OVR_DeviceProvider device_provider;
+OVR_WatchdogDriver watchdog_provider;
 
 //-----------------------------------------------------------------------------
 // Purpose: This is exported from the shared library to be called as the entry point into the driver by vrserver.
@@ -41,6 +67,10 @@ HMD_DLL_EXPORT void *HmdDriverFactory( const char *pInterfaceName, int *pReturnC
 	if ( 0 == strcmp( vr::IServerTrackedDeviceProvider_Version, pInterfaceName ) )
 	{
 		return &device_provider;
+	}
+	if (0 == strcmp(vr::IVRWatchdogProvider_Version, pInterfaceName))
+	{
+		return &watchdog_provider;
 	}
 
 	// Otherwise tell the runtime that we don't have this interface.

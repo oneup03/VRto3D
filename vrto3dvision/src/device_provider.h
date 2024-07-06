@@ -22,7 +22,7 @@
 #include "openvr_driver.h"
 
 // make sure your class is publicly inheriting vr::IServerTrackedDeviceProvider!
-class MyDeviceProvider : public vr::IServerTrackedDeviceProvider
+class OVR_DeviceProvider : public vr::IServerTrackedDeviceProvider
 {
 public:
 	vr::EVRInitError Init( vr::IVRDriverContext *pDriverContext ) override;

@@ -24,9 +24,6 @@
 
 struct StereoDisplayDriverConfiguration
 {
-	int32_t window_x;
-	int32_t window_y;
-
 	int32_t window_width;
 	int32_t window_height;
 
@@ -38,10 +35,8 @@ struct StereoDisplayDriverConfiguration
 	float depth;
 	float convergence;
 
-	bool ss_enable;
 	bool depth_gauge;
 
-	float ss_scale;
 	float display_latency;
 	float display_frequency;
 
@@ -83,7 +78,6 @@ public:
 
   virtual ~OVR_3DV_Driver();
 
-  //void setDeviceData( VRData::HMD hmd, bool generateVSync, VSyncStyle style );
 
   vr::PropertyContainerHandle_t getPropertyContainerHandle() const
   {
