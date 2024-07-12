@@ -37,19 +37,72 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `user_convergence#` | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.1`          |
 
 
-## Installation
+## Base Installation {#base-install}
 
 - Get a multi-display configuration setup (see notes)
 - Install SteamVR
-- Download the latest release and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
+- Download the [latest release](https://github.com/oneup03/VRto3D/releases) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
+	- The Headset window must be on your primary 3D display
 - Try launching a VR game
 - Drag everything besides the headset view to your second display
 - Make the game's window in focus on your second display for control input to work
 - Adjust Depth with `Ctrl+F3` and `Ctrl+F4`
 - Adjust Convergence with `Ctrl+F5` and `Ctrl+F6`
 - Save all Depth & Convergence settings with `Ctrl+F7`
+
+
+## Interlaced, Checkerboard, and Anaglyph Installation
+
+- Complete the [Base Installation](#base-install) section
+- Optionally set `tab_enable` to true in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` if you prefer to lose half vertical resolution instead of half horizontal resolution
+- Download the latest [ReShade](https://reshade.me/#download) with full add-on support
+- Run the ReShade installer
+	- Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
+	- Select `vrserver.exe`
+	- Select DirectX 11
+	- Click `Uncheck All` and click Next, Next, Finish
+- Download [3DToElse.fx](https://github.com/BlueSkyDefender/Depth3D/tree/master/Other%20%20Shaders) and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
+- Run SteamVR
+- Press `Home` to open ReShade and click `Skip Tutorial`
+- Select `To_Else` in the menu to enable 3DToElse
+- Change 3DToElse settings:
+	- Set `Stereoscopic Mode Input` to `Side by Side` (or `Top and Bottom` if you set `tab_enable` above)
+	- Set `3D Display Mode` to the type needed for your display (even anaglyph)
+	- `Eye Swap` can be toggled if needed
+	- Don't touch `Perspective Slider`
+- Once configuration is complete, you can run everything the same way as the Base Installation
+
+
+## 3DVision Installation
+
+- This will be the worst experience due to the finicky nature of 3DVision drivers. It is highly recommended to buy a different 3D Display to use moving forward. AR glasses (Rokid, Xreal, Viture) all work and provide a better experience than 3DVision ever did. AR glasses will need a [compatible adapter](https://air.msmithdev.com/adapters/) if you don't have a USBC port on your computer with DP out.
+- Only Driver v425.31 or 452.06 may work, so only RTX20 series or older
+	- Many DX12 games are not compatible with these old drivers (crashes)
+	- Having 3DVision enabled will crash DX12 games
+	- Make sure your game runs on old drivers with 3D disabled before attempting to get it working with VRto3D
+- Complete the [Base Installation](#base-install) section
+- Modify the window_width and window_height in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` to match your fullscreen resolution
+- Download and install [SpecialK](https://sk-data.special-k.info/SpecialK.exe)
+- Under SteamVR Properties, set Launch Options to `SKIF %COMMAND%`
+- Download Bo3b's [SbS to 3DVision](https://bo3b.s3.amazonaws.com/SD3D_eng.7z) tool and extract the contents to your `Steam\steamapps\common\SteamVR\bin\win64` folder
+- Enable 3D and Global hack. [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) can do this
+- Run SteamVR from Steam - you will have to do this before running any game with a 3DVision setup
+- Open SpecialK's menu `Ctrl+Shift+Backspace`
+	- Under Direct3D 11 Settings / SwapChain Management ensure that `Use Flip Model Presentation` is checked
+	- Under On Screen Display, uncheck `Show Startup Banner`
+	- It may be necessary to toggle between `Windowed Mode` and `Fullscreen Mode` using SpecialK under the Menubar / Display to get 3DVision to trigger
+- Press `Home` to bring up the ReShade menu and select the SBS `SBS_to_Double.fx` shader and click `Reload`
+	- May need to press `Ctrl+T` to get 3D to trigger
+	- If 3D isn't triggering now, disable SBS, Reload, open SpecialK, toggle fullscreen, close SpecialK, enable SBS, reload
+	- If it's still not working, try closing SteamVR and trying again
+- Disable 3D (SteamVR will still be running in 3D, but any newly launched apps won't) (This may not be needed if you are running a VR-native game)
+- Run your Game
+- Move Game window to your second display
+- If needed, inject VR mod
+- Bring SteamVR Headset window into focus on main display
+- Switch back to the game window on second display and hopefully input works and 3D is still displaying
 
 
 ## Notes
