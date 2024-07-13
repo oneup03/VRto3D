@@ -42,7 +42,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 
 - Get a multi-display configuration setup (see notes)
 - Install SteamVR
-- Download the [latest release](https://github.com/oneup03/VRto3D/releases) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
+- Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
 	- The Headset window must be on your primary 3D display
