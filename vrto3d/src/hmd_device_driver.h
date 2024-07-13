@@ -24,13 +24,6 @@
 #include <thread>
 #include <vector>
 
-enum MyComponent
-{
-	MyComponent_system_touch,
-	MyComponent_system_click,
-
-	MyComponent_MAX
-};
 
 struct StereoDisplayDriverConfiguration
 {
@@ -130,7 +123,6 @@ private:
 	std::string stereo_model_number_;
 	std::string stereo_serial_number_;
 
-	std::array< vr::VRInputComponentHandle_t, MyComponent_MAX > my_input_handles_{};
 	std::atomic< bool > is_active_;
 	std::atomic< uint32_t > device_index_;
 

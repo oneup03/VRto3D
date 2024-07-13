@@ -247,18 +247,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vrp->SetBoolProperty( container, vr::Prop_ContainsProximitySensor_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_DeviceCanPowerOff_Bool, false);
 
-	// Now let's set up our inputs
-	// This tells the UI what to show the user for bindings for this controller,
-	// As well as what default bindings should be for legacy apps.
-	// Note, we can use the wildcard {<driver_name>} to match the root folder location
-	// of our driver.
-	vrp->SetStringProperty( container, vr::Prop_InputProfilePath_String, "{vrto3d}/input/vrto3d_profile.json" );
-
-	// Let's set up handles for all of our components.
-	// Even though these are also defined in our input profile,
-	// We need to get handles to them to update the inputs.
-	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/touch", &my_input_handles_[ MyComponent_system_touch ] );
-	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/click", &my_input_handles_[ MyComponent_system_click ] );
 	// set proximity senser to always on, always head present
 	vr::VRInputComponentHandle_t  prox;
 	vr::VRDriverInput()->CreateBooleanComponent(container, "/proximity", &prox);
