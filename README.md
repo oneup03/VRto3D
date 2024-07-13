@@ -112,7 +112,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 	- Disconnect VR headset from computer
 	- [Clean SteamVR Install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/)
 	- [Set SteamVR as OpenXR Runtime](https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html)
-- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only headset pitch emulation and no VR controller emulation
+- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only headset pitch & yaw emulation and no VR controller emulation
 - Configuring controller bindings in SteamVR settings may allow a few more games to be compatible
 - Check the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
 - You will need a multi-display setup in extended mode
