@@ -73,6 +73,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
 	display_configuration.display_latency = vrs->GetFloat(stereo_display_settings_section, "display_latency");
 	display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
+	display_configuration.sleep_count_max = (int)(floor(1600.0 / (1000.0 / display_configuration.display_frequency)));
 
 	int32_t half_width = display_configuration.half_enable ? 1 : 2;
 	if (display_configuration.tab_enable)
@@ -89,6 +90,16 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	// Controller settings
 	display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");
 	display_configuration.yaw_enable = vrs->GetBool(stereo_display_settings_section, "yaw_enable");
+	char ctrl_toggle_key[1024];
+	vrs->GetString(stereo_display_settings_section, "ctrl_toggle_key", ctrl_toggle_key, sizeof(ctrl_toggle_key));
+	if (VirtualKeyMappings.find(ctrl_toggle_key) != VirtualKeyMappings.end()) {
+		display_configuration.ctrl_toggle_key = VirtualKeyMappings[ctrl_toggle_key];
+		display_configuration.ctrl_xinput = false;
+	}
+	else if (XInputMappings.find(ctrl_toggle_key) != XInputMappings.end()) {
+		display_configuration.ctrl_toggle_key = XInputMappings[ctrl_toggle_key];
+		display_configuration.ctrl_xinput = true;
+	}
 	display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
 	display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
 
@@ -345,6 +356,7 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
 	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
+	static int sleep_counter = 0;
 	while ( is_active_ )
 	{
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
@@ -369,6 +381,14 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		// Ctrl+F7 Store Depth & Convergence values
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000)) {
 			SaveDepthConv();
+		}
+		// Ctrl+F9 Toggle HMD height
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && sleep_counter == 0) {
+			sleep_counter = stereo_display_component_->GetConfig().sleep_count_max;
+			stereo_display_component_->SetHeight();
+		}
+		else if (sleep_counter > 0) {
+			sleep_counter--;
 		}
 
 		// Check User binds
@@ -627,11 +647,33 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 {
-	static int sleep_count = (int)(floor(1600.0 / (1000.0 / config_.display_frequency)));
+	static bool pitch_set = config_.pitch_enable;
+	static bool yaw_set = config_.yaw_enable;
+	static int sleep_ctrl = 0;
+
     XINPUT_STATE state;
     ZeroMemory(&state, sizeof(XINPUT_STATE));
     // Get the state of the first controller (index 0)
     DWORD dwResult = XInputGetState(0, &state);
+
+	if (((config_.ctrl_xinput && dwResult == ERROR_SUCCESS &&
+		((config_.ctrl_toggle_key == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+			|| (config_.ctrl_toggle_key == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+			|| (state.Gamepad.wButtons & config_.ctrl_toggle_key)))
+		|| (!config_.ctrl_xinput && (GetAsyncKeyState(config_.ctrl_toggle_key) & 0x8000)))
+		&& sleep_ctrl == 0)
+	{
+		sleep_ctrl = config_.sleep_count_max;
+		if (pitch_set) {
+			config_.pitch_enable = !config_.pitch_enable;
+		}
+		if (yaw_set) {
+			config_.yaw_enable = !config_.yaw_enable;
+		}
+	}
+	else if (sleep_ctrl > 0) {
+		sleep_ctrl--;
+	}
 
     for (int i = 0; i < config_.num_user_settings; i++)
     {
@@ -658,7 +700,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
             }
 			else if (config_.user_key_type[i] == TOGGLE && config_.sleep_count[i] < 1)
 			{
-				config_.sleep_count[i] = sleep_count;
+				config_.sleep_count[i] = config_.sleep_count_max;
 				if (GetDepth() == config_.user_depth[i] && GetConvergence() == config_.user_convergence[i])
 				{
 					// If the current state matches the user settings, revert to the previous state
@@ -774,4 +816,17 @@ void StereoDisplayComponent::AdjustYaw(float& currentYaw)
 		if (currentYaw > 180.0f) currentYaw -= 360.0f;
 		if (currentYaw < -180.0f) currentYaw += 360.0f;
 	}
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Toggle HMD Height for games that have incorrect HMD position
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::SetHeight()
+{
+	static float user_height = config_.hmd_height;
+	if (config_.hmd_height == user_height)
+		config_.hmd_height = 0.1;
+	else
+		config_.hmd_height = user_height;
 }

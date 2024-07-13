@@ -27,10 +27,11 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable`      | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable`        | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
+| `ctrl_toggle_key`   | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to toggle Pitch and Yaw emulation on/off when they are enabled | `XINPUT_GAMEPAD_RIGHT_THUMB` |
 | `ctrl_deadzone`     | `float` | Controller Deadzone                                                                         | `0.05`         |
 | `ctrl_sensitivity`  | `float` | Controller Sensitivity                                                                      | `1.0`          |
 | `num_user_settings` | `int`   | The number of user settings defined below.                                                  | `3`            |
-| `user_load_key#`    | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to load user setting # (replace # with integer number)                | `"VK_NUMPAD1"` |
+| `user_load_key#`    | `string`| The Virtual-Key Code to load user setting # (replace # with integer number)                 | `"VK_NUMPAD1"` |
 | `user_store_key#`   | `string`| The Virtual-Key Code to store user setting # (replace # with integer number)                | `"VK_NUMPAD4"` |
 | `user_key_type#`    | `string`| The store key's behavior ("switch" "toggle" "hold")                                         | `"switch"`     |
 | `user_depth#`       | `float` | The depth value for user setting # (replace # with integer number)                          | `0.5`          |
@@ -130,6 +131,8 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Recommend using a XInput controller
 - OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
 - Optional HMD pitch and yaw emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
+	- The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
+- HMD Height can be toggled between 0.1m and `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
 - HDR doesn't seem to work currently
 - Several mods/games may override your settings
 - DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not

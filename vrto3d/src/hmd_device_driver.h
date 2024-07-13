@@ -51,9 +51,12 @@ struct StereoDisplayDriverConfiguration
 
 	float display_latency;
 	float display_frequency;
+	int sleep_count_max;
 
 	bool pitch_enable;
 	bool yaw_enable;
+	int32_t ctrl_toggle_key;
+	bool ctrl_xinput;
 	float ctrl_deadzone;
 	float ctrl_sensitivity;
 
@@ -93,6 +96,7 @@ public:
 	void CheckUserSettings(uint32_t device_index);
 	void AdjustPitch(float& currentPitch);
 	void AdjustYaw(float& currentYaw);
+	void SetHeight();
 
 private:
 	StereoDisplayDriverConfiguration config_;
