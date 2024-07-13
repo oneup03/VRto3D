@@ -627,6 +627,7 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 {
+	static int sleep_count = (int)(floor(1600.0 / (1000.0 / config_.display_frequency)));
     XINPUT_STATE state;
     ZeroMemory(&state, sizeof(XINPUT_STATE));
     // Get the state of the first controller (index 0)
@@ -657,7 +658,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
             }
 			else if (config_.user_key_type[i] == TOGGLE && config_.sleep_count[i] < 1)
 			{
-				config_.sleep_count[i] = 100;
+				config_.sleep_count[i] = sleep_count;
 				if (GetDepth() == config_.user_depth[i] && GetConvergence() == config_.user_convergence[i])
 				{
 					// If the current state matches the user settings, revert to the previous state
