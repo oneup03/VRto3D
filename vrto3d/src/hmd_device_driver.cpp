@@ -259,6 +259,10 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	// We need to get handles to them to update the inputs.
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/touch", &my_input_handles_[ MyComponent_system_touch ] );
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/system/click", &my_input_handles_[ MyComponent_system_click ] );
+	// set proximity senser to always on, always head present
+	vr::VRInputComponentHandle_t  prox;
+	vr::VRDriverInput()->CreateBooleanComponent(container, "/proximity", &prox);
+	vr::VRDriverInput()->UpdateBooleanComponent(prox, true, 0.0);
 	
 	// Miscellaneous settings
 	vrs->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);

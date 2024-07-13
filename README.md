@@ -37,7 +37,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `user_convergence#` | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.1`          |
 
 
-## Base Installation {#base-install}
+## Base Installation
 
 - Get a multi-display configuration setup (see notes)
 - Install SteamVR
@@ -55,7 +55,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 
 ## Interlaced, Checkerboard, and Anaglyph Installation
 
-- Complete the [Base Installation](#base-install) section
+- Complete the Base Installation section
 - Optionally set `tab_enable` to true in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` if you prefer to lose half vertical resolution instead of half horizontal resolution
 - Download the latest [ReShade](https://reshade.me/#download) with full add-on support
 - Run the ReShade installer
@@ -82,7 +82,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 	- Many DX12 games are not compatible with these old drivers (crashes)
 	- Having 3DVision enabled will crash DX12 games
 	- Make sure your game runs on old drivers with 3D disabled before attempting to get it working with VRto3D
-- Complete the [Base Installation](#base-install) section
+- Complete the Base Installation section
 - Modify the window_width and window_height in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` to match your fullscreen resolution
 - Download and install [SpecialK](https://sk-data.special-k.info/SpecialK.exe)
 - Under SteamVR Properties, set Launch Options to `SKIF %COMMAND%`
