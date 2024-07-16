@@ -46,6 +46,10 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
 	- The Headset window must be on your primary 3D display
+- Turn off SteamVR Theatre mode
+	- On the SteamVR Status window, click the menu button and select `Settings`
+	- Set Advanced Settings to `Show`
+	- On the Dashboard tab, set everything to `Off`
 - Try launching a VR game
 - Drag everything besides the headset view to your second display
 - Make the game's window in focus on your second display for control input to work
@@ -58,6 +62,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 
 - Complete the Base Installation section
 - Optionally set `tab_enable` to true in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` if you prefer to lose half vertical resolution instead of half horizontal resolution
+	- If using interlaced mode, you want SbS for Column Interlaced and TaB for Row Interlaced
 - Download the latest [ReShade](https://reshade.me/#download) with full add-on support
 - Run the ReShade installer
 	- Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
@@ -113,7 +118,7 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 	- [Clean SteamVR Install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/)
 	- [Set SteamVR as OpenXR Runtime](https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html)
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only headset pitch & yaw emulation and no VR controller emulation
-- Configuring controller bindings in SteamVR settings may allow a few more games to be compatible
+- Several VR controller only games can be made to work by using [Driver4VR](https://www.driver4vr.com/), a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Check the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
 - You will need a multi-display setup in extended mode
 - The primary display will be where the "Headset" window is located and should be 3D capable
