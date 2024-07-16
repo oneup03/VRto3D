@@ -100,6 +100,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 		display_configuration.ctrl_toggle_key = XInputMappings[ctrl_toggle_key];
 		display_configuration.ctrl_xinput = true;
 	}
+	display_configuration.pitch_radius = vrs->GetFloat(stereo_display_settings_section, "pitch_radius");
 	display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
 	display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
 
@@ -322,16 +323,7 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 
 	pose.qRotation = HmdQuaternion_Identity;
 
-	pose.vecPosition[ 0 ] = 0.0f;
-	pose.vecPosition[ 1 ] = stereo_display_component_->GetConfig().hmd_height;
-	pose.vecPosition[ 2 ] = 0.0f;
-
-	pose.poseIsValid = true;
-	pose.deviceIsConnected = true;
-	pose.result = vr::TrackingResult_Running_OK;
-
-	// For HMDs we want to apply rotation/motion prediction
-	pose.shouldApplyHeadModel = false;
+	float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
 
 	// Adjust pitch based on controller input
 	if (stereo_display_component_->GetConfig().pitch_enable)
@@ -345,12 +337,23 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 		stereo_display_component_->AdjustYaw(currentYaw);
 	}
 
+	// Calculate the vertical position based on pitch and radius
+	float pitchRadians = DEG_TO_RAD(currentPitch);
+	float yawRadians = DEG_TO_RAD(currentYaw);
+	pose.vecPosition[0] = radius * sin(pitchRadians) * sin(yawRadians); // Adjust for yaw in the x direction
+	pose.vecPosition[1] = stereo_display_component_->GetConfig().hmd_height - radius * (1 - cos(pitchRadians)); // Adjust the height based on pitch
+	pose.vecPosition[2] = radius * sin(pitchRadians) * cos(yawRadians); // Adjust for yaw in the z direction
+
 	// Recompose the rotation quaternion from pitch and yaw
 	vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, DEG_TO_RAD(currentPitch), 0);
 	vr::HmdQuaternion_t yawQuaternion = HmdQuaternion_FromEulerAngles(0, 0, DEG_TO_RAD(currentYaw));
-
-	// Combine pitch and yaw quaternions
 	pose.qRotation = HmdQuaternion_Normalize(yawQuaternion * pitchQuaternion);
+
+	pose.poseIsValid = true;
+	pose.deviceIsConnected = true;
+	pose.result = vr::TrackingResult_Running_OK;
+	pose.shouldApplyHeadModel = false;
+	pose.willDriftInYaw = false;
 
 	return pose;
 }

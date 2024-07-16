@@ -57,6 +57,7 @@ struct StereoDisplayDriverConfiguration
 	bool yaw_enable;
 	int32_t ctrl_toggle_key;
 	bool ctrl_xinput;
+	float pitch_radius;
 	float ctrl_deadzone;
 	float ctrl_sensitivity;
 

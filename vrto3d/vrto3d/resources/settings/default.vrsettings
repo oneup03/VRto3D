@@ -22,6 +22,7 @@
 		"pitch_enable": false,
 		"yaw_enable": false,
 		"ctrl_toggle_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
+		"pitch_radius": 0.0,
 		"ctrl_deadzone": 0.05,
 		"ctrl_sensitivity": 1.0,
 		"num_user_settings": 3,
