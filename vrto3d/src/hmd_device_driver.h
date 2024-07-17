@@ -55,6 +55,9 @@ struct StereoDisplayDriverConfiguration
 
 	bool pitch_enable;
 	bool yaw_enable;
+	int32_t pose_reset_key;
+	bool reset_xinput;
+	bool pose_reset;
 	int32_t ctrl_toggle_key;
 	bool ctrl_xinput;
 	float pitch_radius;
@@ -98,6 +101,7 @@ public:
 	void AdjustPitch(float& currentPitch);
 	void AdjustYaw(float& currentYaw);
 	void SetHeight();
+	void SetReset();
 
 private:
 	StereoDisplayDriverConfiguration config_;

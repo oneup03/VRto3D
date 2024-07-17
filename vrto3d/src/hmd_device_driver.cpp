@@ -90,6 +90,17 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	// Controller settings
 	display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");
 	display_configuration.yaw_enable = vrs->GetBool(stereo_display_settings_section, "yaw_enable");
+	char pose_reset_key[1024];
+	vrs->GetString(stereo_display_settings_section, "pose_reset_key", pose_reset_key, sizeof(pose_reset_key));
+	if (VirtualKeyMappings.find(pose_reset_key) != VirtualKeyMappings.end()) {
+		display_configuration.pose_reset_key = VirtualKeyMappings[pose_reset_key];
+		display_configuration.reset_xinput = false;
+	}
+	else if (XInputMappings.find(pose_reset_key) != XInputMappings.end()) {
+		display_configuration.pose_reset_key = XInputMappings[pose_reset_key];
+		display_configuration.reset_xinput = true;
+	}
+	display_configuration.pose_reset = false;
 	char ctrl_toggle_key[1024];
 	vrs->GetString(stereo_display_settings_section, "ctrl_toggle_key", ctrl_toggle_key, sizeof(ctrl_toggle_key));
 	if (VirtualKeyMappings.find(ctrl_toggle_key) != VirtualKeyMappings.end()) {
@@ -314,6 +325,7 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
 	static const float updateInterval = 1.0f / stereo_display_component_->GetConfig().display_frequency; // Update interval in seconds
+	static const float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
 	static float currentPitch = 0.0f; // Keep track of the current pitch
 	static float currentYaw = 0.0f; // Keep track of the current yaw
 	static float lastPitch = 0.0f;
@@ -340,9 +352,26 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 		stereo_display_component_->AdjustYaw(currentYaw);
 	}
 
+	// Reset Pose to origin
+	if (stereo_display_component_->GetConfig().pose_reset)
+	{
+		currentPitch = 0.0f;
+		currentYaw = 0.0f;
+		lastPitch = 0.0f;
+		lastYaw = 0.0f;
+		lastPos[0] = 0.0f;
+		lastPos[1] = 0.0f;
+		lastPos[2] = 0.0f;
+		lastVel[0] = 0.0f;
+		lastVel[1] = 0.0f;
+		lastVel[2] = 0.0f;
+		lastAngVel[0] = 0.0f;
+		lastAngVel[1] = 0.0f;
+		stereo_display_component_->SetReset();
+	}
+
 	float pitchRadians = DEG_TO_RAD(currentPitch);
 	float yawRadians = currentYaw;
-	float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
 
 	// Recompose the rotation quaternion from pitch and yaw
 	vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, pitchRadians, 0);
@@ -694,6 +723,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 	static bool pitch_set = config_.pitch_enable;
 	static bool yaw_set = config_.yaw_enable;
 	static int sleep_ctrl = 0;
+	static int sleep_rest = 0;
 
     XINPUT_STATE state;
     ZeroMemory(&state, sizeof(XINPUT_STATE));
@@ -717,6 +747,22 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 	}
 	else if (sleep_ctrl > 0) {
 		sleep_ctrl--;
+	}
+
+	if (((config_.reset_xinput && dwResult == ERROR_SUCCESS &&
+		((config_.pose_reset_key == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+			|| (config_.pose_reset_key == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
+			|| (state.Gamepad.wButtons & config_.pose_reset_key)))
+		|| (!config_.reset_xinput && (GetAsyncKeyState(config_.pose_reset_key) & 0x8000)))
+		&& sleep_rest == 0)
+	{
+		sleep_rest = config_.sleep_count_max;
+		if (!config_.pose_reset) {
+			config_.pose_reset = true;
+		}
+	}
+	else if (sleep_rest > 0) {
+		sleep_rest--;
 	}
 
     for (int i = 0; i < config_.num_user_settings; i++)
@@ -872,4 +918,12 @@ void StereoDisplayComponent::SetHeight()
 		config_.hmd_height = 0.1;
 	else
 		config_.hmd_height = user_height;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Toggle Reset off
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::SetReset()
+{
+	config_.pose_reset = false;
 }

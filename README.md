@@ -27,7 +27,8 @@ Windows-only solution, but there are other solutions on Linux like MonadoVR.
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable`      | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable`        | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
-| `ctrl_toggle_key`   | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to toggle Pitch and Yaw emulation on/off when they are enabled | `XINPUT_GAMEPAD_RIGHT_THUMB` |
+| `pose_reset_key`    | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to reset the HMD position and orientation | `"VK_NUMPAD7"` |
+| `ctrl_toggle_key`   | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
 | `pitch_radius`      | `float` | Radius of curvature for the HMD to move along. Useful in 3rd person games                   | `0.0`          |
 | `ctrl_deadzone`     | `float` | Controller Deadzone                                                                         | `0.05`         |
 | `ctrl_sensitivity`  | `float` | Controller Sensitivity                                                                      | `1.0`          |

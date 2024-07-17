@@ -21,6 +21,7 @@
 		"display_frequency": 60.0,
 		"pitch_enable": false,
 		"yaw_enable": false,
+		"pose_reset_key": "VK_NUMPAD7",
 		"ctrl_toggle_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
 		"pitch_radius": 0.0,
 		"ctrl_deadzone": 0.05,
