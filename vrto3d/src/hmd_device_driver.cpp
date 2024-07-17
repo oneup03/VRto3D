@@ -313,17 +313,20 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 //-----------------------------------------------------------------------------
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
+	static const float updateInterval = 1.0f / stereo_display_component_->GetConfig().display_frequency; // Update interval in seconds
 	static float currentPitch = 0.0f; // Keep track of the current pitch
 	static float currentYaw = 0.0f; // Keep track of the current yaw
+	static float lastPitch = 0.0f;
+	static float lastYaw = 0.0f;
+	static float lastPos[3] = { 0.0f, 0.0f, 0.0f }; // Last position vector
+	static float lastVel[3] = { 0.0f, 0.0f, 0.0f }; // Last velocity vector
+	static float lastAngVel[3] = { 0.0f, 0.0f, 0.0f }; // Last angular velocity vector
 
 	vr::DriverPose_t pose = { 0 };
 
 	pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
 	pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
-
 	pose.qRotation = HmdQuaternion_Identity;
-
-	float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
 
 	// Adjust pitch based on controller input
 	if (stereo_display_component_->GetConfig().pitch_enable)
@@ -337,17 +340,49 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 		stereo_display_component_->AdjustYaw(currentYaw);
 	}
 
-	// Calculate the vertical position based on pitch and radius
 	float pitchRadians = DEG_TO_RAD(currentPitch);
 	float yawRadians = DEG_TO_RAD(currentYaw);
-	pose.vecPosition[0] = radius * sin(pitchRadians) * sin(yawRadians); // Adjust for yaw in the x direction
-	pose.vecPosition[1] = stereo_display_component_->GetConfig().hmd_height - radius * (1 - cos(pitchRadians)); // Adjust the height based on pitch
-	pose.vecPosition[2] = radius * sin(pitchRadians) * cos(yawRadians); // Adjust for yaw in the z direction
+	float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
 
 	// Recompose the rotation quaternion from pitch and yaw
-	vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, DEG_TO_RAD(currentPitch), 0);
-	vr::HmdQuaternion_t yawQuaternion = HmdQuaternion_FromEulerAngles(0, 0, DEG_TO_RAD(currentYaw));
+	vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, pitchRadians, 0);
+	vr::HmdQuaternion_t yawQuaternion = HmdQuaternion_FromEulerAngles(0, 0, yawRadians);
 	pose.qRotation = HmdQuaternion_Normalize(yawQuaternion * pitchQuaternion);
+	
+	// Calculate the new position relative to the current pitch & yaw
+	pose.vecPosition[0] = radius * sin(pitchRadians) * sin(yawRadians);
+	pose.vecPosition[1] = stereo_display_component_->GetConfig().hmd_height - radius * (1 - cos(pitchRadians));
+	pose.vecPosition[2] = radius * sin(pitchRadians) * cos(yawRadians);
+
+	// Calculate velocity components based on change in position
+	pose.vecVelocity[0] = (pose.vecPosition[0] - lastPos[0]) / updateInterval;
+	pose.vecVelocity[1] = (pose.vecPosition[1] - lastPos[1]) / updateInterval;
+	pose.vecVelocity[2] = (pose.vecPosition[2] - lastPos[2]) / updateInterval;
+
+	// Calculate velocity using known update interval
+	pose.vecAngularVelocity[0] = (pitchRadians - lastPitch) / updateInterval; // Pitch angular velocity
+	pose.vecAngularVelocity[1] = (yawRadians - lastYaw) / updateInterval; // Yaw angular velocity
+	pose.vecAngularVelocity[2] = 0.0f;
+
+	// Calculate acceleration based on change in velocity
+	pose.vecAcceleration[0] = (pose.vecVelocity[0] - lastVel[0]) / updateInterval;
+	pose.vecAcceleration[1] = (pose.vecVelocity[1] - lastVel[1]) / updateInterval;
+	pose.vecAcceleration[2] = (pose.vecVelocity[2] - lastVel[2]) / updateInterval;
+	pose.vecAngularAcceleration[0] = (pose.vecAngularVelocity[0] - lastAngVel[0]) / updateInterval;
+	pose.vecAngularAcceleration[1] = (pose.vecAngularVelocity[1] - lastAngVel[1]) / updateInterval;
+	pose.vecAngularAcceleration[2] = 0.0f;
+
+	// Update for next iteration
+	lastPitch = pitchRadians;
+	lastYaw = yawRadians;
+	lastPos[0] = pose.vecPosition[0];
+	lastPos[1] = pose.vecPosition[1];
+	lastPos[2] = pose.vecPosition[2];
+	lastVel[0] = pose.vecVelocity[0];
+	lastVel[1] = pose.vecVelocity[1];
+	lastVel[2] = pose.vecVelocity[2];
+	lastAngVel[0] = pose.vecAngularVelocity[0];
+	lastAngVel[1] = pose.vecAngularVelocity[1];
 
 	pose.poseIsValid = true;
 	pose.deviceIsConnected = true;
