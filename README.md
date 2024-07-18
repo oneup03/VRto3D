@@ -2,7 +2,15 @@
 
 OpenVR Driver that can render in SbS or TaB 3D.
 Currently targeting OpenVR 2.5.1.
-Windows-only solution, but there are other solutions on Linux like MonadoVR.
+Windows-only solution currently, but there are other solutions on Linux like MonadoVR.
+
+
+## Compatible 3D Displays
+- 3D TVs - work great if you can find one
+- 3D Projectors - work great, but need more space and may be expensive
+- AR Glasses (Rokid, Xreal, Viture) - work great, relatively inexpensive
+- Lume Pad - works great, a bit more expensive, requires Sunshine/Gamestream + Moonlight
+- 3D Vision hardware (only RTX 20x or older) - will have game compatibility issues, hardware is hard to find
 
 
 ## Configuration
