@@ -189,7 +189,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vrp->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency);
 	vrp->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
 	vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
-	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
+	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_->GetConfig().hdr_enable);
 	if (stereo_display_component_->GetConfig().depth_gauge)
