@@ -186,8 +186,10 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	// Display settings
 	vrp->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
 	vrp->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
-	vrp->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency);
+	vrp->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency * 1.5f );
 	vrp->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
+	vrp->SetFloatProperty( container, vr::Prop_SecondsFromPhotonsToVblank_Float, 0.0);
+	vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
@@ -289,6 +291,10 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, false);
 	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MirrorViewVisibility_Bool, false);
 	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
+	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisplayDebug_Bool, false);
+	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MotionSmoothing_Bool, false);
+	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, true);
+	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowSupersampleFiltering_Bool, false);
 	
 	pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
 
@@ -526,7 +532,7 @@ StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfigu
 //-----------------------------------------------------------------------------
 bool StereoDisplayComponent::IsDisplayOnDesktop()
 {
-	return true;
+	return false;
 }
 
 //-----------------------------------------------------------------------------
