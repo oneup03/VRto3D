@@ -91,29 +91,25 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 
 - This will be the worst experience due to the finicky nature of 3DVision drivers. It is highly recommended to buy a different 3D Display to use moving forward. AR glasses (Rokid, Xreal, Viture) all work and provide a better experience than 3DVision ever did. AR glasses will need a [compatible adapter](https://air.msmithdev.com/adapters/) if you don't have a USBC port on your computer with DP out.
 - Only Driver v425.31 or 452.06 may work, so only RTX20 series or older
-	- Many DX12 games are not compatible with these old drivers (crashes)
+	- Some DX12 games are not compatible with these old drivers (crashes)
 	- Having 3DVision enabled will crash DX12 games
 	- Make sure your game runs on old drivers with 3D disabled before attempting to get it working with VRto3D
 - Complete the Base Installation section
 - Modify the window_width and window_height in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` to match your fullscreen resolution
-- Download and install [SpecialK](https://sk-data.special-k.info/SpecialK.exe)
-- Under SteamVR Properties, set Launch Options to `SKIF %COMMAND%`
 - Download Bo3b's [SbS to 3DVision](https://bo3b.s3.amazonaws.com/SD3D_eng.7z) tool and extract the contents to your `Steam\steamapps\common\SteamVR\bin\win64` folder
 - Enable 3D and Global hack. [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) can do this
 - Run SteamVR from Steam - you will have to do this before running any game with a 3DVision setup
-- Open SpecialK's menu `Ctrl+Shift+Backspace`
-	- Under Direct3D 11 Settings / SwapChain Management ensure that `Use Flip Model Presentation` is checked
-	- Under On Screen Display, uncheck `Show Startup Banner`
-	- It may be necessary to toggle between `Windowed Mode` and `Fullscreen Mode` using SpecialK under the Menubar / Display to get 3DVision to trigger
 - Press `Home` to bring up the ReShade menu and select the SBS `SBS_to_Double.fx` shader and click `Reload`
+	- The Headset window has to be in focus for 3DVision to trigger - try clicking on it
 	- May need to press `Ctrl+T` to get 3D to trigger
-	- If 3D isn't triggering now, disable SBS, Reload, open SpecialK, toggle fullscreen, close SpecialK, enable SBS, reload
 	- If it's still not working, try closing SteamVR and trying again
-- Disable 3D (SteamVR will still be running in 3D, but any newly launched apps won't) (This may not be needed if you are running a VR-native game)
+	- If 3D flickers on and off, try toggling 3D in Nvidia Control Panel
+- Disable 3D from Nvidia Control Panel (This may not be needed if you are running a VR-native game)
 - Run your Game
 - Move Game window to your second display
 - If needed, inject VR mod
 - Bring SteamVR Headset window into focus on main display
+	- If you get complaints about running in a non-stereo mode, Enable 3D in Nvidia Control Panel again
 - Switch back to the game window on second display and hopefully input works and 3D is still displaying
 
 
