@@ -57,6 +57,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
 	display_configuration.window_width = vrs->GetInt32( stereo_display_settings_section, "window_width" );
 	display_configuration.window_height = vrs->GetInt32( stereo_display_settings_section, "window_height" );
+	display_configuration.render_width = vrs->GetInt32(stereo_display_settings_section, "render_width");
+	display_configuration.render_height = vrs->GetInt32(stereo_display_settings_section, "render_height");
 
 	display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
 
@@ -66,7 +68,6 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
 
 	display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
-	display_configuration.half_enable = vrs->GetBool(stereo_display_settings_section, "half_enable");
 	display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
 	display_configuration.hdr_enable = vrs->GetBool(stereo_display_settings_section, "hdr_enable");
 	display_configuration.depth_gauge = vrs->GetBool(stereo_display_settings_section, "depth_gauge");
@@ -74,18 +75,6 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.display_latency = vrs->GetFloat(stereo_display_settings_section, "display_latency");
 	display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
 	display_configuration.sleep_count_max = (int)(floor(1600.0 / (1000.0 / display_configuration.display_frequency)));
-
-	int32_t half_width = display_configuration.half_enable ? 1 : 2;
-	if (display_configuration.tab_enable)
-	{
-		display_configuration.render_width = display_configuration.window_width;
-		display_configuration.render_height = display_configuration.window_height / half_width;
-	}
-	else
-	{
-		display_configuration.render_width = display_configuration.window_width / half_width;
-		display_configuration.render_height = display_configuration.window_height;
-	}
 
 	// Controller settings
 	display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");

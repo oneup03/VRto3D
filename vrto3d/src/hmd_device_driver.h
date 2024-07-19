@@ -44,7 +44,6 @@ struct StereoDisplayDriverConfiguration
 	float convergence;
 
 	bool tab_enable;
-	bool half_enable;
 	bool reverse_enable;
 	bool hdr_enable;
 	bool depth_gauge;

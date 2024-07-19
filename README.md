@@ -21,13 +21,14 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
 | `window_width`      | `int`   | The width of the application window.                                                        | `1920`         |
 | `window_height`     | `int`   | The height of the application window.                                                       | `1080`         |
+| `render_width`      | `int`   | The width to render per eye (can be higher or lower than the application window)            | `1920`         |
+| `render_height`     | `int`   | The height to render per eye (can be higher or lower than the application window)           | `1080`         |
 | `hmd_height`        | `float` | The height of the simulated HMD.                                                            | `1.0`          |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`         |
 | `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`          |
 | `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.1`          |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
-| `half_enable`       | `bool`  | Enable or disable half SbS/TaB 3D output.                                                   | `true`         |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `hdr_enable`        | `bool`  | Enable or disable HDR.                                                                      | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |
@@ -54,6 +55,8 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - Install SteamVR
 - Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed
+	- Set your window resolution to your full-screen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
+	- Set your render resolution per eye to what you want. Can save some performance by reducing this if you're running a half-size 3D
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
 	- The Headset window must be on your primary 3D display
 - Try launching a VR game
