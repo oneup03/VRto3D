@@ -428,8 +428,8 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 	static int height_sleep = 0;
 	static int top_sleep = 0;
 	static bool always_on_top = false;
-	static HWND vr_window;
-	static HWND top_window;
+	static HWND vr_window = NULL;
+	static HWND top_window = NULL;
 
 	while ( is_active_ )
 	{
@@ -441,6 +441,12 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 			}
 			else {
 				vr_window = FindWindow(NULL, L"Headset Window");
+			}
+		}
+		else if (top_window != NULL) {
+			top_window = NULL;
+			if (vr_window != NULL) {
+				SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 			}
 		}
 
