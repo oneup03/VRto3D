@@ -142,23 +142,31 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only headset pitch & yaw emulation and no VR controller emulation
 - Several VR controller only games can be made to work by using [Driver4VR](https://www.driver4vr.com/), a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Check the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
-- You will need a multi-display setup in extended mode
-- The primary display will be where the "Headset" window is located and should be 3D capable
-- The secondary display will need to have the game's main window in focus for control input from your mouse/keyboard/controller to work
-- Here are some example configurations that are confirmed to work:
-	- A single display connected to your computer twice in extended mode - switch between the inputs on the monitor as needed to move windows around
-	- Multiple displays connected in extended mode - easier to move things around and manage
-	- A virtual monitor will work, but will prove tricky. [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/)
-		- Sunshine/Moonlight is compatible
-- Use Windows shortcut keys to move windowed programs around `Win + Left/Right Keys`
-- Use Windows shortcut keys to move fullscreen programs around `Shift + Win + Left/Right`
+- Single-Display notes:
+	- Some games/mods will not be compatible with this mode (3D view becomes black screen)
+ 	- The headset window has to be on top of everything for 3D to render correctly
+  	- The game window has to be in focus for controls to work
+  	- `Ctrl+F8` will toggle locking the headset window in the foreground
+  	- You can then `Alt+Tab` to the game window
+- Multi-Display notes:
+	- A multi-display setup in extended mode is recommended for the most compatibility
+	- The primary display will be where the "Headset" window is located and should be 3D capable
+	- The secondary display will need to have the game's main window in focus for control input from your mouse/keyboard/controller to work
+	- Here are some example configurations that are confirmed to work:
+		- A single display connected to your computer twice in extended mode - switch between the inputs on the monitor as needed to move windows around
+		- Multiple displays connected in extended mode - easier to move things around and manage
+		- A virtual monitor will work, but will prove tricky. [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/)
+			- Sunshine/Moonlight is compatible
+	- Use Windows shortcut keys to move windowed programs around `Win + Left/Right Keys`
+	- Use Windows shortcut keys to move fullscreen programs around `Shift + Win + Left/Right`
 - SteamVR may still complain about Direct Display mode, but this can be safely ignored
 - Exiting SteamVR will "restart" Steam - this is normal
 - Overlays generally won't work on this virtual HMD
 - Recommend using a XInput controller
-- OpenXR games/mods seem to be more likely to work and be stable than OpenVR ones
-- Optional HMD pitch and yaw emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
+- Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
 	- The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
+ 	- The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
+  	- The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
 - HMD Height can be toggled between 0.1m and `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
 - HDR doesn't seem to work currently
 - Several mods/games may override your settings
