@@ -425,9 +425,25 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
 	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
-	static int sleep_counter = 0;
+	static int height_sleep = 0;
+	static int top_sleep = 0;
+	static bool always_on_top = false;
+	static HWND vr_window;
+	static HWND top_window;
+
 	while ( is_active_ )
 	{
+		// Keep VR display always on top for 3D rendering
+		if (always_on_top) {
+			top_window = GetTopWindow(GetDesktopWindow());
+			if (vr_window != NULL && vr_window != top_window) {
+				SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+			}
+			else {
+				vr_window = FindWindow(NULL, L"Headset Window");
+			}
+		}
+
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
 		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
 		
@@ -451,13 +467,21 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000)) {
 			SaveDepthConv();
 		}
+		// Ctrl+F8 Toggle Always On Top
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
+			top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+			always_on_top = !always_on_top;
+		}
+		else if (top_sleep > 0) {
+			top_sleep--;
+		}
 		// Ctrl+F9 Toggle HMD height
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && sleep_counter == 0) {
-			sleep_counter = stereo_display_component_->GetConfig().sleep_count_max;
+		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
+			height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
 			stereo_display_component_->SetHeight();
 		}
-		else if (sleep_counter > 0) {
-			sleep_counter--;
+		else if (height_sleep > 0) {
+			height_sleep--;
 		}
 
 		// Check User binds
