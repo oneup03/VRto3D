@@ -16,6 +16,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 ## Configuration
 
 - Modify the `vrto3d\resources\settings\default.vrsettings` for your setup:
+- Any changes made to this configuration require a restart of SteamVR to take effect
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
