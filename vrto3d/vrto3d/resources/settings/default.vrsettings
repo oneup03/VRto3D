@@ -16,7 +16,6 @@
 		"convergence": 0.1,
 		"tab_enable": false,
 		"reverse_enable": false,
-		"hdr_enable": false,
 		"depth_gauge": false,
 		"debug_enable": false,
 		"display_latency": 0.011,

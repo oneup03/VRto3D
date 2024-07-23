@@ -45,7 +45,6 @@ struct StereoDisplayDriverConfiguration
 
 	bool tab_enable;
 	bool reverse_enable;
-	bool hdr_enable;
 	bool depth_gauge;
 	bool debug_enable;
 

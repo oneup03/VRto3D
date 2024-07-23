@@ -31,7 +31,6 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 | `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.1`          |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
-| `hdr_enable`        | `bool`  | Enable or disable HDR.                                                                      | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |
 | `debug_enable`      | `bool`  | Enable if using a single screen. Not 3DVision compatible. May reduce framerate. Breaks running some mods in OpenVR. Use OpenXR instead | `false` |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
