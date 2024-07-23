@@ -66,7 +66,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
 	display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
 	display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
-
+	
+	display_configuration.debug_enable = vrs->GetBool(stereo_display_settings_section, "debug_enable");
 	display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
 	display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
 	display_configuration.hdr_enable = vrs->GetBool(stereo_display_settings_section, "hdr_enable");
@@ -180,7 +181,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vrp->SetFloatProperty( container, vr::Prop_SecondsFromPhotonsToVblank_Float, 0.0);
 	vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
-	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, false);
+	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, stereo_display_component_->GetConfig().debug_enable);
 	vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
 	vrp->SetBoolProperty( container, vr::Prop_Hmd_SupportsHDR10_Bool, stereo_display_component_->GetConfig().hdr_enable);
 	if (stereo_display_component_->GetConfig().depth_gauge)

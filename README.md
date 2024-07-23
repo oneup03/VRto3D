@@ -33,6 +33,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `hdr_enable`        | `bool`  | Enable or disable HDR.                                                                      | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |
+| `debug_enable`      | `bool`  | Enable if using a single screen. Not 3DVision compatible. Limits framerate. Breaks running some mods in OpenVR. Use OpenXR instead | `false` |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable`      | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
@@ -58,6 +59,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed
 	- Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
 	- Set your render resolution per eye to what you want. Can save some performance by reducing this if you're running a half-size 3D format
+	- If using a single display, set the `debug_enable` flag to true to make more games work (not 3DVision compatible)
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
 	- The Headset window must be on your primary 3D display
 - Try launching a VR game
@@ -69,14 +71,14 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 	- Make the headset window in focus on your display
 	- Press `Ctrl+F8` to toggle locking the headset window to the foreground
 	- Use `Alt+Tab` to switch to the game window
-	- If the headset window went completely black, this game isn't compatible in single display mode
+	- If the headset window went completely black or rendering messes up, this game isn't compatible in single display mode
 	- To quit, press `Ctrl+F8` to toggle the headset foregrounding off, and then `Alt+Tab` out
 - Adjust Depth with `Ctrl+F3` and `Ctrl+F4`
 - Adjust Convergence with `Ctrl+F5` and `Ctrl+F6`
 - Save all Depth & Convergence settings with `Ctrl+F7`
 
 
-## Interlaced, Checkerboard, and Anaglyph Installation
+## Interlaced, Checkerboard, and Anaglyph Installation (only if you need this output format)
 
 - Complete the Base Installation section
 - Optionally set `tab_enable` to true in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` if you prefer to lose half vertical resolution instead of half horizontal resolution
@@ -99,7 +101,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - Once configuration is complete, you can run everything the same way as the Base Installation
 
 
-## 3DVision Installation
+## 3DVision Installation (only if you need this output format)
 
 - This will be the worst experience due to the finicky nature of 3DVision drivers. It is highly recommended to buy a different 3D Display to use moving forward. AR glasses (Rokid, Xreal, Viture) all work and provide a better experience than 3DVision ever did. AR glasses will need a [compatible adapter](https://air.msmithdev.com/adapters/) if you don't have a USBC port on your computer with DP out.
 - Only Driver v425.31 or 452.06 may work, so only RTX20 series or older
@@ -145,6 +147,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - Check the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
 - Single-Display notes:
 	- Some games/mods will not be compatible with this mode (3D view becomes black screen)
+	- More games will be compatible with the `debug_enable` flag, but framerate will be reduced
  	- The headset window has to be on top of everything for 3D to render correctly
   	- The game window has to be in focus for controls to work
   	- `Ctrl+F8` will toggle locking the headset window in the foreground

@@ -18,6 +18,7 @@
 		"reverse_enable": false,
 		"hdr_enable": false,
 		"depth_gauge": false,
+		"debug_enable": false,
 		"display_latency": 0.011,
 		"display_frequency": 60.0,
 		"pitch_enable": false,
