@@ -428,6 +428,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
 	static int height_sleep = 0;
 	static int top_sleep = 0;
+	static uint32_t window_count = 0;
 	static bool always_on_top = false;
 	static HWND vr_window = NULL;
 	static HWND top_window = NULL;
@@ -436,19 +437,20 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 	{
 		// Keep VR display always on top for 3D rendering
 		if (always_on_top) {
-			top_window = GetTopWindow(GetDesktopWindow());
+			if (window_count == 0) {
+				top_window = GetTopWindow(GetDesktopWindow());
+			}
 			if (vr_window != NULL && vr_window != top_window) {
 				SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 			}
-			else {
+			else if (vr_window == NULL) {
 				vr_window = FindWindow(NULL, L"Headset Window");
 			}
+			window_count = (window_count + 1) % 100;
 		}
-		else if (top_window != NULL) {
-			top_window = NULL;
-			if (vr_window != NULL) {
-				SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-			}
+		else if (vr_window != NULL) {
+			SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+			vr_window = NULL;
 		}
 
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
