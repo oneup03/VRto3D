@@ -33,7 +33,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `hdr_enable`        | `bool`  | Enable or disable HDR.                                                                      | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |
-| `debug_enable`      | `bool`  | Enable if using a single screen. Not 3DVision compatible. Limits framerate. Breaks running some mods in OpenVR. Use OpenXR instead | `false` |
+| `debug_enable`      | `bool`  | Enable if using a single screen. Not 3DVision compatible. May reduce framerate. Breaks running some mods in OpenVR. Use OpenXR instead | `false` |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable`      | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
@@ -59,23 +59,31 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed
 	- Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
 	- Set your render resolution per eye to what you want. Can save some performance by reducing this if you're running a half-size 3D format
-	- If using a single display, set the `debug_enable` flag to true to make more games work (not 3DVision compatible)
+	- If using a single display, set the `debug_enable` flag to `true` to make more games work (not 3DVision compatible)
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
 	- The Headset window must be on your primary 3D display
+	- Ignore/Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
 - Try launching a VR game
 - Multi-Display setups:
-	- Drag everything besides the headset view to your second display
-	- Make the headset window in focus on your primary display
-	- Make the game's window in focus on your second display for control input to work
+	- Move all windows besides the `Headset Window` over to your second display
+		- Can use mouse to drag over
+		- Can use Windows shortcut keys to move windowed programs around `Win + Left/Right`
+		- Can use Windows shortcut keys to move fullscreen programs around `Shift + Win + Left/Right`
+		- May need to make the game windowed either in-game settings or with `Alt + Enter`
+	- Click on the headset window to make it fullscreen on your primary display
+		- If it isn't fullscreen then you may get a black screen or some UI may not render in-game
+		- AVOID using `Alt + Tab` as this is more likely to exit fullscreen
+		- SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice to fix it
+	- Click on the game's window on your second display for control input to work
 - Single Display setup:
 	- Make the headset window in focus on your display
-	- Press `Ctrl+F8` to toggle locking the headset window to the foreground
-	- Use `Alt+Tab` to switch to the game window
-	- If the headset window went completely black or rendering messes up, this game isn't compatible in single display mode
-	- To quit, press `Ctrl+F8` to toggle the headset foregrounding off, and then `Alt+Tab` out
-- Adjust Depth with `Ctrl+F3` and `Ctrl+F4`
-- Adjust Convergence with `Ctrl+F5` and `Ctrl+F6`
-- Save all Depth & Convergence settings with `Ctrl+F7`
+	- Press `Ctrl + F8` to toggle locking the headset window to the foreground
+	- Use `Alt + Tab` to switch to the game window
+	- If the headset window went completely black or rendering messes up, try again with `debug_enable` set to `true`. Otherwise, this game isn't compatible in single display mode
+	- To quit, press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
+- Adjust Depth with `Ctrl + F3` and `Ctrl + F4`
+- Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
+- Save all Depth & Convergence settings with `Ctrl + F7`
 
 
 ## Interlaced, Checkerboard, and Anaglyph Installation (only if you need this output format)
@@ -123,7 +131,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - This configuration step should only need to be done once:
 	- Press `Home` to bring up the ReShade menu and select the SBS `SBS_to_Double.fx` shader and click `Reload`
 	- The Headset window has to be in focus for 3DVision to trigger - try clicking on it
-	- May need to press `Ctrl+T` to get 3D to trigger
+	- May need to press `Ctrl + T` to get 3D to trigger
 	- If it's still not working, try closing SteamVR and trying again
 	- If 3D flickers on and off, try toggling 3D in Nvidia Control Panel
 - Disable 3D from Nvidia Control Panel (This may not be needed if you are running a VR-native game)
@@ -147,11 +155,11 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 - Check the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
 - Single-Display notes:
 	- Some games/mods will not be compatible with this mode (3D view becomes black screen)
-	- More games will be compatible with the `debug_enable` flag, but framerate will be reduced
+	- More games will be compatible with the `debug_enable` flag, but framerate may be reduced
  	- The headset window has to be on top of everything for 3D to render correctly
   	- The game window has to be in focus for controls to work
-  	- `Ctrl+F8` will toggle locking the headset window in the foreground
-  	- You can then `Alt+Tab` to the game window
+  	- `Ctrl + F8` will toggle locking the headset window in the foreground
+  	- You can then `Alt + Tab` to the game window
 - Multi-Display notes:
 	- A multi-display setup in extended mode is recommended for the most compatibility
 	- The primary display will be where the "Headset" window is located and should be 3D capable
@@ -161,7 +169,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 		- Multiple displays connected in extended mode - easier to move things around and manage
 		- A virtual monitor will work, but will prove tricky. [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/)
 			- Sunshine/Moonlight is compatible
-	- Use Windows shortcut keys to move windowed programs around `Win + Left/Right Keys`
+	- Use Windows shortcut keys to move windowed programs around `Win + Left/Right`
 	- Use Windows shortcut keys to move fullscreen programs around `Shift + Win + Left/Right`
 - SteamVR may still complain about Direct Display mode, but this can be safely ignored
 - Exiting SteamVR will "restart" Steam - this is normal
@@ -182,7 +190,7 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 	- A Load key and a Store key can be configured to load and save Depth and Convergence settings for a configuration set
 	- The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the user and current every 1.5s, or `"hold"` the user setting until the key is released
 	- The Store key will update your user Depth and Convergence setting to the current value
-	- Changed values are saved to `Steam\config\steamvr.vrsettings` if you press `Ctrl+F7`
+	- Changed values are saved to `Steam\config\steamvr.vrsettings` if you press `Ctrl + F7`
 	- If a User Depth and Convergence setting is in `Steam\config\steamvr.vrsettings` then it will override `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings`
 
 
