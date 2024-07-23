@@ -146,6 +146,13 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 
 ## Notes
 
+- If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable them
+	- Run SteamVR
+	- On the SteamVR Status window, go to `Menu -> Settings`
+	- Change to the `Startup / Shutdown` tab
+	- Click `Manage Add-Ons`
+	- Turn `Off` any virtual HMD drivers (ALVR, VRidge, OpenTrack, VCR, etc)
+	- if issues still arise, try a [Clean SteamVR Install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/) and delete your `Steam\steamapps\common\SteamVR` folder
 - If you have a VR headset and run into issues with this driver, here's some things to try:
 	- Disconnect VR headset from computer
 	- [Clean SteamVR Install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/)
