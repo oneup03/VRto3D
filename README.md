@@ -124,6 +124,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 	- For both, read the Base Installation configuration and usage instructions to ensure that you get a proper 3D image and can control the game
 	- For Single-Display, it may also be necessary to use Regedit to set the key `HKEY_LOCAL_MACHINE\SOFTWARE\Acer\SpatialLabs\Fullscreen_Detection` to a `REG_DWORD` of value `0x00000000` 
 - Complete the [Base Installation](#base-installation) section
+- If you have [Game Bridge Installer](https://github.com/BramTeurlings/3DGameBridgeGUI/releases) setup, you can use that and browse to your `Steam\steamapps\common\SteamVR\bin\win64\vrserver.exe` instead of the instructions below. Just be sure to disable SuperDepth3D if it gets installed.
 - Download [ReShade 6.0.1](https://reshade.me/downloads/ReShade_Setup_6.0.1_Addon.exe)
 - Run the ReShade installer
 	- Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
