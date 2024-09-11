@@ -33,7 +33,7 @@
 		"user_key_type1": "switch",
 		"user_depth1": 0.5,
 		"user_convergence1": 0.02,
-		"user_load_key2": "XINPUT_GAMEPAD_START",
+		"user_load_key2": "XINPUT_GAMEPAD_GUIDE",
 		"user_store_key2": "VK_NUMPAD5",
 		"user_key_type2": "toggle",
 		"user_depth2": 0.1,

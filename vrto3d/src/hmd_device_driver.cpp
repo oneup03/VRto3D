@@ -29,6 +29,55 @@
 // Link the XInput library
 #pragma comment(lib, "XInput.lib")
 
+//-----------------------------------------------------------------------------
+// Purpose:
+// Set a function pointer to the xinput get state call. By default, set it to
+// XInputGetState() in whichever xinput we are linked to (xinput9_1_0.dll). If
+// the d3dx.ini is using the guide button we will try to switch to either
+// xinput 1.3 or 1.4 to get access to the undocumented XInputGetStateEx() call.
+// We can't rely on these existing on Win7 though, so if we fail to load them
+// don't treat it as fatal and continue using the original one.
+//-----------------------------------------------------------------------------
+static HMODULE xinput_lib;
+typedef DWORD(WINAPI* tXInputGetState)(DWORD dwUserIndex, XINPUT_STATE* pState);
+static tXInputGetState _XInputGetState = XInputGetState;
+static void SwitchToXinpuGetStateEx()
+{
+	tXInputGetState XInputGetStateEx;
+
+	if (xinput_lib)
+		return;
+
+	// 3DMigoto is linked against xinput9_1_0.dll, but that version does
+	// not export XInputGetStateEx to get the guide button. Try loading
+	// xinput 1.3 and 1.4, which both support this functionality.
+	xinput_lib = LoadLibrary(L"xinput1_3.dll");
+	if (xinput_lib) {
+		DriverLog("Loaded xinput1_3.dll for guide button support\n");
+	}
+	else {
+		xinput_lib = LoadLibrary(L"xinput1_4.dll");
+		if (xinput_lib) {
+			DriverLog("Loaded xinput1_4.dll for guide button support\n");
+		}
+		else {
+			DriverLog("ERROR: Unable to load xinput 1.3 or 1.4: Guide button will not be available\n");
+			return;
+		}
+	}
+
+	// Unnamed and undocumented exports FTW
+	LPCSTR XInputGetStateExOrdinal = (LPCSTR)100;
+	XInputGetStateEx = (tXInputGetState)GetProcAddress(xinput_lib, XInputGetStateExOrdinal);
+	if (!XInputGetStateEx) {
+		DriverLog("ERROR: Unable to get XInputGetStateEx: Guide button will not be available\n");
+		return;
+	}
+
+	_XInputGetState = XInputGetStateEx;
+}
+
+
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
 static const char *stereo_display_settings_section = "vrto3d_display";
@@ -49,6 +98,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
 	DriverLog( "VRto3D Model Number: %s", stereo_model_number_.c_str() );
 	DriverLog( "VRto3D Serial Number: %s", stereo_serial_number_.c_str() );
+
+	SwitchToXinpuGetStateEx();
 
 	// Display settings
 	StereoDisplayDriverConfiguration display_configuration{};
@@ -769,7 +820,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     XINPUT_STATE state;
     ZeroMemory(&state, sizeof(XINPUT_STATE));
     // Get the state of the first controller (index 0)
-    DWORD dwResult = XInputGetState(0, &state);
+    DWORD dwResult = _XInputGetState(0, &state);
 
 	if (((config_.ctrl_xinput && dwResult == ERROR_SUCCESS &&
 		((config_.ctrl_toggle_key == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
