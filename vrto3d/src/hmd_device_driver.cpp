@@ -162,6 +162,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 {
 	device_index_ = unObjectId;
 	is_active_ = true;
+	is_on_top_ = false;
 
 	// A list of properties available is contained in vr::ETrackedDeviceProperty.
 	auto* vrp = vr::VRProperties();
@@ -287,6 +288,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
 	
 	pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
+	focus_update_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
 
 	return vr::VRInitError_None;
 }
@@ -427,31 +429,9 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
 	static int height_sleep = 0;
 	static int top_sleep = 0;
-	static uint32_t window_count = 0;
-	static bool always_on_top = false;
-	static HWND vr_window = NULL;
-	static HWND top_window = NULL;
 
 	while ( is_active_ )
 	{
-		// Keep VR display always on top for 3D rendering
-		if (always_on_top) {
-			if (window_count == 0) {
-				top_window = GetTopWindow(GetDesktopWindow());
-			}
-			if (vr_window != NULL && vr_window != top_window) {
-				SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-			}
-			else if (vr_window == NULL) {
-				vr_window = FindWindow(NULL, L"Headset Window");
-			}
-			window_count = (window_count + 1) % 100;
-		}
-		else if (vr_window != NULL) {
-			SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-			vr_window = NULL;
-		}
-
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
 		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
 		
@@ -478,7 +458,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		// Ctrl+F8 Toggle Always On Top
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
 			top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-			always_on_top = !always_on_top;
+			is_on_top_ = !is_on_top_;
 		}
 		else if (top_sleep > 0) {
 			top_sleep--;
@@ -499,6 +479,39 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		std::this_thread::sleep_for( std::chrono::milliseconds(sleep_time));
 	}
 }
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Keep Headset Window on top if set
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::FocusUpdateThread()
+{
+	static int sleep_time = 1000;
+	static HWND vr_window = NULL;
+	static HWND top_window = NULL;
+
+	while (is_active_)
+	{
+		// Keep VR display always on top for 3D rendering
+		if (is_on_top_) {
+			top_window = GetTopWindow(GetDesktopWindow());
+			if (vr_window != NULL && vr_window != top_window) {
+				SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+			}
+			else if (vr_window == NULL) {
+				vr_window = FindWindow(NULL, L"Headset Window");
+			}
+		}
+		else if (vr_window != NULL) {
+			SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+			vr_window = NULL;
+		}
+
+		// Sleep for 1s
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+	}
+}
+
 
 //-----------------------------------------------------------------------------
 // Purpose: Save Depth and Convergence to Steam\config\steamvr.vrsettings

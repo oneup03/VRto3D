@@ -123,6 +123,7 @@ public:
 	void Deactivate() override;
 
 	void PoseUpdateThread();
+	void FocusUpdateThread();
 	void SaveDepthConv();
 
 private:
@@ -133,6 +134,8 @@ private:
 
 	std::atomic< bool > is_active_;
 	std::atomic< uint32_t > device_index_;
+	std::atomic< bool > is_on_top_;
 
 	std::thread pose_update_thread_;
+	std::thread focus_update_thread_;
 };
