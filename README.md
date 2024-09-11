@@ -18,6 +18,17 @@ Windows-only solution currently, but there are other solutions on Linux like Mon
 Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
 
 
+## Hotkeys
+- Adjust Depth with `Ctrl + F3` and `Ctrl + F4`
+- Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
+    - If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen. So if you experience black bars, find a setting you like, save it, and then restart the game
+- Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) with `Ctrl + F7`
+- Toggle locking the SteamVR Headset Window to the foreground with `Ctrl + F8`
+- Toggle HMD Height between 0.1m and configured `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
+- Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed) and Luke Ross mods (not for other mods)
+- Check the [User Settings](#user-settings) section for instructions on setting up your own Depth and Convergence presets and also reference the Configuration table below
+
+
 ## Configuration
 
 - Modify the `vrto3d\resources\settings\default.vrsettings` for your setup:
@@ -37,7 +48,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |
-| `debug_enable`      | `bool`  | Enable if using a single screen. Not 3DVision compatible. May reduce framerate. Breaks running some mods in OpenVR. Use OpenXR instead | `false` |
+| `debug_enable`      | `bool`  | Borderless Windowed. Not 3DVision compatible. Breaks running some mods in OpenVR mode.      | `true`         |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable`      | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
@@ -73,24 +84,20 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 	- Move all windows besides the `Headset Window` over to your second display
 		- Can use mouse to drag over
 		- Can use Windows shortcut keys to move windowed programs around `Win + Left/Right`
-		- Can use Windows shortcut keys to move fullscreen programs around `Shift + Win + Left/Right`
+		- Can use Windows shortcut keys to move fullscreen programs and the SteamVR Headset Window around `Shift + Win + Left/Right`
 		- May need to make the game windowed either in-game settings or with `Alt + Enter`
-	- Click on the headset window to make it fullscreen on your primary display
-		- If it isn't fullscreen then you may get a black screen or some UI may not render in-game
+	- If running SteamVR in fullscreen mode (not the default but can be set with debug_enable=false)
+		- Click on the headset window to make it fullscreen on your primary display
+		- If the Headset Window isn't fullscreen then you may get a black screen or some UI may not render in-game
 		- AVOID using `Alt + Tab` as this is more likely to exit fullscreen
 		- SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice or the headset window again to fix it
-		- Can alternatively set the `debug_enable` flag to `true` but this is less compatible with some games/mods
 	- Click on the game's window on your second display for control input to work
 - Single Display setup:
 	- Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
-	- Make the headset window in focus on your display
+	- Make the SteamVR Headset Window in focus on your display
 	- Press `Ctrl + F8` to toggle locking the headset window to the foreground
 	- Use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
-	- If the headset window went completely black or rendering messes up, try again with `debug_enable` set to `true`. Otherwise, this game isn't compatible in single display mode
-	- To quit, press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
-- Adjust Depth with `Ctrl + F3` and `Ctrl + F4`
-- Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
-- Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) with `Ctrl + F7`
+	- To quit, `Alt + Tab` to switch to the headset window and press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
 
 
 ## Interlaced, Checkerboard, and Anaglyph Installation (only if you need this output format)
@@ -158,6 +165,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 	- This should match your DSR 4x resolution if you're using DSR
 - Modify the `render_width` and `render_height` to be the resolution you want per eye, can be lower or higher than the window setting
 	- Recommended to set this to your monitors normal non-DSR resolution to avoid the performance hit
+- Set the `debug_enable` flag to `false` to enable fullscreen mode ***VRto3D will not work if you miss this setting***
 - Download Bo3b's [SbS to 3DVision](https://bo3b.s3.amazonaws.com/SD3D_eng.7z) tool and extract the contents to your `Steam\steamapps\common\SteamVR\bin\win64` folder
 - Enable 3D and Global hack. [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) can do this
 - Run SteamVR from Steam - you will have to do this before running any game with a 3DVision setup
@@ -197,7 +205,6 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 	- The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
  	- The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
   	- The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
-- HMD Height can be toggled between 0.1m and `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
 
 #### User Settings
 - Depth and Convergence (including ones temporarily set with the `user_store_keys`) are saved to your `Steam\config\steamvr.vrsettings` when you press `Ctrl+F7`. There are only global settings, no per-game ones.
