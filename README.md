@@ -1,8 +1,9 @@
 # VRto3D
 
-OpenVR Driver that can render in SbS or TaB 3D.
-Currently targeting OpenVR 2.5.1.
-Windows-only solution currently, but there are other solutions on Linux like MonadoVR.
+- OpenVR Driver that can render in SbS or TaB 3D.
+- Compatible games play great with a XInput controller. No motion controls required!
+- Currently targeting OpenVR 2.5.1.
+- Windows-only solution currently, but there are other solutions on Linux like MonadoVR.
 
 
 ## Compatible 3D Displays
@@ -44,7 +45,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`         |
 | `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`          |
-| `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.1`          |
+| `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.02`         |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |
@@ -63,19 +64,19 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `user_store_key#`   | `string`| The Virtual-Key Code to store user setting # (replace # with integer number)                | `"VK_NUMPAD4"` |
 | `user_key_type#`    | `string`| The store key's behavior ("switch" "toggle" "hold")  (replace # with integer number)        | `"switch"`     |
 | `user_depth#`       | `float` | The depth value for user setting # (replace # with integer number)                          | `0.5`          |
-| `user_convergence#` | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.1`          |
+| `user_convergence#` | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.02`         |
 
 
 ## Base Installation
 
-- A multi-display configuration setup will be the most compatible - see [notes](#displays) for working setups, but single displays can be used. Some mods or games may not work with a single display
+- A multi-display configuration setup in fullscreen mode will be the most compatible - see [notes](#displays) for working setups, but single displays can be used. Some mods or games may not work with a single display
 - Install SteamVR
 - Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Edit the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` as needed - [see what each setting does](#configuration)
 	- Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
 	- Set your render resolution per eye to what you want - can save some performance by reducing this
 	- Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
-	- Single Display Mode: set the `debug_enable` flag to `true` to make more games work (not 3DVision compatible)
+	- Single Display Mode: make sure the `debug_enable` flag is set to `true` to make more games work (not 3DVision compatible)
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
 	- The Headset window must be on your primary 3D display
 	- Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
@@ -104,7 +105,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 - Complete the [Base Installation](#base-installation) section
 - Optionally set `tab_enable` to true in `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` if you prefer to lose half vertical resolution instead of half horizontal resolution
-	- If using interlaced mode, you want SbS for Column Interlaced and TaB for Row Interlaced
+	- If using interlaced mode, you want SbS for Column Interlaced and TaB for Row/Line Interlaced
 - Download the latest [ReShade](https://reshade.me/#download) with full add-on support
 - Run the ReShade installer
 	- Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
@@ -129,7 +130,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 - SR displays work in either Multi or Single Display environments
 	- For both, read the Base Installation configuration and usage instructions to ensure that you get a proper 3D image and can control the game
-	- For Single-Display, it may also be necessary to use Regedit to set the key `HKEY_LOCAL_MACHINE\SOFTWARE\Acer\SpatialLabs\Fullscreen_Detection` to a `REG_DWORD` of value `0x00000000` 
+	- It may also be necessary to use Regedit to set the key `HKEY_LOCAL_MACHINE\SOFTWARE\Acer\SpatialLabs\Fullscreen_Detection` to a `REG_DWORD` of value `0x00000000` 
 - Complete the [Base Installation](#base-installation) section
 - If you have [Game Bridge Installer](https://github.com/BramTeurlings/3DGameBridgeGUI/releases) setup, you can use that and browse to your `Steam\steamapps\common\SteamVR\bin\win64\vrserver.exe` instead of the instructions below. Just be sure to disable SuperDepth3D if it gets installed.
 - Download [ReShade 6.0.1](https://reshade.me/downloads/ReShade_Setup_6.0.1_Addon.exe)
@@ -193,7 +194,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - SteamVR may still complain about Direct Display mode, but this can be safely dismissed
 - Exiting SteamVR will "restart" Steam - this is normal
 - Overlays generally won't work on this virtual HMD
-- Recommend using a XInput controller
+- Recommend using a XInput controller (required for Single-Display mode)
 - SteamVR doesn't support HDR currently
 - Some mods/games may override your VR settings
 - DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not
