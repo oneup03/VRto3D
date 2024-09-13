@@ -1,6 +1,6 @@
 # VRto3D
 
-- OpenVR Driver that can render in SbS or TaB 3D.
+- OpenVR Driver that can render in SbS or TaB 3D with other formats converted to through ReShade
 - Compatible games play great with a XInput controller. No motion controls required!
 - Currently targeting OpenVR 2.5.1.
 - Windows-only solution currently, but there are other solutions on Linux like MonadoVR.
@@ -11,7 +11,7 @@
 - 3D Projectors - work great, but need more space and may be expensive
 - AR Glasses (Rokid, Xreal, Viture) - work great, relatively inexpensive, require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) if you don't have a USBC port with DP-Alt mode on your PC. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
 - Lume Pad - works great, a bit more expensive, requires [Sunshine/Gamestream + Moonlight](https://support.leiainc.com/lume-pad-2/apps/moonlight3d)
-- SR SpatialLabs Displays - work great, currently expensive
+- SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, currently expensive
 - 3D Vision hardware (only RTX 20x or older) - will have game compatibility issues, hardware is hard to find
  
 
@@ -45,6 +45,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`         |
 | `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`          |
 | `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.02`         |
+| `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD depth gauge display.                                          | `false`        |

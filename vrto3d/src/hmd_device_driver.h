@@ -42,6 +42,7 @@ struct StereoDisplayDriverConfiguration
 	float fov;
 	float depth;
 	float convergence;
+	bool disable_hotkeys;
 
 	bool tab_enable;
 	bool reverse_enable;

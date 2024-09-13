@@ -134,6 +134,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
 	display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
 	display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
+    display_configuration.disable_hotkeys = vrs->GetBool(stereo_display_settings_section, "disable_hotkeys");
 	
 	display_configuration.debug_enable = vrs->GetBool(stereo_display_settings_section, "debug_enable");
 	display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
@@ -515,25 +516,27 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
 		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
 		
-		// Ctrl+F3 Decrease Depth
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
-			stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
-		}
-		// Ctrl+F4 Increase Depth
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
-			stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
-		}
-		// Ctrl+F5 Decrease Convergence
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
-			stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
-		}
-		// Ctrl+F6 Increase Convergence
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
-			stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
-		}
-		// Ctrl+F7 Store Depth & Convergence values
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000)) {
-			SaveDepthConv();
+		if (!stereo_display_component_->GetConfig().disable_hotkeys) {
+			// Ctrl+F3 Decrease Depth
+			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
+				stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
+			}
+			// Ctrl+F4 Increase Depth
+			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
+				stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
+			}
+			// Ctrl+F5 Decrease Convergence
+			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
+				stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
+			}
+			// Ctrl+F6 Increase Convergence
+			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
+				stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
+			}
+			// Ctrl+F7 Store Depth & Convergence values
+			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000)) {
+				SaveDepthConv();
+			}
 		}
 		// Ctrl+F8 Toggle Always On Top
 		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
