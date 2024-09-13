@@ -406,7 +406,7 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 	static const float updateInterval = 1.0f / stereo_display_component_->GetConfig().display_frequency; // Update interval in seconds
 	static const float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
 	static float currentPitch = 0.0f; // Keep track of the current pitch
-	static float currentYaw = 0.0f; // Keep track of the current yaw
+	static vr::HmdQuaternion_t currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f }; // Initial yaw quaternion
 	static float lastPitch = 0.0f;
 	static float lastYaw = 0.0f;
 	static float lastPos[3] = { 0.0f, 0.0f, 0.0f }; // Last position vector
@@ -428,14 +428,14 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 	// Adjust yaw based on controller input
 	if (stereo_display_component_->GetConfig().yaw_enable)
 	{
-		stereo_display_component_->AdjustYaw(currentYaw);
+		stereo_display_component_->AdjustYaw(currentYawQuat);
 	}
 
 	// Reset Pose to origin
 	if (stereo_display_component_->GetConfig().pose_reset)
 	{
 		currentPitch = 0.0f;
-		currentYaw = 0.0f;
+		currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f };
 		lastPitch = 0.0f;
 		lastYaw = 0.0f;
 		lastPos[0] = 0.0f;
@@ -450,12 +450,11 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 	}
 
 	float pitchRadians = DEG_TO_RAD(currentPitch);
-	float yawRadians = currentYaw;
+	float yawRadians = 2.0f * acos(currentYawQuat.w);
 
 	// Recompose the rotation quaternion from pitch and yaw
-	vr::HmdQuaternion_t pitchQuaternion = HmdQuaternion_FromEulerAngles(0, pitchRadians, 0);
-	vr::HmdQuaternion_t yawQuaternion = HmdQuaternion_FromEulerAngles(0, 0, yawRadians);
-	pose.qRotation = HmdQuaternion_Normalize(yawQuaternion * pitchQuaternion);
+	vr::HmdQuaternion_t pitchQuaternion = QuaternionFromAxisAngle(1.0f, 0.0f, 0.0f, pitchRadians);
+	pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
 	
 	// Calculate the new position relative to the current pitch & yaw
 	pose.vecPosition[0] = radius * cos(pitchRadians) * sin(yawRadians) - radius * sin(yawRadians);
@@ -482,7 +481,7 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 
 	// Update for next iteration
 	lastPitch = pitchRadians;
-	lastYaw = yawRadians;
+	lastYaw   = yawRadians;
 	lastPos[0] = pose.vecPosition[0];
 	lastPos[1] = pose.vecPosition[1];
 	lastPos[2] = pose.vecPosition[2];
@@ -996,7 +995,7 @@ void StereoDisplayComponent::AdjustPitch(float& currentPitch)
 //-----------------------------------------------------------------------------
 // Purpose: Adjust HMD Yaw using XInput Right Stick XAxis
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustYaw(float& currentYaw)
+void StereoDisplayComponent::AdjustYaw(vr::HmdQuaternion_t& currentYawQuat)
 {
 	XINPUT_STATE state;
 	ZeroMemory(&state, sizeof(XINPUT_STATE));
@@ -1023,9 +1022,11 @@ void StereoDisplayComponent::AdjustYaw(float& currentYaw)
 		// Scale Yaw
 		float yawAdjustment = -normalizedX * config_.ctrl_sensitivity;
 
-		// Apply the incremental yaw adjustment to the current yaw in radians
-		currentYaw += DEG_TO_RAD(yawAdjustment);
-		currentYaw = std::fmod(currentYaw + M_PI, 2 * M_PI) - M_PI; // Keep yaw in range
+		// Create a quaternion for the yaw adjustment
+		vr::HmdQuaternion_t yawQuatAdjust = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(yawAdjustment));
+
+		// Update the current yaw quaternion
+		currentYawQuat = HmdQuaternion_Normalize(yawQuatAdjust * currentYawQuat);
 	}
 }
 

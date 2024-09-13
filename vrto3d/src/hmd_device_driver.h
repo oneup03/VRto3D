@@ -98,7 +98,7 @@ public:
 	float GetConvergence();
 	void CheckUserSettings(uint32_t device_index);
 	void AdjustPitch(float& currentPitch);
-	void AdjustYaw(float& currentYaw);
+	void AdjustYaw(vr::HmdQuaternion_t& currentYawQuat);
 	void SetHeight();
 	void SetReset();
 

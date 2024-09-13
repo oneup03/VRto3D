@@ -110,6 +110,20 @@ static vr::HmdQuaternion_t HmdQuaternion_FromEulerAngles(double roll, double pit
   return q;
 }
 
+vr::HmdQuaternion_t QuaternionFromAxisAngle(float x, float y, float z, float angle)
+{
+	vr::HmdQuaternion_t quat;
+	float halfAngle = angle / 2.0f;
+	float sinHalfAngle = sin(halfAngle);
+
+	quat.w = cos(halfAngle);
+	quat.x = x * sinHalfAngle;
+	quat.y = y * sinHalfAngle;
+	quat.z = z * sinHalfAngle;
+
+	return quat;
+}
+
 template < class T, class Q >
 void HmdQuaternion_ConvertQuaternion( const T &in_quaternion, Q &out_quaternion )
 {
