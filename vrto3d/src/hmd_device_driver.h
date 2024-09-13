@@ -73,7 +73,6 @@ struct StereoDisplayDriverConfiguration
 	std::vector<float> prev_convergence;
 	std::vector<bool> was_held;
 	std::vector<bool> load_xinput;
-	std::vector<bool> store_xinput;
 	std::vector<int32_t> sleep_count;
 };
 

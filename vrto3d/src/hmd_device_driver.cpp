@@ -23,6 +23,7 @@
 #include <sstream>
 #include <ctime>
 #include <iomanip>
+#include <vector>
 #include <windows.h>
 #include <Xinput.h>
 
@@ -75,6 +76,22 @@ static void SwitchToXinpuGetStateEx()
 	}
 
 	_XInputGetState = XInputGetStateEx;
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Split a string by a delimiter
+//-----------------------------------------------------------------------------
+std::vector<std::string> split(const std::string& str, char delimiter) {
+	std::vector<std::string> tokens;
+	std::stringstream ss(str);
+	std::string token;
+
+	while (std::getline(ss, token, delimiter)) {
+		tokens.push_back(token);
+	}
+
+	return tokens;
 }
 
 
@@ -136,8 +153,14 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 		display_configuration.pose_reset_key = VirtualKeyMappings[pose_reset_key];
 		display_configuration.reset_xinput = false;
 	}
-	else if (XInputMappings.find(pose_reset_key) != XInputMappings.end()) {
-		display_configuration.pose_reset_key = XInputMappings[pose_reset_key];
+	else if (XInputMappings.find(pose_reset_key) != XInputMappings.end() || std::string(pose_reset_key).find('+') != std::string::npos) {
+		display_configuration.pose_reset_key = 0x0;
+        auto hotkeys = split(pose_reset_key, '+');
+        for (const auto& hotkey : hotkeys) {
+            if (XInputMappings.find(hotkey) != XInputMappings.end()) {
+                display_configuration.pose_reset_key |= XInputMappings[hotkey];
+            }
+        }
 		display_configuration.reset_xinput = true;
 	}
 	display_configuration.pose_reset = false;
@@ -147,8 +170,14 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 		display_configuration.ctrl_toggle_key = VirtualKeyMappings[ctrl_toggle_key];
 		display_configuration.ctrl_xinput = false;
 	}
-	else if (XInputMappings.find(ctrl_toggle_key) != XInputMappings.end()) {
-		display_configuration.ctrl_toggle_key = XInputMappings[ctrl_toggle_key];
+	else if (XInputMappings.find(ctrl_toggle_key) != XInputMappings.end() || std::string(ctrl_toggle_key).find('+') != std::string::npos) {
+		display_configuration.ctrl_toggle_key = 0x0;
+		auto hotkeys = split(ctrl_toggle_key, '+');
+		for (const auto& hotkey : hotkeys) {
+			if (XInputMappings.find(hotkey) != XInputMappings.end()) {
+				display_configuration.ctrl_toggle_key |= XInputMappings[hotkey];
+			}
+		}
 		display_configuration.ctrl_xinput = true;
 	}
 	display_configuration.pitch_radius = vrs->GetFloat(stereo_display_settings_section, "pitch_radius");
@@ -166,7 +195,6 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	display_configuration.prev_convergence.resize(display_configuration.num_user_settings);
 	display_configuration.was_held.resize(display_configuration.num_user_settings);
 	display_configuration.load_xinput.resize(display_configuration.num_user_settings);
-	display_configuration.store_xinput.resize(display_configuration.num_user_settings);
 	display_configuration.sleep_count.resize(display_configuration.num_user_settings);
 	for (int i = 0; i < display_configuration.num_user_settings; i++)
 	{
@@ -177,19 +205,20 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 			display_configuration.user_load_key[i] = VirtualKeyMappings[user_key];
 			display_configuration.load_xinput[i] = false;
 		}
-		else if (XInputMappings.find(user_key) != XInputMappings.end()) {
-			display_configuration.user_load_key[i] = XInputMappings[user_key];
+		else if (XInputMappings.find(user_key) != XInputMappings.end() || std::string(user_key).find('+') != std::string::npos) {
+			display_configuration.user_load_key[i] = 0x0;
+			auto hotkeys = split(user_key, '+');
+			for (const auto& hotkey : hotkeys) {
+				if (XInputMappings.find(hotkey) != XInputMappings.end()) {
+					display_configuration.user_load_key[i] |= XInputMappings[hotkey];
+				}
+			}
 			display_configuration.load_xinput[i] = true;
 		}
 		temp = "user_store_key" + std::to_string(i + 1);
 		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
 		if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
 			display_configuration.user_store_key[i] = VirtualKeyMappings[user_key];
-			display_configuration.store_xinput[i] = false;
-		}
-		else if (XInputMappings.find(user_key) != XInputMappings.end()) {
-			display_configuration.user_store_key[i] = XInputMappings[user_key];
-			display_configuration.store_xinput[i] = true;
 		}
 		temp = "user_key_type" + std::to_string(i + 1);
 		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
@@ -778,6 +807,8 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, ui
 	float cur_conv = GetConvergence();
 	if (is_delta)
 		new_conv += cur_conv;
+    if (cur_conv == new_conv)
+        return;
 	while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
 	// Regenerate the Projection
 	vr::HmdRect2_t eyeLeft, eyeRight;
@@ -816,16 +847,23 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 	static bool yaw_set = config_.yaw_enable;
 	static int sleep_ctrl = 0;
 	static int sleep_rest = 0;
-
+    
+	// Get the state of the first controller (index 0)
+	DWORD xstate = 0x00000000;
     XINPUT_STATE state;
     ZeroMemory(&state, sizeof(XINPUT_STATE));
-    // Get the state of the first controller (index 0)
     DWORD dwResult = _XInputGetState(0, &state);
+	xstate = state.Gamepad.wButtons;
+    if (state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+        xstate |= XINPUT_GAMEPAD_LEFT_TRIGGER;
+    }
+    if (state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+        xstate |= XINPUT_GAMEPAD_RIGHT_TRIGGER;
+    }
 
+    // Toggle Pitch and Yaw control
 	if (((config_.ctrl_xinput && dwResult == ERROR_SUCCESS &&
-		((config_.ctrl_toggle_key == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-			|| (config_.ctrl_toggle_key == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-			|| (state.Gamepad.wButtons & config_.ctrl_toggle_key)))
+		((xstate & config_.ctrl_toggle_key) == config_.ctrl_toggle_key))
 		|| (!config_.ctrl_xinput && (GetAsyncKeyState(config_.ctrl_toggle_key) & 0x8000)))
 		&& sleep_ctrl == 0)
 	{
@@ -841,10 +879,9 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 		sleep_ctrl--;
 	}
 
+    // Reset HMD position
 	if (((config_.reset_xinput && dwResult == ERROR_SUCCESS &&
-		((config_.pose_reset_key == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-			|| (config_.pose_reset_key == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-			|| (state.Gamepad.wButtons & config_.pose_reset_key)))
+		((xstate & config_.pose_reset_key) == config_.pose_reset_key))
 		|| (!config_.reset_xinput && (GetAsyncKeyState(config_.pose_reset_key) & 0x8000)))
 		&& sleep_rest == 0)
 	{
@@ -863,14 +900,10 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
         if (config_.sleep_count[i] > 0)
             config_.sleep_count[i]--;
 
-        bool keyPressed = (config_.load_xinput[i] && dwResult == ERROR_SUCCESS &&
-            ((config_.user_load_key[i] == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-            || (config_.user_load_key[i] == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-            || (state.Gamepad.wButtons & config_.user_load_key[i])))
-            || (!config_.load_xinput[i] && (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000));
-
-        // Load stored convergence
-        if (keyPressed)
+        // Load stored depth & convergence
+        if ((config_.load_xinput[i] && dwResult == ERROR_SUCCESS &&
+			((xstate & config_.user_load_key[i]) == config_.user_load_key[i]))
+			|| (!config_.load_xinput[i] && (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000)))
         {
             if (config_.user_key_type[i] == HOLD && !config_.was_held[i])
             {
@@ -913,13 +946,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
         }
 
         // Store current depth & convergence to user setting
-        bool storeKeyPressed = (config_.store_xinput[i] && dwResult == ERROR_SUCCESS &&
-            ((config_.user_store_key[i] == XINPUT_GAMEPAD_LEFT_TRIGGER && state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-            || (config_.user_store_key[i] == XINPUT_GAMEPAD_RIGHT_TRIGGER && state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD)
-            || (state.Gamepad.wButtons & config_.user_store_key[i])))
-            || (!config_.store_xinput[i] && (GetAsyncKeyState(config_.user_store_key[i]) & 0x8000));
-
-        if (storeKeyPressed)
+        if ((GetAsyncKeyState(config_.user_store_key[i]) & 0x8000))
         {
             config_.user_depth[i] = GetDepth();
             config_.user_convergence[i] = GetConvergence();

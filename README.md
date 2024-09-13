@@ -22,7 +22,6 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 ## Hotkeys
 - Adjust Depth with `Ctrl + F3` and `Ctrl + F4`
 - Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
-    - If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen. So if you experience black bars, find a setting you like, save it, and then restart the game
 - Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) with `Ctrl + F7`
 - Toggle locking the SteamVR Headset Window to the foreground with `Ctrl + F8`
 - Toggle HMD Height between 0.1m and configured `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
@@ -166,7 +165,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 	- This should match your DSR 4x resolution if you're using DSR
 - Modify the `render_width` and `render_height` to be the resolution you want per eye, can be lower or higher than the window setting
 	- Recommended to set this to your monitors normal non-DSR resolution to avoid the performance hit
-- Set the `debug_enable` flag to `false` to enable fullscreen mode ***VRto3D will not work if you miss this setting***
+- Set the `debug_enable` flag to `false` to enable fullscreen mode ***3D will not work if you miss this setting***
 - Download Bo3b's [SbS to 3DVision](https://bo3b.s3.amazonaws.com/SD3D_eng.7z) tool and extract the contents to your `Steam\steamapps\common\SteamVR\bin\win64` folder
 - Enable 3D and Global hack. [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) can do this
 - Run SteamVR from Steam - you will have to do this before running any game with a 3DVision setup
@@ -194,7 +193,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - SteamVR may still complain about Direct Display mode, but this can be safely dismissed
 - Exiting SteamVR will "restart" Steam - this is normal
 - Overlays generally won't work on this virtual HMD
-- Recommend using a XInput controller (required for Single-Display mode)
+- XInput controller is recommended (required for Single-Display mode)
 - SteamVR doesn't support HDR currently
 - Some mods/games may override your VR settings
 - DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not
@@ -205,13 +204,21 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
 	- The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
  	- The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
+	- Both of these keys can be set to XInput buttons & combinations or single keyboard keys as outlined in User Settings - Load Keys
   	- The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
 
 #### User Settings
 - Depth and Convergence (including ones temporarily set with the `user_store_keys`) are saved to your `Steam\config\steamvr.vrsettings` when you press `Ctrl+F7`. There are only global settings, no per-game ones.
-- The `num_user_settings` field must match the number of user defined configurations - as many as you want
+- If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen. So if you experience black bars, find a setting you like, save it, and then restart the game
+- It is recommended to use a single convergence setting for all your presets
+- The `num_user_settings` field in the default.vrsettings must match the number of user defined configurations - as many as you want
 - Each configuration's Field Names should end with an integer, starting from 1
 - A Load key and a Store key can be configured to load and save Depth and Convergence settings for a configuration set
+    - Load keys can use XInput buttons & combinations as well as single keyboard keys
+		- The Guide button can be used, but not in combinations
+		- XInput Combinations can be set like this `"XINPUT_GAMEPAD_A+XINPUT_GAMEPAD_B"`
+	- Store keys can only use single keyboard keys
+	- Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for the keys
 - The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the user and current every 1.5s, or `"hold"` the user setting until the key is released
 - The Store key will update your user Depth and Convergence setting to the current value
 - If a User Depth and Convergence setting is in `Steam\config\steamvr.vrsettings` then it will override `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings`
