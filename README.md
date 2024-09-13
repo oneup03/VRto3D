@@ -109,8 +109,8 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Download the latest [ReShade](https://reshade.me/#download) with full add-on support
 - Run the ReShade installer
 	- Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
-	- Select `vrserver.exe`
-	- Select DirectX 11
+	- Select `vrserver.exe` and click Next
+	- Select `DirectX 11` and click Next
 	- Click `Uncheck All` and click Next, Next, Finish
 - Download [3DToElse.fx](https://github.com/BlueSkyDefender/Depth3D/tree/master/Other%20%20Shaders) and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
 - Run SteamVR
@@ -126,27 +126,29 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Once configuration is complete, you can run everything the same way as the Base Installation
 
 
-## Simulated Reality / Spatial Labs Displays (only if you need this output format)
+## SR (Simulated Reality) Displays (only if you need this output format)
 
+- When [XRGameBridge](https://github.com/JoeyAnthony/XRGameBridge/releases) is more stable, that will be preferable to use instead of VRto3D for games/mods with OpenXR support
 - SR displays work in either Multi or Single Display environments
 	- For both, read the Base Installation configuration and usage instructions to ensure that you get a proper 3D image and can control the game
-	- It may also be necessary to use Regedit to set the key `HKEY_LOCAL_MACHINE\SOFTWARE\Acer\SpatialLabs\Fullscreen_Detection` to a `REG_DWORD` of value `0x00000000` 
 - Complete the [Base Installation](#base-installation) section
-- If you have [Game Bridge Installer](https://github.com/BramTeurlings/3DGameBridgeGUI/releases) setup, you can use that and browse to your `Steam\steamapps\common\SteamVR\bin\win64\vrserver.exe` instead of the instructions below. Just be sure to disable SuperDepth3D if it gets installed.
-- Download [ReShade 6.0.1](https://reshade.me/downloads/ReShade_Setup_6.0.1_Addon.exe)
+- Install the software package provided with your SR display, if yours did not come with one, install the `SR-VERSION-win64.exe` and `simulatedreality-VERSION-win64-Release.exe` from the [LeiaInc Github](https://github.com/LeiaInc/leiainc.github.io/tree/master/SRSDK)
+- Download the latest [ReShade](https://reshade.me/#download) with full add-on support
 - Run the ReShade installer
 	- Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
-	- Select `vrserver.exe`
-	- Select DirectX 11
-	- Click `Uncheck All` and click Next, Next, Finish
-- Setup SR Reshade
-	- Download [SR Reshade Plugin](https://drive.google.com/drive/folders/1sbWHRq47Q5jyBvVTW3Tjfyut_LuKWmQ5?usp=drive_link)
-	- Folow the included srReshade Installation Guide. Skip `steps 6,11` and use `Steam\steamapps\common\SteamVR\bin\win64` as the game executable directory
+	- Select `vrserver.exe` and click Next
+	- Select `DirectX 11` and click Next
+	- Click `Uncheck All` and click Next
+	- Select `3DGameBridge by Janthony & DinnerBram` and click Next
+	- Click Finish
 - Run SteamVR
 - Press `Home` to open ReShade and click `Skip Tutorial`
+- Click on the `Add-Ons` tab
 - Select `srReshade` in the menu to enable it
-	- If 3D doesn't activate, verify your setup looks like the pictures in srReshade Installation Guide `steps 12,13`
-- Enable ReShade's `Performance Mode` checkbox
+	- Expand the srReshade dropdown and if you get a `Status: Inactive - Unable to load all SR DLLs` then you need to install the SR Runtime + SDK from Leia's Github above
+	- 3D can be toggled on and off by using srReshade's `Ctrl + 2` hotkey
+- Click on the `Home` tab
+	- Enable ReShade's `Performance Mode` checkbox
 - Once configuration is complete, you can run everything the same way as the Base Installation
 
 
