@@ -112,7 +112,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 	- Select `vrserver.exe` and click Next
 	- Select `DirectX 11` and click Next
 	- Click `Uncheck All` and click Next, Next, Finish
-- Download [3DToElse.fx](https://github.com/BlueSkyDefender/Depth3D/tree/master/Other%20%20Shaders) and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
+- Download [3DToElse.fx](https://github.com/BlueSkyDefender/Depth3D/blob/master/Other%20%20Shaders/3DToElse.fx) and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
 - Run SteamVR
 - Press `Home` to open ReShade and click `Skip Tutorial`
 - Select `To_Else` in the menu to enable 3DToElse
