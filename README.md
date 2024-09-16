@@ -4,12 +4,15 @@
 - Compatible games play great with a XInput controller. No motion controls required!
 - Currently targeting OpenVR 2.5.1.
 - Windows-only solution currently, but there are other solutions on Linux like MonadoVR.
+- Check out the video guide here:
+
+[![Video guide available here](https://img.youtube.com/vi/0caYbmcthkg/hqdefault.jpg)](https://www.youtube.com/watch?v=0caYbmcthkg)
 
 
 ## Compatible 3D Displays
 - 3D TVs - work great if you can find one
 - 3D Projectors - work great, but need more space and may be expensive
-- AR Glasses (Rokid, Xreal, Viture) - work great, relatively inexpensive, require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) if you don't have a USBC port with DP-Alt mode on your PC. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
+- AR Glasses (Rokid, Xreal, Viture) - work great, relatively inexpensive, require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) - choose one with SBS and audio support. if you don't have a USBC port with DP-Alt mode on your PC. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
 - Lume Pad - works great, a bit more expensive, requires [Sunshine/Gamestream + Moonlight](https://support.leiainc.com/lume-pad-2/apps/moonlight3d)
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, currently expensive
 - 3D Vision hardware (only RTX 20x or older) - will have game compatibility issues, hardware is hard to find
@@ -94,6 +97,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 		- SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice or the headset window again to fix it
 	- Click on the game's window on your second display for control input to work
 - Single Display setup:
+	- Mouse controls will not be usable in single display mode as you will click on the headset window in the foreground and input will not register in-game.
 	- Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
 	- Make the SteamVR Headset Window in focus on your display
 	- Press `Ctrl + F8` to toggle locking the headset window to the foreground
