@@ -14,8 +14,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
-#include "device_provider.h"
+#include <algorithm> 
+#include <windows.h>
+#include <psapi.h>
+#include <tchar.h>
 
+#include "device_provider.h"
 #include "driverlog.h"
 
 //-----------------------------------------------------------------------------
@@ -65,6 +69,28 @@ bool MyDeviceProvider::ShouldBlockStandbyMode()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::RunFrame()
 {
+	vr::VREvent_t vrEvent;
+	while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent)))
+	{
+		if (vrEvent.eventType == vr::VREvent_ProcessConnected ||
+			vrEvent.eventType == vr::VREvent_ActionBindingReloaded ||
+			vrEvent.eventType == vr::VREvent_SceneApplicationChanged ||
+			vrEvent.eventType == vr::VREvent_Input_BindingLoadFailed || 
+			vrEvent.eventType == vr::VREvent_Input_BindingLoadSuccessful ||
+			vrEvent.eventType == vr::VREvent_Input_ActionManifestReloaded)
+		{
+			auto appName = GetProcessName(vrEvent.data.process.pid);
+			auto lowerAppName = appName;
+			std::transform(lowerAppName.begin(), lowerAppName.end(), lowerAppName.begin(), ::tolower);
+			
+            if (skip_processes_.find(appName) == skip_processes_.end() &&
+				lowerAppName.find("exe") != std::string::npos)
+            {
+                DriverLog("AppName = %s\n", appName.c_str());
+                my_hmd_device_->LoadSettings(appName);
+            }
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -92,4 +118,35 @@ void MyDeviceProvider::Cleanup()
 {
 	// Our controller devices will have already deactivated. Let's now destroy them.
 	my_hmd_device_ = nullptr;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: To get the executable name given a process ID
+//-----------------------------------------------------------------------------
+std::string MyDeviceProvider::GetProcessName(uint32_t processID)
+{
+	TCHAR processName[MAX_PATH] = TEXT("<unknown>");
+
+	// Get a handle to the process.
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
+
+	// Get the process name.
+	if (hProcess != NULL)
+	{
+		HMODULE hMod;
+		DWORD cbNeeded;
+
+		if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
+		{
+			GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
+		}
+	}
+
+	// Release the handle to the process.
+	CloseHandle(hProcess);
+
+	// Convert TCHAR to std::string and return
+	std::wstring ws(processName);
+	std::string processNameStr(ws.begin(), ws.end());
+	return processNameStr;
 }

@@ -101,6 +101,7 @@ public:
 	void AdjustYaw(vr::HmdQuaternion_t& currentYawQuat);
 	void SetHeight();
 	void SetReset();
+    void LoadSettings(const std::string& app_name, uint32_t device_index);
 
 private:
 	StereoDisplayDriverConfiguration config_;
@@ -124,7 +125,9 @@ public:
 
 	void PoseUpdateThread();
 	void FocusUpdateThread();
-	void SaveDepthConv();
+
+    void LoadSettings(const std::string& app_name);
+	void SaveSettings();
 
 private:
 	std::unique_ptr< StereoDisplayComponent > stereo_display_component_;
@@ -132,9 +135,12 @@ private:
 	std::string stereo_model_number_;
 	std::string stereo_serial_number_;
 
+	std::string app_name_;
+
 	std::atomic< bool > is_active_;
 	std::atomic< uint32_t > device_index_;
 	std::atomic< bool > is_on_top_;
+    std::atomic< bool > is_loading_;
 
 	std::thread pose_update_thread_;
 	std::thread focus_update_thread_;

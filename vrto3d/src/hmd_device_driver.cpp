@@ -95,6 +95,16 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
 }
 
 
+//-----------------------------------------------------------------------------
+// Purpose: Signify Operation Successful
+//-----------------------------------------------------------------------------
+static void BeepSuccess()
+{
+	// High beep for success
+	Beep(1800, 400);
+}
+
+
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
 static const char *stereo_display_settings_section = "vrto3d_display";
@@ -200,8 +210,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 	for (int i = 0; i < display_configuration.num_user_settings; i++)
 	{
 		char user_key[1024];
-		std::string temp = "user_load_key" + std::to_string(i + 1);
-		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		auto si = std::to_string(i + 1);
+		vrs->GetString(stereo_display_settings_section, ("user_load_key" + si).c_str(), user_key, sizeof(user_key));
 		if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
 			display_configuration.user_load_key[i] = VirtualKeyMappings[user_key];
 			display_configuration.load_xinput[i] = false;
@@ -216,24 +226,23 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 			}
 			display_configuration.load_xinput[i] = true;
 		}
-		temp = "user_store_key" + std::to_string(i + 1);
-		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		vrs->GetString(stereo_display_settings_section, ("user_store_key" + si).c_str(), user_key, sizeof(user_key));
 		if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
 			display_configuration.user_store_key[i] = VirtualKeyMappings[user_key];
 		}
-		temp = "user_key_type" + std::to_string(i + 1);
-		vrs->GetString(stereo_display_settings_section, temp.c_str(), user_key, sizeof(user_key));
+		vrs->GetString(stereo_display_settings_section, ("user_key_type" + si).c_str(), user_key, sizeof(user_key));
 		if (KeyBindTypes.find(user_key) != KeyBindTypes.end()) {
 			display_configuration.user_key_type[i] = KeyBindTypes[user_key];
 		}
-		temp = "user_depth" + std::to_string(i + 1);
-		display_configuration.user_depth[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
-		temp = "user_convergence" + std::to_string(i + 1);
-		display_configuration.user_convergence[i] = vr::VRSettings()->GetFloat(stereo_display_settings_section, temp.c_str());
+		display_configuration.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, ("user_depth" + si).c_str());
+		display_configuration.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, ("user_convergence" + si).c_str());
 	}
 
 	// Instantiate our display component
 	stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
+    is_loading_ = false;
+
+	DriverLog("Default Config Loaded\n");
 }
 
 //-----------------------------------------------------------------------------
@@ -370,6 +379,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 	
 	pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
 	focus_update_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
+
+	DriverLog("Activation Complete\n");
 
 	return vr::VRInitError_None;
 }
@@ -509,54 +520,61 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
 	static int height_sleep = 0;
 	static int top_sleep = 0;
+    static int save_sleep = 0;
 
 	while ( is_active_ )
 	{
-		// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
-		vr::VRServerDriverHost()->TrackedDevicePoseUpdated( device_index_, GetPose(), sizeof( vr::DriverPose_t ) );
-		
-		if (!stereo_display_component_->GetConfig().disable_hotkeys) {
-			// Ctrl+F3 Decrease Depth
-			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
-				stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
-			}
-			// Ctrl+F4 Increase Depth
-			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
-				stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
-			}
-			// Ctrl+F5 Decrease Convergence
-			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
-				stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
-			}
-			// Ctrl+F6 Increase Convergence
-			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
-				stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
-			}
-			// Ctrl+F7 Store Depth & Convergence values
-			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000)) {
-				SaveDepthConv();
-			}
-		}
-		// Ctrl+F8 Toggle Always On Top
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
-			top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-			is_on_top_ = !is_on_top_;
-		}
-		else if (top_sleep > 0) {
-			top_sleep--;
-		}
-		// Ctrl+F9 Toggle HMD height
-		if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
-			height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-			stereo_display_component_->SetHeight();
-		}
-		else if (height_sleep > 0) {
-			height_sleep--;
-		}
+		if (!is_loading_)
+		{
+			// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
+			vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, GetPose(), sizeof(vr::DriverPose_t));
 
-		// Check User binds
-		stereo_display_component_->CheckUserSettings(device_index_);
+			if (!stereo_display_component_->GetConfig().disable_hotkeys) {
+				// Ctrl+F3 Decrease Depth
+				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
+					stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
+				}
+				// Ctrl+F4 Increase Depth
+				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
+					stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
+				}
+				// Ctrl+F5 Decrease Convergence
+				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
+					stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
+				}
+				// Ctrl+F6 Increase Convergence
+				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
+					stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
+				}
+				// Ctrl+F7 Store Depth & Convergence values
+				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
+					save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+					SaveSettings();
+				}
+				else if (save_sleep > 0) {
+					save_sleep--;
+				}
+			}
+			// Ctrl+F8 Toggle Always On Top
+			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
+				top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+				is_on_top_ = !is_on_top_;
+			}
+			else if (top_sleep > 0) {
+				top_sleep--;
+			}
+			// Ctrl+F9 Toggle HMD height
+			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
+				height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+				stereo_display_component_->SetHeight();
+			}
+			else if (height_sleep > 0) {
+				height_sleep--;
+			}
 
+			// Check User binds
+			stereo_display_component_->CheckUserSettings(device_index_);
+		}
 		// Update our pose ~ every frame
 		std::this_thread::sleep_for( std::chrono::milliseconds(sleep_time));
 	}
@@ -596,21 +614,71 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Save Depth and Convergence to Steam\config\steamvr.vrsettings
+// Purpose: Load Game Specific Settings from Steam\config\steamvr.vrsettings
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::SaveDepthConv()
+void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
 {
-	vr::VRSettings()->SetFloat(stereo_display_settings_section, "depth", stereo_display_component_->GetDepth());
-	vr::VRSettings()->SetFloat(stereo_display_settings_section, "convergence", stereo_display_component_->GetConvergence());
+    if (app_name != app_name_)
+	{
+		is_loading_ = true;
+        app_name_ = app_name;
+        auto* vrs = vr::VRSettings();
+
+		try {
+            bool profile = vrs->GetBool(stereo_display_settings_section, app_name.c_str());
+			if (profile)
+			{
+                stereo_display_component_->LoadSettings(app_name, device_index_);
+				BeepSuccess();
+            }
+            else
+            {
+                DriverLog("No settings found for %s profile\n", app_name.c_str());
+            }
+		}
+		catch (...) {
+			DriverLog("No settings found for %s profile\n", app_name_);
+		}
+        is_loading_ = false;
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Save Game Specific Settings to Steam\config\steamvr.vrsettings
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::SaveSettings()
+{
+	auto* vrs = vr::VRSettings();
+    vrs->SetBool(stereo_display_settings_section, app_name_.c_str(), true);
+	vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/depth").c_str(), stereo_display_component_->GetDepth());
+	vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/convergence").c_str(), stereo_display_component_->GetConvergence());
+    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/hmd_height").c_str(), stereo_display_component_->GetConfig().hmd_height);
+    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/pitch_enable").c_str(), stereo_display_component_->GetConfig().pitch_enable);
+    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/yaw_enable").c_str(), stereo_display_component_->GetConfig().yaw_enable);
+    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/pose_reset_key").c_str(), stereo_display_component_->GetConfig().pose_reset_key);
+    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/reset_xinput").c_str(), stereo_display_component_->GetConfig().reset_xinput);
+    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/ctrl_toggle_key").c_str(), stereo_display_component_->GetConfig().ctrl_toggle_key);
+    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/ctrl_xinput").c_str(), stereo_display_component_->GetConfig().ctrl_xinput);
+    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/pitch_radius").c_str(), stereo_display_component_->GetConfig().pitch_radius);
+    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/ctrl_deadzone").c_str(), stereo_display_component_->GetConfig().ctrl_deadzone);
+    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/ctrl_sensitivity").c_str(), stereo_display_component_->GetConfig().ctrl_sensitivity);
+    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/num_user_settings").c_str(), stereo_display_component_->GetConfig().num_user_settings);
 
 	for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
 	{
-		std::string temp = "user_depth" + std::to_string(i + 1);
-		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_depth[i]);
-		temp = "user_convergence" + std::to_string(i + 1);
-		vr::VRSettings()->SetFloat(stereo_display_settings_section, temp.c_str(), stereo_display_component_->GetConfig().user_convergence[i]);
+        auto si = std::to_string(i + 1);
+        vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_load_key" + si).c_str(), stereo_display_component_->GetConfig().user_load_key[i]);
+        vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_store_key" + si).c_str(), stereo_display_component_->GetConfig().user_store_key[i]);
+        vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_key_type" + si).c_str(), stereo_display_component_->GetConfig().user_key_type[i]);
+		vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_depth" + si).c_str(), stereo_display_component_->GetConfig().user_depth[i]);
+		vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_convergence" + si).c_str(), stereo_display_component_->GetConfig().user_convergence[i]);
+        vrs->SetBool(stereo_display_settings_section, (app_name_ + "/load_xinput" + si).c_str(), stereo_display_component_->GetConfig().load_xinput[i]);
 	}
+	DriverLog("Saved to %s profile\n", app_name_);
+    BeepSuccess();
 }
+
 
 //-----------------------------------------------------------------------------
 // Purpose: Stub for Standby mode
@@ -1049,4 +1117,58 @@ void StereoDisplayComponent::SetHeight()
 void StereoDisplayComponent::SetReset()
 {
 	config_.pose_reset = false;
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Load Game Specific Settings from Steam\config\steamvr.vrsettings
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t device_index)
+{
+	auto* vrs = vr::VRSettings();
+
+	try {
+		config_.depth = vrs->GetFloat(stereo_display_settings_section, (app_name + "/depth").c_str());
+		config_.convergence = vrs->GetFloat(stereo_display_settings_section, (app_name + "/convergence").c_str());
+		config_.hmd_height = vrs->GetFloat(stereo_display_settings_section, (app_name + "/hmd_height").c_str());
+		config_.pitch_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/pitch_enable").c_str());
+		config_.yaw_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/yaw_enable").c_str());
+		config_.pose_reset_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/pose_reset_key").c_str());
+		config_.reset_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/reset_xinput").c_str());
+		config_.ctrl_toggle_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/ctrl_toggle_key").c_str());
+		config_.ctrl_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/ctrl_xinput").c_str());
+		config_.pitch_radius = vrs->GetFloat(stereo_display_settings_section, (app_name + "/pitch_radius").c_str());
+		config_.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_deadzone").c_str());
+		config_.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_sensitivity").c_str());
+		config_.num_user_settings = vrs->GetInt32(stereo_display_settings_section, (app_name + "/num_user_settings").c_str());
+
+		config_.user_load_key.resize(config_.num_user_settings);
+		config_.user_store_key.resize(config_.num_user_settings);
+		config_.user_key_type.resize(config_.num_user_settings);
+		config_.user_depth.resize(config_.num_user_settings);
+		config_.user_convergence.resize(config_.num_user_settings);
+		config_.prev_depth.resize(config_.num_user_settings);
+		config_.prev_convergence.resize(config_.num_user_settings);
+		config_.was_held.resize(config_.num_user_settings);
+		config_.load_xinput.resize(config_.num_user_settings);
+		config_.sleep_count.resize(config_.num_user_settings);
+		for (int i = 0; i < config_.num_user_settings; i++)
+		{
+			auto si = std::to_string(i + 1);
+			config_.user_load_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_load_key" + si).c_str());
+			config_.user_store_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_store_key" + si).c_str());
+			config_.user_key_type[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_key_type" + si).c_str());
+			config_.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_depth" + si).c_str());
+			config_.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_convergence" + si).c_str());
+			config_.load_xinput[i] = vrs->GetBool(stereo_display_settings_section, (app_name + "/load_xinput" + si).c_str());
+		}
+
+		AdjustDepth(config_.depth, false, device_index);
+        AdjustConvergence(config_.convergence, false, device_index);
+
+		DriverLog("Loaded %s profile\n", app_name);
+	}
+	catch (...) {
+		DriverLog("Failed loading settings for %s profile\n", app_name);
+	}
 }
