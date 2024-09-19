@@ -27,39 +27,39 @@
 class MyDeviceProvider : public vr::IServerTrackedDeviceProvider
 {
 public:
-	vr::EVRInitError Init( vr::IVRDriverContext *pDriverContext ) override;
-	const char *const *GetInterfaceVersions() override;
+    vr::EVRInitError Init( vr::IVRDriverContext *pDriverContext ) override;
+    const char *const *GetInterfaceVersions() override;
 
-	void RunFrame() override;
-	std::string GetProcessName(uint32_t processID);
+    void RunFrame() override;
+    std::string GetProcessName(uint32_t processID);
 
-	bool ShouldBlockStandbyMode() override;
-	void EnterStandby() override;
-	void LeaveStandby() override;
+    bool ShouldBlockStandbyMode() override;
+    void EnterStandby() override;
+    void LeaveStandby() override;
 
-	void Cleanup() override;
+    void Cleanup() override;
 
 private:
-	std::unique_ptr<MockControllerDeviceDriver> my_hmd_device_;
+    std::unique_ptr<MockControllerDeviceDriver> my_hmd_device_;
 
-	std::unordered_set<std::string> skip_processes_ = {
-		"vrcompositor.exe",
+    std::unordered_set<std::string> skip_processes_ = {
+        "vrcompositor.exe",
         "vrserver.exe",
         "vrmonitor.exe",
         "vrstartup.exe",
         "removeusbhelper.exe",
-		"restarthelper.exe",
+        "restarthelper.exe",
         "vrcmd.exe",
         "vrdashboard.exe",
         "vrpathreg.exe",
         "vrwebhelper.exe",
-		"vrprismhost.exe",
+        "vrprismhost.exe",
         "vrserverhelper.exe",
         "vrservice.exe",
         "vrurlhandler.exe",
-		"steam.exe",
+        "steam.exe",
         "steamwebhelper.exe",
         "steamerrorreporter.exe",
         "steamservice.exe"
-	};
+    };
 };

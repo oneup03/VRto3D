@@ -28,21 +28,21 @@
 //-----------------------------------------------------------------------------
 vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 {
-	// We need to initialise our driver context to make calls to the server.
-	// OpenVR provides a macro to do this for us.
-	VR_INIT_SERVER_DRIVER_CONTEXT( pDriverContext );
+    // We need to initialise our driver context to make calls to the server.
+    // OpenVR provides a macro to do this for us.
+    VR_INIT_SERVER_DRIVER_CONTEXT( pDriverContext );
 
-	// First, initialize our hmd, which we'll later pass OpenVR a pointer to.
-	my_hmd_device_ = std::make_unique< MockControllerDeviceDriver >();
+    // First, initialize our hmd, which we'll later pass OpenVR a pointer to.
+    my_hmd_device_ = std::make_unique< MockControllerDeviceDriver >();
 
-	// TrackedDeviceAdded returning true means we have had our device added to SteamVR.
-	if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3D-1234", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
-	{
-		DriverLog( "Failed to create hmd device!" );
-		return vr::VRInitError_Driver_Unknown;
-	}
+    // TrackedDeviceAdded returning true means we have had our device added to SteamVR.
+    if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3D-1234", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
+    {
+        DriverLog( "Failed to create hmd device!" );
+        return vr::VRInitError_Driver_Unknown;
+    }
 
-	return vr::VRInitError_None;
+    return vr::VRInitError_None;
 }
 
 //-----------------------------------------------------------------------------
@@ -51,7 +51,7 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 //-----------------------------------------------------------------------------
 const char *const *MyDeviceProvider::GetInterfaceVersions()
 {
-	return vr::k_InterfaceVersions;
+    return vr::k_InterfaceVersions;
 }
 
 //-----------------------------------------------------------------------------
@@ -59,7 +59,7 @@ const char *const *MyDeviceProvider::GetInterfaceVersions()
 //-----------------------------------------------------------------------------
 bool MyDeviceProvider::ShouldBlockStandbyMode()
 {
-	return false;
+    return false;
 }
 
 //-----------------------------------------------------------------------------
@@ -69,28 +69,28 @@ bool MyDeviceProvider::ShouldBlockStandbyMode()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::RunFrame()
 {
-	vr::VREvent_t vrEvent;
-	while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent)))
-	{
-		if (vrEvent.eventType == vr::VREvent_ProcessConnected ||
-			vrEvent.eventType == vr::VREvent_ActionBindingReloaded ||
-			vrEvent.eventType == vr::VREvent_SceneApplicationChanged ||
-			vrEvent.eventType == vr::VREvent_Input_BindingLoadFailed || 
-			vrEvent.eventType == vr::VREvent_Input_BindingLoadSuccessful ||
-			vrEvent.eventType == vr::VREvent_Input_ActionManifestReloaded)
-		{
-			auto appName = GetProcessName(vrEvent.data.process.pid);
-			auto lowerAppName = appName;
-			std::transform(lowerAppName.begin(), lowerAppName.end(), lowerAppName.begin(), ::tolower);
-			
+    vr::VREvent_t vrEvent;
+    while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent)))
+    {
+        if (vrEvent.eventType == vr::VREvent_ProcessConnected ||
+            vrEvent.eventType == vr::VREvent_ActionBindingReloaded ||
+            vrEvent.eventType == vr::VREvent_SceneApplicationChanged ||
+            vrEvent.eventType == vr::VREvent_Input_BindingLoadFailed || 
+            vrEvent.eventType == vr::VREvent_Input_BindingLoadSuccessful ||
+            vrEvent.eventType == vr::VREvent_Input_ActionManifestReloaded)
+        {
+            auto appName = GetProcessName(vrEvent.data.process.pid);
+            auto lowerAppName = appName;
+            std::transform(lowerAppName.begin(), lowerAppName.end(), lowerAppName.begin(), ::tolower);
+            
             if (skip_processes_.find(appName) == skip_processes_.end() &&
-				lowerAppName.find("exe") != std::string::npos)
+                lowerAppName.find("exe") != std::string::npos)
             {
                 DriverLog("AppName = %s\n", appName.c_str());
                 my_hmd_device_->LoadSettings(appName);
             }
-		}
-	}
+        }
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -116,8 +116,8 @@ void MyDeviceProvider::LeaveStandby()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::Cleanup()
 {
-	// Our controller devices will have already deactivated. Let's now destroy them.
-	my_hmd_device_ = nullptr;
+    // Our controller devices will have already deactivated. Let's now destroy them.
+    my_hmd_device_ = nullptr;
 }
 
 //-----------------------------------------------------------------------------
@@ -125,28 +125,28 @@ void MyDeviceProvider::Cleanup()
 //-----------------------------------------------------------------------------
 std::string MyDeviceProvider::GetProcessName(uint32_t processID)
 {
-	TCHAR processName[MAX_PATH] = TEXT("<unknown>");
+    TCHAR processName[MAX_PATH] = TEXT("<unknown>");
 
-	// Get a handle to the process.
-	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
+    // Get a handle to the process.
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
 
-	// Get the process name.
-	if (hProcess != NULL)
-	{
-		HMODULE hMod;
-		DWORD cbNeeded;
+    // Get the process name.
+    if (hProcess != NULL)
+    {
+        HMODULE hMod;
+        DWORD cbNeeded;
 
-		if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
-		{
-			GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
-		}
-	}
+        if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
+        {
+            GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
+        }
+    }
 
-	// Release the handle to the process.
-	CloseHandle(hProcess);
+    // Release the handle to the process.
+    CloseHandle(hProcess);
 
-	// Convert TCHAR to std::string and return
-	std::wstring ws(processName);
-	std::string processNameStr(ws.begin(), ws.end());
-	return processNameStr;
+    // Convert TCHAR to std::string and return
+    std::wstring ws(processName);
+    std::string processNameStr(ws.begin(), ws.end());
+    return processNameStr;
 }

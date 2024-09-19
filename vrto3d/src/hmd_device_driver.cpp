@@ -44,38 +44,38 @@ typedef DWORD(WINAPI* tXInputGetState)(DWORD dwUserIndex, XINPUT_STATE* pState);
 static tXInputGetState _XInputGetState = XInputGetState;
 static void SwitchToXinpuGetStateEx()
 {
-	tXInputGetState XInputGetStateEx;
+    tXInputGetState XInputGetStateEx;
 
-	if (xinput_lib)
-		return;
+    if (xinput_lib)
+        return;
 
-	// 3DMigoto is linked against xinput9_1_0.dll, but that version does
-	// not export XInputGetStateEx to get the guide button. Try loading
-	// xinput 1.3 and 1.4, which both support this functionality.
-	xinput_lib = LoadLibrary(L"xinput1_3.dll");
-	if (xinput_lib) {
-		DriverLog("Loaded xinput1_3.dll for guide button support\n");
-	}
-	else {
-		xinput_lib = LoadLibrary(L"xinput1_4.dll");
-		if (xinput_lib) {
-			DriverLog("Loaded xinput1_4.dll for guide button support\n");
-		}
-		else {
-			DriverLog("ERROR: Unable to load xinput 1.3 or 1.4: Guide button will not be available\n");
-			return;
-		}
-	}
+    // 3DMigoto is linked against xinput9_1_0.dll, but that version does
+    // not export XInputGetStateEx to get the guide button. Try loading
+    // xinput 1.3 and 1.4, which both support this functionality.
+    xinput_lib = LoadLibrary(L"xinput1_3.dll");
+    if (xinput_lib) {
+        DriverLog("Loaded xinput1_3.dll for guide button support\n");
+    }
+    else {
+        xinput_lib = LoadLibrary(L"xinput1_4.dll");
+        if (xinput_lib) {
+            DriverLog("Loaded xinput1_4.dll for guide button support\n");
+        }
+        else {
+            DriverLog("ERROR: Unable to load xinput 1.3 or 1.4: Guide button will not be available\n");
+            return;
+        }
+    }
 
-	// Unnamed and undocumented exports FTW
-	LPCSTR XInputGetStateExOrdinal = (LPCSTR)100;
-	XInputGetStateEx = (tXInputGetState)GetProcAddress(xinput_lib, XInputGetStateExOrdinal);
-	if (!XInputGetStateEx) {
-		DriverLog("ERROR: Unable to get XInputGetStateEx: Guide button will not be available\n");
-		return;
-	}
+    // Unnamed and undocumented exports FTW
+    LPCSTR XInputGetStateExOrdinal = (LPCSTR)100;
+    XInputGetStateEx = (tXInputGetState)GetProcAddress(xinput_lib, XInputGetStateExOrdinal);
+    if (!XInputGetStateEx) {
+        DriverLog("ERROR: Unable to get XInputGetStateEx: Guide button will not be available\n");
+        return;
+    }
 
-	_XInputGetState = XInputGetStateEx;
+    _XInputGetState = XInputGetStateEx;
 }
 
 
@@ -83,15 +83,15 @@ static void SwitchToXinpuGetStateEx()
 // Purpose: Split a string by a delimiter
 //-----------------------------------------------------------------------------
 std::vector<std::string> split(const std::string& str, char delimiter) {
-	std::vector<std::string> tokens;
-	std::stringstream ss(str);
-	std::string token;
+    std::vector<std::string> tokens;
+    std::stringstream ss(str);
+    std::string token;
 
-	while (std::getline(ss, token, delimiter)) {
-		tokens.push_back(token);
-	}
+    while (std::getline(ss, token, delimiter)) {
+        tokens.push_back(token);
+    }
 
-	return tokens;
+    return tokens;
 }
 
 
@@ -100,8 +100,8 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
 //-----------------------------------------------------------------------------
 static void BeepSuccess()
 {
-	// High beep for success
-	Beep(1800, 400);
+    // High beep for success
+    Beep(1800, 400);
 }
 
 
@@ -111,138 +111,138 @@ static const char *stereo_display_settings_section = "vrto3d_display";
 
 MockControllerDeviceDriver::MockControllerDeviceDriver()
 {
-	// Keep track of whether Activate() has been called
-	is_active_ = false;
+    // Keep track of whether Activate() has been called
+    is_active_ = false;
 
-	auto* vrs = vr::VRSettings();
+    auto* vrs = vr::VRSettings();
 
-	char model_number[ 1024 ];
-	vrs->GetString( stereo_main_settings_section, "model_number", model_number, sizeof( model_number ) );
-	stereo_model_number_ = model_number;
-	char serial_number[ 1024 ];
-	vrs->GetString( stereo_main_settings_section, "serial_number", serial_number, sizeof( serial_number ) );
-	stereo_serial_number_ = serial_number;
+    char model_number[ 1024 ];
+    vrs->GetString( stereo_main_settings_section, "model_number", model_number, sizeof( model_number ) );
+    stereo_model_number_ = model_number;
+    char serial_number[ 1024 ];
+    vrs->GetString( stereo_main_settings_section, "serial_number", serial_number, sizeof( serial_number ) );
+    stereo_serial_number_ = serial_number;
 
-	DriverLog( "VRto3D Model Number: %s", stereo_model_number_.c_str() );
-	DriverLog( "VRto3D Serial Number: %s", stereo_serial_number_.c_str() );
+    DriverLog( "VRto3D Model Number: %s", stereo_model_number_.c_str() );
+    DriverLog( "VRto3D Serial Number: %s", stereo_serial_number_.c_str() );
 
-	SwitchToXinpuGetStateEx();
+    SwitchToXinpuGetStateEx();
 
-	// Display settings
-	StereoDisplayDriverConfiguration display_configuration{};
-	display_configuration.window_x = 0;
-	display_configuration.window_y = 0;
+    // Display settings
+    StereoDisplayDriverConfiguration display_configuration{};
+    display_configuration.window_x = 0;
+    display_configuration.window_y = 0;
 
-	display_configuration.window_width = vrs->GetInt32( stereo_display_settings_section, "window_width" );
-	display_configuration.window_height = vrs->GetInt32( stereo_display_settings_section, "window_height" );
-	display_configuration.render_width = vrs->GetInt32(stereo_display_settings_section, "render_width");
-	display_configuration.render_height = vrs->GetInt32(stereo_display_settings_section, "render_height");
+    display_configuration.window_width = vrs->GetInt32( stereo_display_settings_section, "window_width" );
+    display_configuration.window_height = vrs->GetInt32( stereo_display_settings_section, "window_height" );
+    display_configuration.render_width = vrs->GetInt32(stereo_display_settings_section, "render_width");
+    display_configuration.render_height = vrs->GetInt32(stereo_display_settings_section, "render_height");
 
-	display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
+    display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
 
-	display_configuration.aspect_ratio = vrs->GetFloat(stereo_display_settings_section, "aspect_ratio");
-	display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
-	display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
-	display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
+    display_configuration.aspect_ratio = vrs->GetFloat(stereo_display_settings_section, "aspect_ratio");
+    display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
+    display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
+    display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
     display_configuration.disable_hotkeys = vrs->GetBool(stereo_display_settings_section, "disable_hotkeys");
-	
-	display_configuration.debug_enable = vrs->GetBool(stereo_display_settings_section, "debug_enable");
-	display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
-	display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
-	display_configuration.depth_gauge = vrs->GetBool(stereo_display_settings_section, "depth_gauge");
+    
+    display_configuration.debug_enable = vrs->GetBool(stereo_display_settings_section, "debug_enable");
+    display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
+    display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
+    display_configuration.depth_gauge = vrs->GetBool(stereo_display_settings_section, "depth_gauge");
 
-	display_configuration.display_latency = vrs->GetFloat(stereo_display_settings_section, "display_latency");
-	display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
-	display_configuration.sleep_count_max = (int)(floor(1600.0 / (1000.0 / display_configuration.display_frequency)));
+    display_configuration.display_latency = vrs->GetFloat(stereo_display_settings_section, "display_latency");
+    display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
+    display_configuration.sleep_count_max = (int)(floor(1600.0 / (1000.0 / display_configuration.display_frequency)));
 
-	// Controller settings
-	display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");
-	display_configuration.yaw_enable = vrs->GetBool(stereo_display_settings_section, "yaw_enable");
-	char pose_reset_key[1024];
-	vrs->GetString(stereo_display_settings_section, "pose_reset_key", pose_reset_key, sizeof(pose_reset_key));
-	if (VirtualKeyMappings.find(pose_reset_key) != VirtualKeyMappings.end()) {
-		display_configuration.pose_reset_key = VirtualKeyMappings[pose_reset_key];
-		display_configuration.reset_xinput = false;
-	}
-	else if (XInputMappings.find(pose_reset_key) != XInputMappings.end() || std::string(pose_reset_key).find('+') != std::string::npos) {
-		display_configuration.pose_reset_key = 0x0;
+    // Controller settings
+    display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");
+    display_configuration.yaw_enable = vrs->GetBool(stereo_display_settings_section, "yaw_enable");
+    char pose_reset_key[1024];
+    vrs->GetString(stereo_display_settings_section, "pose_reset_key", pose_reset_key, sizeof(pose_reset_key));
+    if (VirtualKeyMappings.find(pose_reset_key) != VirtualKeyMappings.end()) {
+        display_configuration.pose_reset_key = VirtualKeyMappings[pose_reset_key];
+        display_configuration.reset_xinput = false;
+    }
+    else if (XInputMappings.find(pose_reset_key) != XInputMappings.end() || std::string(pose_reset_key).find('+') != std::string::npos) {
+        display_configuration.pose_reset_key = 0x0;
         auto hotkeys = split(pose_reset_key, '+');
         for (const auto& hotkey : hotkeys) {
             if (XInputMappings.find(hotkey) != XInputMappings.end()) {
                 display_configuration.pose_reset_key |= XInputMappings[hotkey];
             }
         }
-		display_configuration.reset_xinput = true;
-	}
-	display_configuration.pose_reset = false;
-	char ctrl_toggle_key[1024];
-	vrs->GetString(stereo_display_settings_section, "ctrl_toggle_key", ctrl_toggle_key, sizeof(ctrl_toggle_key));
-	if (VirtualKeyMappings.find(ctrl_toggle_key) != VirtualKeyMappings.end()) {
-		display_configuration.ctrl_toggle_key = VirtualKeyMappings[ctrl_toggle_key];
-		display_configuration.ctrl_xinput = false;
-	}
-	else if (XInputMappings.find(ctrl_toggle_key) != XInputMappings.end() || std::string(ctrl_toggle_key).find('+') != std::string::npos) {
-		display_configuration.ctrl_toggle_key = 0x0;
-		auto hotkeys = split(ctrl_toggle_key, '+');
-		for (const auto& hotkey : hotkeys) {
-			if (XInputMappings.find(hotkey) != XInputMappings.end()) {
-				display_configuration.ctrl_toggle_key |= XInputMappings[hotkey];
-			}
-		}
-		display_configuration.ctrl_xinput = true;
-	}
-	display_configuration.pitch_radius = vrs->GetFloat(stereo_display_settings_section, "pitch_radius");
-	display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
-	display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
+        display_configuration.reset_xinput = true;
+    }
+    display_configuration.pose_reset = false;
+    char ctrl_toggle_key[1024];
+    vrs->GetString(stereo_display_settings_section, "ctrl_toggle_key", ctrl_toggle_key, sizeof(ctrl_toggle_key));
+    if (VirtualKeyMappings.find(ctrl_toggle_key) != VirtualKeyMappings.end()) {
+        display_configuration.ctrl_toggle_key = VirtualKeyMappings[ctrl_toggle_key];
+        display_configuration.ctrl_xinput = false;
+    }
+    else if (XInputMappings.find(ctrl_toggle_key) != XInputMappings.end() || std::string(ctrl_toggle_key).find('+') != std::string::npos) {
+        display_configuration.ctrl_toggle_key = 0x0;
+        auto hotkeys = split(ctrl_toggle_key, '+');
+        for (const auto& hotkey : hotkeys) {
+            if (XInputMappings.find(hotkey) != XInputMappings.end()) {
+                display_configuration.ctrl_toggle_key |= XInputMappings[hotkey];
+            }
+        }
+        display_configuration.ctrl_xinput = true;
+    }
+    display_configuration.pitch_radius = vrs->GetFloat(stereo_display_settings_section, "pitch_radius");
+    display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
+    display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
 
-	// Read user binds
-	display_configuration.num_user_settings = vrs->GetInt32(stereo_display_settings_section, "num_user_settings");
-	display_configuration.user_load_key.resize(display_configuration.num_user_settings);
-	display_configuration.user_store_key.resize(display_configuration.num_user_settings);
-	display_configuration.user_key_type.resize(display_configuration.num_user_settings);
-	display_configuration.user_depth.resize(display_configuration.num_user_settings);
-	display_configuration.user_convergence.resize(display_configuration.num_user_settings);
-	display_configuration.prev_depth.resize(display_configuration.num_user_settings);
-	display_configuration.prev_convergence.resize(display_configuration.num_user_settings);
-	display_configuration.was_held.resize(display_configuration.num_user_settings);
-	display_configuration.load_xinput.resize(display_configuration.num_user_settings);
-	display_configuration.sleep_count.resize(display_configuration.num_user_settings);
-	for (int i = 0; i < display_configuration.num_user_settings; i++)
-	{
-		char user_key[1024];
-		auto si = std::to_string(i + 1);
-		vrs->GetString(stereo_display_settings_section, ("user_load_key" + si).c_str(), user_key, sizeof(user_key));
-		if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
-			display_configuration.user_load_key[i] = VirtualKeyMappings[user_key];
-			display_configuration.load_xinput[i] = false;
-		}
-		else if (XInputMappings.find(user_key) != XInputMappings.end() || std::string(user_key).find('+') != std::string::npos) {
-			display_configuration.user_load_key[i] = 0x0;
-			auto hotkeys = split(user_key, '+');
-			for (const auto& hotkey : hotkeys) {
-				if (XInputMappings.find(hotkey) != XInputMappings.end()) {
-					display_configuration.user_load_key[i] |= XInputMappings[hotkey];
-				}
-			}
-			display_configuration.load_xinput[i] = true;
-		}
-		vrs->GetString(stereo_display_settings_section, ("user_store_key" + si).c_str(), user_key, sizeof(user_key));
-		if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
-			display_configuration.user_store_key[i] = VirtualKeyMappings[user_key];
-		}
-		vrs->GetString(stereo_display_settings_section, ("user_key_type" + si).c_str(), user_key, sizeof(user_key));
-		if (KeyBindTypes.find(user_key) != KeyBindTypes.end()) {
-			display_configuration.user_key_type[i] = KeyBindTypes[user_key];
-		}
-		display_configuration.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, ("user_depth" + si).c_str());
-		display_configuration.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, ("user_convergence" + si).c_str());
-	}
+    // Read user binds
+    display_configuration.num_user_settings = vrs->GetInt32(stereo_display_settings_section, "num_user_settings");
+    display_configuration.user_load_key.resize(display_configuration.num_user_settings);
+    display_configuration.user_store_key.resize(display_configuration.num_user_settings);
+    display_configuration.user_key_type.resize(display_configuration.num_user_settings);
+    display_configuration.user_depth.resize(display_configuration.num_user_settings);
+    display_configuration.user_convergence.resize(display_configuration.num_user_settings);
+    display_configuration.prev_depth.resize(display_configuration.num_user_settings);
+    display_configuration.prev_convergence.resize(display_configuration.num_user_settings);
+    display_configuration.was_held.resize(display_configuration.num_user_settings);
+    display_configuration.load_xinput.resize(display_configuration.num_user_settings);
+    display_configuration.sleep_count.resize(display_configuration.num_user_settings);
+    for (int i = 0; i < display_configuration.num_user_settings; i++)
+    {
+        char user_key[1024];
+        auto si = std::to_string(i + 1);
+        vrs->GetString(stereo_display_settings_section, ("user_load_key" + si).c_str(), user_key, sizeof(user_key));
+        if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
+            display_configuration.user_load_key[i] = VirtualKeyMappings[user_key];
+            display_configuration.load_xinput[i] = false;
+        }
+        else if (XInputMappings.find(user_key) != XInputMappings.end() || std::string(user_key).find('+') != std::string::npos) {
+            display_configuration.user_load_key[i] = 0x0;
+            auto hotkeys = split(user_key, '+');
+            for (const auto& hotkey : hotkeys) {
+                if (XInputMappings.find(hotkey) != XInputMappings.end()) {
+                    display_configuration.user_load_key[i] |= XInputMappings[hotkey];
+                }
+            }
+            display_configuration.load_xinput[i] = true;
+        }
+        vrs->GetString(stereo_display_settings_section, ("user_store_key" + si).c_str(), user_key, sizeof(user_key));
+        if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
+            display_configuration.user_store_key[i] = VirtualKeyMappings[user_key];
+        }
+        vrs->GetString(stereo_display_settings_section, ("user_key_type" + si).c_str(), user_key, sizeof(user_key));
+        if (KeyBindTypes.find(user_key) != KeyBindTypes.end()) {
+            display_configuration.user_key_type[i] = KeyBindTypes[user_key];
+        }
+        display_configuration.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, ("user_depth" + si).c_str());
+        display_configuration.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, ("user_convergence" + si).c_str());
+    }
 
-	// Instantiate our display component
-	stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
+    // Instantiate our display component
+    stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
     is_loading_ = false;
 
-	DriverLog("Default Config Loaded\n");
+    DriverLog("Default Config Loaded\n");
 }
 
 //-----------------------------------------------------------------------------
@@ -250,46 +250,46 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 //-----------------------------------------------------------------------------
 vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 {
-	device_index_ = unObjectId;
-	is_active_ = true;
-	is_on_top_ = false;
+    device_index_ = unObjectId;
+    is_active_ = true;
+    is_on_top_ = false;
 
-	// A list of properties available is contained in vr::ETrackedDeviceProperty.
-	auto* vrp = vr::VRProperties();
-	auto* vrs = vr::VRSettings();
-	vr::PropertyContainerHandle_t container = vrp->TrackedDeviceToPropertyContainer( device_index_ );
-	vrp->SetStringProperty( container, vr::Prop_ModelNumber_String, stereo_model_number_.c_str() );
-	vrp->SetStringProperty( container, vr::Prop_ManufacturerName_String, "VRto3D");
-	vrp->SetStringProperty( container, vr::Prop_TrackingFirmwareVersion_String, "1.0");
-	vrp->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
+    // A list of properties available is contained in vr::ETrackedDeviceProperty.
+    auto* vrp = vr::VRProperties();
+    auto* vrs = vr::VRSettings();
+    vr::PropertyContainerHandle_t container = vrp->TrackedDeviceToPropertyContainer( device_index_ );
+    vrp->SetStringProperty( container, vr::Prop_ModelNumber_String, stereo_model_number_.c_str() );
+    vrp->SetStringProperty( container, vr::Prop_ManufacturerName_String, "VRto3D");
+    vrp->SetStringProperty( container, vr::Prop_TrackingFirmwareVersion_String, "1.0");
+    vrp->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
 
-	// Display settings
-	vrp->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
-	vrp->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
-	vrp->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency * 1.5f );
-	vrp->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
-	vrp->SetFloatProperty( container, vr::Prop_SecondsFromPhotonsToVblank_Float, 0.0);
-	vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
-	vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, !stereo_display_component_->GetConfig().debug_enable);
-	vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, stereo_display_component_->GetConfig().debug_enable);
-	vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
-	if (stereo_display_component_->GetConfig().depth_gauge)
-	{
-		vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
-	}
-	else
-	{
-		vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 0.0f);
-	}
+    // Display settings
+    vrp->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
+    vrp->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
+    vrp->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency * 1.5f );
+    vrp->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
+    vrp->SetFloatProperty( container, vr::Prop_SecondsFromPhotonsToVblank_Float, 0.0);
+    vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, !stereo_display_component_->GetConfig().debug_enable);
+    vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, stereo_display_component_->GetConfig().debug_enable);
+    vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
+    if (stereo_display_component_->GetConfig().depth_gauge)
+    {
+        vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
+    }
+    else
+    {
+        vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 0.0f);
+    }
 
-	// Set the chaperone JSON property
-	// Get the current time
-	std::time_t t = std::time(nullptr);
-	std::tm tm;
-	localtime_s(&tm, &t);
-	// Construct the JSON string with variables
-	std::stringstream ss;
-	ss << R"(
+    // Set the chaperone JSON property
+    // Get the current time
+    std::time_t t = std::time(nullptr);
+    std::tm tm;
+    localtime_s(&tm, &t);
+    // Construct the JSON string with variables
+    std::stringstream ss;
+    ss << R"(
         {
            "jsonid" : "chaperone_info",
            "universes" : [
@@ -336,53 +336,53 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
            "version" : 5
         }
         )";
-	// Convert the stringstream to a string
-	std::string chaperoneJson = ss.str();
-	// Set the chaperone JSON property
-	vrp->SetStringProperty(container, vr::Prop_DriverProvidedChaperoneJson_String, chaperoneJson.c_str());
-	vrp->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
-	vrs->SetInt32(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_Style_Int32, vr::COLLISION_BOUNDS_STYLE_NONE);
-	vrs->SetBool(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_GroundPerimeterOn_Bool, false);
+    // Convert the stringstream to a string
+    std::string chaperoneJson = ss.str();
+    // Set the chaperone JSON property
+    vrp->SetStringProperty(container, vr::Prop_DriverProvidedChaperoneJson_String, chaperoneJson.c_str());
+    vrp->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
+    vrs->SetInt32(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_Style_Int32, vr::COLLISION_BOUNDS_STYLE_NONE);
+    vrs->SetBool(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_GroundPerimeterOn_Bool, false);
 
-	// Miscellaneous settings
-	vrp->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
-	vrp->SetBoolProperty( container, vr::Prop_DeviceIsWireless_Bool, false);
-	vrp->SetBoolProperty( container, vr::Prop_DeviceIsCharging_Bool, false);
-	vrp->SetBoolProperty( container, vr::Prop_ContainsProximitySensor_Bool, false);
-	vrp->SetBoolProperty( container, vr::Prop_DeviceCanPowerOff_Bool, false);
+    // Miscellaneous settings
+    vrp->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_DeviceIsWireless_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_DeviceIsCharging_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_ContainsProximitySensor_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_DeviceCanPowerOff_Bool, false);
 
-	// set proximity senser to always on, always head present
-	vr::VRInputComponentHandle_t  prox;
-	vr::VRDriverInput()->CreateBooleanComponent(container, "/proximity", &prox);
-	vr::VRDriverInput()->UpdateBooleanComponent(prox, true, 0.0);
-	
-	// Miscellaneous settings
-	vrs->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);
-	vrs->SetFloat(vr::k_pch_Power_Section, vr::k_pch_Power_TurnOffScreensTimeout_Float, 86400.0f);
-	vrs->SetBool(vr::k_pch_Power_Section, vr::k_pch_Power_PauseCompositorOnStandby_Bool, false);
-	vrs->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_EnableDashboard_Bool, false);
-	vrs->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_ArcadeMode_Bool, true);
-	vrs->SetBool(vr::k_pch_Dashboard_Section, "allowAppQuitting", false);
-	vrs->SetBool(vr::k_pch_Dashboard_Section, "autoShowGameTheater", false);
-	vrs->SetBool(vr::k_pch_Dashboard_Section, "showDesktop", false);
-	vrs->SetBool(vr::k_pch_Dashboard_Section, "showPowerOptions", false);
-	vrs->SetBool(vr::k_pch_Dashboard_Section, "inputCaptureEnabled", false);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, false);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MirrorViewVisibility_Bool, false);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisplayDebug_Bool, false);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MotionSmoothing_Bool, false);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, true);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowSupersampleFiltering_Bool, false);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleManualOverride_Bool, true);
-	vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
-	
-	pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
-	focus_update_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
+    // set proximity senser to always on, always head present
+    vr::VRInputComponentHandle_t  prox;
+    vr::VRDriverInput()->CreateBooleanComponent(container, "/proximity", &prox);
+    vr::VRDriverInput()->UpdateBooleanComponent(prox, true, 0.0);
+    
+    // Miscellaneous settings
+    vrs->SetBool(vr::k_pch_DirectMode_Section, vr::k_pch_DirectMode_Enable_Bool, false);
+    vrs->SetFloat(vr::k_pch_Power_Section, vr::k_pch_Power_TurnOffScreensTimeout_Float, 86400.0f);
+    vrs->SetBool(vr::k_pch_Power_Section, vr::k_pch_Power_PauseCompositorOnStandby_Bool, false);
+    vrs->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_EnableDashboard_Bool, false);
+    vrs->SetBool(vr::k_pch_Dashboard_Section, vr::k_pch_Dashboard_ArcadeMode_Bool, true);
+    vrs->SetBool(vr::k_pch_Dashboard_Section, "allowAppQuitting", false);
+    vrs->SetBool(vr::k_pch_Dashboard_Section, "autoShowGameTheater", false);
+    vrs->SetBool(vr::k_pch_Dashboard_Section, "showDesktop", false);
+    vrs->SetBool(vr::k_pch_Dashboard_Section, "showPowerOptions", false);
+    vrs->SetBool(vr::k_pch_Dashboard_Section, "inputCaptureEnabled", false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MirrorViewVisibility_Bool, false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisplayDebug_Bool, false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MotionSmoothing_Bool, false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, true);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowSupersampleFiltering_Bool, false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleManualOverride_Bool, true);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
+    
+    pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
+    focus_update_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
 
-	DriverLog("Activation Complete\n");
+    DriverLog("Activation Complete\n");
 
-	return vr::VRInitError_None;
+    return vr::VRInitError_None;
 }
 
 //-----------------------------------------------------------------------------
@@ -390,12 +390,12 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 //-----------------------------------------------------------------------------
 void *MockControllerDeviceDriver::GetComponent( const char *pchComponentNameAndVersion )
 {
-	if ( strcmp( pchComponentNameAndVersion, vr::IVRDisplayComponent_Version ) == 0 )
-	{
-		return stereo_display_component_.get();
-	}
+    if ( strcmp( pchComponentNameAndVersion, vr::IVRDisplayComponent_Version ) == 0 )
+    {
+        return stereo_display_component_.get();
+    }
 
-	return nullptr;
+    return nullptr;
 }
 
 //-----------------------------------------------------------------------------
@@ -404,8 +404,8 @@ void *MockControllerDeviceDriver::GetComponent( const char *pchComponentNameAndV
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pchResponseBuffer, uint32_t unResponseBufferSize )
 {
-	if ( unResponseBufferSize >= 1 )
-		pchResponseBuffer[ 0 ] = 0;
+    if ( unResponseBufferSize >= 1 )
+        pchResponseBuffer[ 0 ] = 0;
 }
 
 
@@ -414,101 +414,101 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 //-----------------------------------------------------------------------------
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
-	static const float updateInterval = 1.0f / stereo_display_component_->GetConfig().display_frequency; // Update interval in seconds
-	static const float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
-	static float currentPitch = 0.0f; // Keep track of the current pitch
-	static vr::HmdQuaternion_t currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f }; // Initial yaw quaternion
-	static float lastPitch = 0.0f;
-	static float lastYaw = 0.0f;
-	static float lastPos[3] = { 0.0f, 0.0f, 0.0f }; // Last position vector
-	static float lastVel[3] = { 0.0f, 0.0f, 0.0f }; // Last velocity vector
-	static float lastAngVel[3] = { 0.0f, 0.0f, 0.0f }; // Last angular velocity vector
+    static const float updateInterval = 1.0f / stereo_display_component_->GetConfig().display_frequency; // Update interval in seconds
+    static const float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
+    static float currentPitch = 0.0f; // Keep track of the current pitch
+    static vr::HmdQuaternion_t currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f }; // Initial yaw quaternion
+    static float lastPitch = 0.0f;
+    static float lastYaw = 0.0f;
+    static float lastPos[3] = { 0.0f, 0.0f, 0.0f }; // Last position vector
+    static float lastVel[3] = { 0.0f, 0.0f, 0.0f }; // Last velocity vector
+    static float lastAngVel[3] = { 0.0f, 0.0f, 0.0f }; // Last angular velocity vector
 
-	vr::DriverPose_t pose = { 0 };
+    vr::DriverPose_t pose = { 0 };
 
-	pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
-	pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
-	pose.qRotation = HmdQuaternion_Identity;
+    pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
+    pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
+    pose.qRotation = HmdQuaternion_Identity;
 
-	// Adjust pitch based on controller input
-	if (stereo_display_component_->GetConfig().pitch_enable)
-	{
-		stereo_display_component_->AdjustPitch(currentPitch);
-	}
+    // Adjust pitch based on controller input
+    if (stereo_display_component_->GetConfig().pitch_enable)
+    {
+        stereo_display_component_->AdjustPitch(currentPitch);
+    }
 
-	// Adjust yaw based on controller input
-	if (stereo_display_component_->GetConfig().yaw_enable)
-	{
-		stereo_display_component_->AdjustYaw(currentYawQuat);
-	}
+    // Adjust yaw based on controller input
+    if (stereo_display_component_->GetConfig().yaw_enable)
+    {
+        stereo_display_component_->AdjustYaw(currentYawQuat);
+    }
 
-	// Reset Pose to origin
-	if (stereo_display_component_->GetConfig().pose_reset)
-	{
-		currentPitch = 0.0f;
-		currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f };
-		lastPitch = 0.0f;
-		lastYaw = 0.0f;
-		lastPos[0] = 0.0f;
-		lastPos[1] = 0.0f;
-		lastPos[2] = 0.0f;
-		lastVel[0] = 0.0f;
-		lastVel[1] = 0.0f;
-		lastVel[2] = 0.0f;
-		lastAngVel[0] = 0.0f;
-		lastAngVel[1] = 0.0f;
-		stereo_display_component_->SetReset();
-	}
+    // Reset Pose to origin
+    if (stereo_display_component_->GetConfig().pose_reset)
+    {
+        currentPitch = 0.0f;
+        currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f };
+        lastPitch = 0.0f;
+        lastYaw = 0.0f;
+        lastPos[0] = 0.0f;
+        lastPos[1] = 0.0f;
+        lastPos[2] = 0.0f;
+        lastVel[0] = 0.0f;
+        lastVel[1] = 0.0f;
+        lastVel[2] = 0.0f;
+        lastAngVel[0] = 0.0f;
+        lastAngVel[1] = 0.0f;
+        stereo_display_component_->SetReset();
+    }
 
-	float pitchRadians = DEG_TO_RAD(currentPitch);
-	float yawRadians = 2.0f * acos(currentYawQuat.w);
+    float pitchRadians = DEG_TO_RAD(currentPitch);
+    float yawRadians = 2.0f * acos(currentYawQuat.w);
 
-	// Recompose the rotation quaternion from pitch and yaw
-	vr::HmdQuaternion_t pitchQuaternion = QuaternionFromAxisAngle(1.0f, 0.0f, 0.0f, pitchRadians);
-	pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
-	
-	// Calculate the new position relative to the current pitch & yaw
-	pose.vecPosition[0] = radius * cos(pitchRadians) * sin(yawRadians) - radius * sin(yawRadians);
-	pose.vecPosition[1] = stereo_display_component_->GetConfig().hmd_height - radius * sin(pitchRadians);
-	pose.vecPosition[2] = radius * cos(pitchRadians) * cos(yawRadians) - radius * cos(yawRadians);
+    // Recompose the rotation quaternion from pitch and yaw
+    vr::HmdQuaternion_t pitchQuaternion = QuaternionFromAxisAngle(1.0f, 0.0f, 0.0f, pitchRadians);
+    pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
+    
+    // Calculate the new position relative to the current pitch & yaw
+    pose.vecPosition[0] = radius * cos(pitchRadians) * sin(yawRadians) - radius * sin(yawRadians);
+    pose.vecPosition[1] = stereo_display_component_->GetConfig().hmd_height - radius * sin(pitchRadians);
+    pose.vecPosition[2] = radius * cos(pitchRadians) * cos(yawRadians) - radius * cos(yawRadians);
 
-	// Calculate velocity components based on change in position
-	pose.vecVelocity[0] = (pose.vecPosition[0] - lastPos[0]) / updateInterval;
-	pose.vecVelocity[1] = (pose.vecPosition[1] - lastPos[1]) / updateInterval;
-	pose.vecVelocity[2] = (pose.vecPosition[2] - lastPos[2]) / updateInterval;
+    // Calculate velocity components based on change in position
+    pose.vecVelocity[0] = (pose.vecPosition[0] - lastPos[0]) / updateInterval;
+    pose.vecVelocity[1] = (pose.vecPosition[1] - lastPos[1]) / updateInterval;
+    pose.vecVelocity[2] = (pose.vecPosition[2] - lastPos[2]) / updateInterval;
 
-	// Calculate velocity using known update interval
-	pose.vecAngularVelocity[0] = (pitchRadians - lastPitch) / updateInterval; // Pitch angular velocity
-	pose.vecAngularVelocity[1] = (yawRadians - lastYaw) / updateInterval; // Yaw angular velocity
-	pose.vecAngularVelocity[2] = 0.0f;
+    // Calculate velocity using known update interval
+    pose.vecAngularVelocity[0] = (pitchRadians - lastPitch) / updateInterval; // Pitch angular velocity
+    pose.vecAngularVelocity[1] = (yawRadians - lastYaw) / updateInterval; // Yaw angular velocity
+    pose.vecAngularVelocity[2] = 0.0f;
 
-	// Calculate acceleration based on change in velocity
-	pose.vecAcceleration[0] = (pose.vecVelocity[0] - lastVel[0]) / updateInterval;
-	pose.vecAcceleration[1] = (pose.vecVelocity[1] - lastVel[1]) / updateInterval;
-	pose.vecAcceleration[2] = (pose.vecVelocity[2] - lastVel[2]) / updateInterval;
-	pose.vecAngularAcceleration[0] = (pose.vecAngularVelocity[0] - lastAngVel[0]) / updateInterval;
-	pose.vecAngularAcceleration[1] = (pose.vecAngularVelocity[1] - lastAngVel[1]) / updateInterval;
-	pose.vecAngularAcceleration[2] = 0.0f;
+    // Calculate acceleration based on change in velocity
+    pose.vecAcceleration[0] = (pose.vecVelocity[0] - lastVel[0]) / updateInterval;
+    pose.vecAcceleration[1] = (pose.vecVelocity[1] - lastVel[1]) / updateInterval;
+    pose.vecAcceleration[2] = (pose.vecVelocity[2] - lastVel[2]) / updateInterval;
+    pose.vecAngularAcceleration[0] = (pose.vecAngularVelocity[0] - lastAngVel[0]) / updateInterval;
+    pose.vecAngularAcceleration[1] = (pose.vecAngularVelocity[1] - lastAngVel[1]) / updateInterval;
+    pose.vecAngularAcceleration[2] = 0.0f;
 
-	// Update for next iteration
-	lastPitch = pitchRadians;
-	lastYaw   = yawRadians;
-	lastPos[0] = pose.vecPosition[0];
-	lastPos[1] = pose.vecPosition[1];
-	lastPos[2] = pose.vecPosition[2];
-	lastVel[0] = pose.vecVelocity[0];
-	lastVel[1] = pose.vecVelocity[1];
-	lastVel[2] = pose.vecVelocity[2];
-	lastAngVel[0] = pose.vecAngularVelocity[0];
-	lastAngVel[1] = pose.vecAngularVelocity[1];
+    // Update for next iteration
+    lastPitch = pitchRadians;
+    lastYaw   = yawRadians;
+    lastPos[0] = pose.vecPosition[0];
+    lastPos[1] = pose.vecPosition[1];
+    lastPos[2] = pose.vecPosition[2];
+    lastVel[0] = pose.vecVelocity[0];
+    lastVel[1] = pose.vecVelocity[1];
+    lastVel[2] = pose.vecVelocity[2];
+    lastAngVel[0] = pose.vecAngularVelocity[0];
+    lastAngVel[1] = pose.vecAngularVelocity[1];
 
-	pose.poseIsValid = true;
-	pose.deviceIsConnected = true;
-	pose.result = vr::TrackingResult_Running_OK;
-	pose.shouldApplyHeadModel = false;
-	pose.willDriftInYaw = false;
+    pose.poseIsValid = true;
+    pose.deviceIsConnected = true;
+    pose.result = vr::TrackingResult_Running_OK;
+    pose.shouldApplyHeadModel = false;
+    pose.willDriftInYaw = false;
 
-	return pose;
+    return pose;
 }
 
 
@@ -517,72 +517,72 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
-	static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
-	static int height_sleep = 0;
-	static int top_sleep = 0;
+    static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
+    static int height_sleep = 0;
+    static int top_sleep = 0;
     static int save_sleep = 0;
 
-	while ( is_active_ )
-	{
-		if (!is_loading_)
-		{
-			// Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
-			vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, GetPose(), sizeof(vr::DriverPose_t));
+    while ( is_active_ )
+    {
+        if (!is_loading_)
+        {
+            // Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
+            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, GetPose(), sizeof(vr::DriverPose_t));
 
-			if (!stereo_display_component_->GetConfig().disable_hotkeys) {
-				// Ctrl+F3 Decrease Depth
-				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
-					stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
-				}
-				// Ctrl+F4 Increase Depth
-				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
-					stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
-				}
-				// Ctrl+F5 Decrease Convergence
-				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
-					stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
-				}
-				// Ctrl+F6 Increase Convergence
-				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
-					stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
-				}
-				// Ctrl+F7 Store settings into game profile
-				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
-					save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-					SaveSettings();
-				}
-				// Ctrl+F10 Reload settings from default.vrsettings
-				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
-					save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-					stereo_display_component_->LoadDefaults(device_index_);
-				}
-				if (save_sleep > 0) {
-					save_sleep--;
-				}
-			}
-			// Ctrl+F8 Toggle Always On Top
-			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
-				top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-				is_on_top_ = !is_on_top_;
-			}
-			else if (top_sleep > 0) {
-				top_sleep--;
-			}
-			// Ctrl+F9 Toggle HMD height
-			if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
-				height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-				stereo_display_component_->SetHeight();
-			}
-			else if (height_sleep > 0) {
-				height_sleep--;
-			}
+            if (!stereo_display_component_->GetConfig().disable_hotkeys) {
+                // Ctrl+F3 Decrease Depth
+                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
+                    stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
+                }
+                // Ctrl+F4 Increase Depth
+                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
+                    stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
+                }
+                // Ctrl+F5 Decrease Convergence
+                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
+                    stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
+                }
+                // Ctrl+F6 Increase Convergence
+                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
+                    stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
+                }
+                // Ctrl+F7 Store settings into game profile
+                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
+                    save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                    SaveSettings();
+                }
+                // Ctrl+F10 Reload settings from default.vrsettings
+                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
+                    save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                    stereo_display_component_->LoadDefaults(device_index_);
+                }
+                if (save_sleep > 0) {
+                    save_sleep--;
+                }
+            }
+            // Ctrl+F8 Toggle Always On Top
+            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
+                top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                is_on_top_ = !is_on_top_;
+            }
+            else if (top_sleep > 0) {
+                top_sleep--;
+            }
+            // Ctrl+F9 Toggle HMD height
+            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
+                height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                stereo_display_component_->SetHeight();
+            }
+            else if (height_sleep > 0) {
+                height_sleep--;
+            }
 
-			// Check User binds
-			stereo_display_component_->CheckUserSettings(device_index_);
-		}
-		// Update our pose ~ every frame
-		std::this_thread::sleep_for( std::chrono::milliseconds(sleep_time));
-	}
+            // Check User binds
+            stereo_display_component_->CheckUserSettings(device_index_);
+        }
+        // Update our pose ~ every frame
+        std::this_thread::sleep_for( std::chrono::milliseconds(sleep_time));
+    }
 }
 
 
@@ -591,30 +591,30 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::FocusUpdateThread()
 {
-	static int sleep_time = 1000;
-	static HWND vr_window = NULL;
-	static HWND top_window = NULL;
+    static int sleep_time = 1000;
+    static HWND vr_window = NULL;
+    static HWND top_window = NULL;
 
-	while (is_active_)
-	{
-		// Keep VR display always on top for 3D rendering
-		if (is_on_top_) {
-			top_window = GetTopWindow(GetDesktopWindow());
-			if (vr_window != NULL && vr_window != top_window) {
-				SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-			}
-			else if (vr_window == NULL) {
-				vr_window = FindWindow(NULL, L"Headset Window");
-			}
-		}
-		else if (vr_window != NULL) {
-			SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-			vr_window = NULL;
-		}
+    while (is_active_)
+    {
+        // Keep VR display always on top for 3D rendering
+        if (is_on_top_) {
+            top_window = GetTopWindow(GetDesktopWindow());
+            if (vr_window != NULL && vr_window != top_window) {
+                SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            }
+            else if (vr_window == NULL) {
+                vr_window = FindWindow(NULL, L"Headset Window");
+            }
+        }
+        else if (vr_window != NULL) {
+            SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            vr_window = NULL;
+        }
 
-		// Sleep for 1s
-		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
-	}
+        // Sleep for 1s
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+    }
 }
 
 
@@ -624,26 +624,26 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
 {
     if (app_name != app_name_)
-	{
-		is_loading_ = true;
+    {
+        is_loading_ = true;
         app_name_ = app_name;
         auto* vrs = vr::VRSettings();
 
-		try {
+        try {
             bool profile = vrs->GetBool(stereo_display_settings_section, app_name.c_str());
-			if (profile)
-			{
+            if (profile)
+            {
                 stereo_display_component_->LoadSettings(app_name, device_index_);
-				BeepSuccess();
+                BeepSuccess();
             }
             else
             {
                 DriverLog("No settings found for %s profile\n", app_name);
             }
-		}
-		catch (...) {
-			DriverLog("No settings found for %s profile\n", app_name);
-		}
+        }
+        catch (...) {
+            DriverLog("No settings found for %s profile\n", app_name);
+        }
         is_loading_ = false;
     }
 }
@@ -654,10 +654,10 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::SaveSettings()
 {
-	auto* vrs = vr::VRSettings();
+    auto* vrs = vr::VRSettings();
     vrs->SetBool(stereo_display_settings_section, app_name_.c_str(), true);
-	vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/depth").c_str(), stereo_display_component_->GetDepth());
-	vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/convergence").c_str(), stereo_display_component_->GetConvergence());
+    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/depth").c_str(), stereo_display_component_->GetDepth());
+    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/convergence").c_str(), stereo_display_component_->GetConvergence());
     vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/hmd_height").c_str(), stereo_display_component_->GetConfig().hmd_height);
     vrs->SetBool(stereo_display_settings_section, (app_name_ + "/pitch_enable").c_str(), stereo_display_component_->GetConfig().pitch_enable);
     vrs->SetBool(stereo_display_settings_section, (app_name_ + "/yaw_enable").c_str(), stereo_display_component_->GetConfig().yaw_enable);
@@ -670,17 +670,17 @@ void MockControllerDeviceDriver::SaveSettings()
     vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/ctrl_sensitivity").c_str(), stereo_display_component_->GetConfig().ctrl_sensitivity);
     vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/num_user_settings").c_str(), stereo_display_component_->GetConfig().num_user_settings);
 
-	for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
-	{
+    for (int i = 0; i < stereo_display_component_->GetConfig().num_user_settings; i++)
+    {
         auto si = std::to_string(i + 1);
         vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_load_key" + si).c_str(), stereo_display_component_->GetConfig().user_load_key[i]);
         vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_store_key" + si).c_str(), stereo_display_component_->GetConfig().user_store_key[i]);
         vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_key_type" + si).c_str(), stereo_display_component_->GetConfig().user_key_type[i]);
-		vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_depth" + si).c_str(), stereo_display_component_->GetConfig().user_depth[i]);
-		vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_convergence" + si).c_str(), stereo_display_component_->GetConfig().user_convergence[i]);
+        vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_depth" + si).c_str(), stereo_display_component_->GetConfig().user_depth[i]);
+        vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_convergence" + si).c_str(), stereo_display_component_->GetConfig().user_convergence[i]);
         vrs->SetBool(stereo_display_settings_section, (app_name_ + "/load_xinput" + si).c_str(), stereo_display_component_->GetConfig().load_xinput[i]);
-	}
-	DriverLog("Saved to %s profile\n", app_name_);
+    }
+    DriverLog("Saved to %s profile\n", app_name_);
     BeepSuccess();
 }
 
@@ -690,7 +690,7 @@ void MockControllerDeviceDriver::SaveSettings()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::EnterStandby()
 {
-	DriverLog( "HMD has been put into standby." );
+    DriverLog( "HMD has been put into standby." );
 }
 
 //-----------------------------------------------------------------------------
@@ -698,13 +698,13 @@ void MockControllerDeviceDriver::EnterStandby()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::Deactivate()
 {
-	if ( is_active_.exchange( false ) )
-	{
-		pose_update_thread_.join();
-	}
+    if ( is_active_.exchange( false ) )
+    {
+        pose_update_thread_.join();
+    }
 
-	// unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
-	device_index_ = vr::k_unTrackedDeviceIndexInvalid;
+    // unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
+    device_index_ = vr::k_unTrackedDeviceIndexInvalid;
 }
 
 
@@ -713,7 +713,7 @@ void MockControllerDeviceDriver::Deactivate()
 //-----------------------------------------------------------------------------
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
-	: config_( config ), def_config_(config), depth_(config.depth), convergence_(config.convergence)
+    : config_( config ), def_config_(config), depth_(config.depth), convergence_(config.convergence)
 {
 }
 
@@ -722,7 +722,7 @@ StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfigu
 //-----------------------------------------------------------------------------
 bool StereoDisplayComponent::IsDisplayOnDesktop()
 {
-	return !config_.debug_enable;
+    return !config_.debug_enable;
 }
 
 //-----------------------------------------------------------------------------
@@ -730,7 +730,7 @@ bool StereoDisplayComponent::IsDisplayOnDesktop()
 //-----------------------------------------------------------------------------
 bool StereoDisplayComponent::IsDisplayRealDisplay()
 {
-	return false;
+    return false;
 }
 
 //-----------------------------------------------------------------------------
@@ -738,8 +738,8 @@ bool StereoDisplayComponent::IsDisplayRealDisplay()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, uint32_t *pnHeight )
 {
-	*pnWidth = config_.render_width;
-	*pnHeight = config_.render_height;
+    *pnWidth = config_.render_width;
+    *pnHeight = config_.render_height;
 }
 
 //-----------------------------------------------------------------------------
@@ -747,49 +747,49 @@ void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, 
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pnX, uint32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
-	if (config_.reverse_enable)
-	{
-		eEye = static_cast<vr::EVREye>(!static_cast<bool> (eEye));
-	}
-	// Use Top and Bottom Rendering
-	if (config_.tab_enable)
-	{
-		*pnX = 0;
-		// Each eye will have full width
-		*pnWidth = config_.window_width;
-		// Each eye will have half height
-		*pnHeight = config_.window_height / 2;
-		if (eEye == vr::Eye_Left)
-		{
-			// Left eye viewport on the top half of the window
-			*pnY = 0;
-		}
-		else
-		{
-			// Right eye viewport on the bottom half of the window
-			*pnY = config_.window_height / 2;
-		}
-	}
+    if (config_.reverse_enable)
+    {
+        eEye = static_cast<vr::EVREye>(!static_cast<bool> (eEye));
+    }
+    // Use Top and Bottom Rendering
+    if (config_.tab_enable)
+    {
+        *pnX = 0;
+        // Each eye will have full width
+        *pnWidth = config_.window_width;
+        // Each eye will have half height
+        *pnHeight = config_.window_height / 2;
+        if (eEye == vr::Eye_Left)
+        {
+            // Left eye viewport on the top half of the window
+            *pnY = 0;
+        }
+        else
+        {
+            // Right eye viewport on the bottom half of the window
+            *pnY = config_.window_height / 2;
+        }
+    }
 
-	// Use Side by Side Rendering
-	else
-	{
-		*pnY = 0;
-		// Each eye will have half width
-		*pnWidth = config_.window_width / 2;
-		// Each eye will have full height
-		*pnHeight = config_.window_height;
-		if (eEye == vr::Eye_Left)
-		{
-			// Left eye viewport on the left half of the window
-			*pnX = 0;
-		}
-		else
-		{
-			// Right eye viewport on the right half of the window
-			*pnX = config_.window_width / 2;
-		}
-	}
+    // Use Side by Side Rendering
+    else
+    {
+        *pnY = 0;
+        // Each eye will have half width
+        *pnWidth = config_.window_width / 2;
+        // Each eye will have full height
+        *pnHeight = config_.window_height;
+        if (eEye == vr::Eye_Left)
+        {
+            // Left eye viewport on the left half of the window
+            *pnX = 0;
+        }
+        else
+        {
+            // Right eye viewport on the right half of the window
+            *pnX = config_.window_width / 2;
+        }
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -797,28 +797,28 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, float *pfRight, float *pfTop, float *pfBottom )
 {
-	// Convert horizontal FOV from degrees to radians
-	float horFovRadians = tan((config_.fov * (M_PI / 180.0f)) / 2);
+    // Convert horizontal FOV from degrees to radians
+    float horFovRadians = tan((config_.fov * (M_PI / 180.0f)) / 2);
 
-	// Calculate the vertical FOV in radians
-	float verFovRadians = tan(atan(horFovRadians / config_.aspect_ratio));
+    // Calculate the vertical FOV in radians
+    float verFovRadians = tan(atan(horFovRadians / config_.aspect_ratio));
 
-	// Get convergence value
-	float convergence = GetConvergence();
+    // Get convergence value
+    float convergence = GetConvergence();
 
-	// Calculate the raw projection values
-	*pfTop = -verFovRadians;
-	*pfBottom = verFovRadians;
+    // Calculate the raw projection values
+    *pfTop = -verFovRadians;
+    *pfBottom = verFovRadians;
 
-	// Adjust the frustum based on the eye
-	if (eEye == vr::Eye_Left) {
-		*pfLeft = -horFovRadians + convergence;
-		*pfRight = horFovRadians + convergence;
-	}
-	else {
-		*pfLeft = -horFovRadians - convergence;
-		*pfRight = horFovRadians - convergence;
-	}
+    // Adjust the frustum based on the eye
+    if (eEye == vr::Eye_Left) {
+        *pfLeft = -horFovRadians + convergence;
+        *pfRight = horFovRadians + convergence;
+    }
+    else {
+        *pfLeft = -horFovRadians - convergence;
+        *pfRight = horFovRadians - convergence;
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -826,18 +826,18 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
 //-----------------------------------------------------------------------------
 vr::DistortionCoordinates_t StereoDisplayComponent::ComputeDistortion( vr::EVREye eEye, float fU, float fV )
 {
-	vr::DistortionCoordinates_t coordinates{};
-	coordinates.rfBlue[ 0 ] = fU;
-	coordinates.rfBlue[ 1 ] = fV;
-	coordinates.rfGreen[ 0 ] = fU;
-	coordinates.rfGreen[ 1 ] = fV;
-	coordinates.rfRed[ 0 ] = fU;
-	coordinates.rfRed[ 1 ] = fV;
-	return coordinates;
+    vr::DistortionCoordinates_t coordinates{};
+    coordinates.rfBlue[ 0 ] = fU;
+    coordinates.rfBlue[ 1 ] = fV;
+    coordinates.rfGreen[ 0 ] = fU;
+    coordinates.rfGreen[ 1 ] = fV;
+    coordinates.rfRed[ 0 ] = fU;
+    coordinates.rfRed[ 1 ] = fV;
+    return coordinates;
 }
 bool StereoDisplayComponent::ComputeInverseDistortion(vr::HmdVector2_t* pResult, vr::EVREye eEye, uint32_t unChannel, float fU, float fV)
 {
-	return false;
+    return false;
 }
 
 //-----------------------------------------------------------------------------
@@ -845,10 +845,10 @@ bool StereoDisplayComponent::ComputeInverseDistortion(vr::HmdVector2_t* pResult,
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
-	*pnX = config_.window_x;
-	*pnY = config_.window_y;
-	*pnWidth = config_.window_width;
-	*pnHeight = config_.window_height;
+    *pnX = config_.window_x;
+    *pnY = config_.window_y;
+    *pnWidth = config_.window_width;
+    *pnHeight = config_.window_height;
 }
 
 //-----------------------------------------------------------------------------
@@ -856,7 +856,7 @@ void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32
 //-----------------------------------------------------------------------------
 StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 {
-	return config_;
+    return config_;
 }
 
 
@@ -865,12 +865,12 @@ StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_t device_index)
 {
-	float cur_depth = GetDepth();
-	if (is_delta)
-		new_depth += cur_depth;
-	while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
-	vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index);
-	vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
+    float cur_depth = GetDepth();
+    if (is_delta)
+        new_depth += cur_depth;
+    while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
+    vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index);
+    vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
 }
 
 
@@ -879,19 +879,19 @@ void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index)
 {
-	float cur_conv = GetConvergence();
-	if (is_delta)
-		new_conv += cur_conv;
+    float cur_conv = GetConvergence();
+    if (is_delta)
+        new_conv += cur_conv;
     if (cur_conv == new_conv)
         return;
-	while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
-	// Regenerate the Projection
-	vr::HmdRect2_t eyeLeft, eyeRight;
-	GetProjectionRaw(vr::Eye_Left, &eyeLeft.vTopLeft.v[0], &eyeLeft.vBottomRight.v[0], &eyeLeft.vTopLeft.v[1], &eyeLeft.vBottomRight.v[1]);
-	GetProjectionRaw(vr::Eye_Right, &eyeRight.vTopLeft.v[0], &eyeRight.vBottomRight.v[0], &eyeRight.vTopLeft.v[1], &eyeRight.vBottomRight.v[1]);
-	vr::VREvent_Data_t temp;
-	vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index, eyeLeft, eyeRight);
-	vr::VRServerDriverHost()->VendorSpecificEvent(device_index, vr::VREvent_LensDistortionChanged, temp, 0.0f);
+    while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
+    // Regenerate the Projection
+    vr::HmdRect2_t eyeLeft, eyeRight;
+    GetProjectionRaw(vr::Eye_Left, &eyeLeft.vTopLeft.v[0], &eyeLeft.vBottomRight.v[0], &eyeLeft.vTopLeft.v[1], &eyeLeft.vBottomRight.v[1]);
+    GetProjectionRaw(vr::Eye_Right, &eyeRight.vTopLeft.v[0], &eyeRight.vBottomRight.v[0], &eyeRight.vTopLeft.v[1], &eyeRight.vBottomRight.v[1]);
+    vr::VREvent_Data_t temp;
+    vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index, eyeLeft, eyeRight);
+    vr::VRServerDriverHost()->VendorSpecificEvent(device_index, vr::VREvent_LensDistortionChanged, temp, 0.0f);
 }
 
 
@@ -900,7 +900,7 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, ui
 //-----------------------------------------------------------------------------
 float StereoDisplayComponent::GetDepth()
 {
-	return depth_.load(std::memory_order_relaxed);
+    return depth_.load(std::memory_order_relaxed);
 }
 
 
@@ -909,7 +909,7 @@ float StereoDisplayComponent::GetDepth()
 //-----------------------------------------------------------------------------
 float StereoDisplayComponent::GetConvergence()
 {
-	return convergence_.load(std::memory_order_relaxed);
+    return convergence_.load(std::memory_order_relaxed);
 }
 
 
@@ -918,17 +918,17 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 {
-	static bool pitch_set = config_.pitch_enable;
-	static bool yaw_set = config_.yaw_enable;
-	static int sleep_ctrl = 0;
-	static int sleep_rest = 0;
+    static bool pitch_set = config_.pitch_enable;
+    static bool yaw_set = config_.yaw_enable;
+    static int sleep_ctrl = 0;
+    static int sleep_rest = 0;
     
-	// Get the state of the first controller (index 0)
-	DWORD xstate = 0x00000000;
+    // Get the state of the first controller (index 0)
+    DWORD xstate = 0x00000000;
     XINPUT_STATE state;
     ZeroMemory(&state, sizeof(XINPUT_STATE));
     DWORD dwResult = _XInputGetState(0, &state);
-	xstate = state.Gamepad.wButtons;
+    xstate = state.Gamepad.wButtons;
     if (state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
         xstate |= XINPUT_GAMEPAD_LEFT_TRIGGER;
     }
@@ -937,37 +937,37 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     }
 
     // Toggle Pitch and Yaw control
-	if (((config_.ctrl_xinput && dwResult == ERROR_SUCCESS &&
-		((xstate & config_.ctrl_toggle_key) == config_.ctrl_toggle_key))
-		|| (!config_.ctrl_xinput && (GetAsyncKeyState(config_.ctrl_toggle_key) & 0x8000)))
-		&& sleep_ctrl == 0)
-	{
-		sleep_ctrl = config_.sleep_count_max;
-		if (pitch_set) {
-			config_.pitch_enable = !config_.pitch_enable;
-		}
-		if (yaw_set) {
-			config_.yaw_enable = !config_.yaw_enable;
-		}
-	}
-	else if (sleep_ctrl > 0) {
-		sleep_ctrl--;
-	}
+    if (((config_.ctrl_xinput && dwResult == ERROR_SUCCESS &&
+        ((xstate & config_.ctrl_toggle_key) == config_.ctrl_toggle_key))
+        || (!config_.ctrl_xinput && (GetAsyncKeyState(config_.ctrl_toggle_key) & 0x8000)))
+        && sleep_ctrl == 0)
+    {
+        sleep_ctrl = config_.sleep_count_max;
+        if (pitch_set) {
+            config_.pitch_enable = !config_.pitch_enable;
+        }
+        if (yaw_set) {
+            config_.yaw_enable = !config_.yaw_enable;
+        }
+    }
+    else if (sleep_ctrl > 0) {
+        sleep_ctrl--;
+    }
 
     // Reset HMD position
-	if (((config_.reset_xinput && dwResult == ERROR_SUCCESS &&
-		((xstate & config_.pose_reset_key) == config_.pose_reset_key))
-		|| (!config_.reset_xinput && (GetAsyncKeyState(config_.pose_reset_key) & 0x8000)))
-		&& sleep_rest == 0)
-	{
-		sleep_rest = config_.sleep_count_max;
-		if (!config_.pose_reset) {
-			config_.pose_reset = true;
-		}
-	}
-	else if (sleep_rest > 0) {
-		sleep_rest--;
-	}
+    if (((config_.reset_xinput && dwResult == ERROR_SUCCESS &&
+        ((xstate & config_.pose_reset_key) == config_.pose_reset_key))
+        || (!config_.reset_xinput && (GetAsyncKeyState(config_.pose_reset_key) & 0x8000)))
+        && sleep_rest == 0)
+    {
+        sleep_rest = config_.sleep_count_max;
+        if (!config_.pose_reset) {
+            config_.pose_reset = true;
+        }
+    }
+    else if (sleep_rest > 0) {
+        sleep_rest--;
+    }
 
     for (int i = 0; i < config_.num_user_settings; i++)
     {
@@ -977,8 +977,8 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 
         // Load stored depth & convergence
         if ((config_.load_xinput[i] && dwResult == ERROR_SUCCESS &&
-			((xstate & config_.user_load_key[i]) == config_.user_load_key[i]))
-			|| (!config_.load_xinput[i] && (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000)))
+            ((xstate & config_.user_load_key[i]) == config_.user_load_key[i]))
+            || (!config_.load_xinput[i] && (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000)))
         {
             if (config_.user_key_type[i] == HOLD && !config_.was_held[i])
             {
@@ -988,24 +988,24 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
                 AdjustDepth(config_.user_depth[i], false, device_index);
                 AdjustConvergence(config_.user_convergence[i], false, device_index);
             }
-			else if (config_.user_key_type[i] == TOGGLE && config_.sleep_count[i] < 1)
-			{
-				config_.sleep_count[i] = config_.sleep_count_max;
-				if (GetDepth() == config_.user_depth[i] && GetConvergence() == config_.user_convergence[i])
-				{
-					// If the current state matches the user settings, revert to the previous state
-					AdjustDepth(config_.prev_depth[i], false, device_index);
-					AdjustConvergence(config_.prev_convergence[i], false, device_index);
-				}
-				else
-				{
-					// Save the current state and apply the user settings
-					config_.prev_depth[i] = GetDepth();
-					config_.prev_convergence[i] = GetConvergence();
-					AdjustDepth(config_.user_depth[i], false, device_index);
-					AdjustConvergence(config_.user_convergence[i], false, device_index);
-				}
-			}
+            else if (config_.user_key_type[i] == TOGGLE && config_.sleep_count[i] < 1)
+            {
+                config_.sleep_count[i] = config_.sleep_count_max;
+                if (GetDepth() == config_.user_depth[i] && GetConvergence() == config_.user_convergence[i])
+                {
+                    // If the current state matches the user settings, revert to the previous state
+                    AdjustDepth(config_.prev_depth[i], false, device_index);
+                    AdjustConvergence(config_.prev_convergence[i], false, device_index);
+                }
+                else
+                {
+                    // Save the current state and apply the user settings
+                    config_.prev_depth[i] = GetDepth();
+                    config_.prev_convergence[i] = GetConvergence();
+                    AdjustDepth(config_.user_depth[i], false, device_index);
+                    AdjustConvergence(config_.user_convergence[i], false, device_index);
+                }
+            }
             else if (config_.user_key_type[i] == SWITCH)
             {
                 AdjustDepth(config_.user_depth[i], false, device_index);
@@ -1035,33 +1035,33 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::AdjustPitch(float& currentPitch)
 {
-	XINPUT_STATE state;
-	ZeroMemory(&state, sizeof(XINPUT_STATE));
-	DWORD dwResult = XInputGetState(0, &state);
+    XINPUT_STATE state;
+    ZeroMemory(&state, sizeof(XINPUT_STATE));
+    DWORD dwResult = XInputGetState(0, &state);
 
-	if (dwResult == ERROR_SUCCESS)
-	{
-		SHORT sThumbRY = state.Gamepad.sThumbRY;
-		float normalizedY = sThumbRY / 32767.0f;
+    if (dwResult == ERROR_SUCCESS)
+    {
+        SHORT sThumbRY = state.Gamepad.sThumbRY;
+        float normalizedY = sThumbRY / 32767.0f;
 
-		// Apply deadzone
-		if (std::abs(normalizedY) < config_.ctrl_deadzone)
-		{
-			normalizedY = 0.0f;
-		}
-		else
-		{
-			if (normalizedY > 0)
-				normalizedY = (normalizedY - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-			else
-				normalizedY = (normalizedY + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-		}
+        // Apply deadzone
+        if (std::abs(normalizedY) < config_.ctrl_deadzone)
+        {
+            normalizedY = 0.0f;
+        }
+        else
+        {
+            if (normalizedY > 0)
+                normalizedY = (normalizedY - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+            else
+                normalizedY = (normalizedY + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+        }
 
-		// Scale Pitch
-		currentPitch += (normalizedY * config_.ctrl_sensitivity);
-		if (currentPitch > 90.0f) currentPitch = 90.0f;
-		if (currentPitch < -90.0f) currentPitch = -90.0f;
-	}
+        // Scale Pitch
+        currentPitch += (normalizedY * config_.ctrl_sensitivity);
+        if (currentPitch > 90.0f) currentPitch = 90.0f;
+        if (currentPitch < -90.0f) currentPitch = -90.0f;
+    }
 }
 
 
@@ -1070,37 +1070,37 @@ void StereoDisplayComponent::AdjustPitch(float& currentPitch)
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::AdjustYaw(vr::HmdQuaternion_t& currentYawQuat)
 {
-	XINPUT_STATE state;
-	ZeroMemory(&state, sizeof(XINPUT_STATE));
-	DWORD dwResult = XInputGetState(0, &state);
+    XINPUT_STATE state;
+    ZeroMemory(&state, sizeof(XINPUT_STATE));
+    DWORD dwResult = XInputGetState(0, &state);
 
-	if (dwResult == ERROR_SUCCESS)
-	{
-		SHORT sThumbRX = state.Gamepad.sThumbRX;
-		float normalizedX = sThumbRX / 32767.0f;
+    if (dwResult == ERROR_SUCCESS)
+    {
+        SHORT sThumbRX = state.Gamepad.sThumbRX;
+        float normalizedX = sThumbRX / 32767.0f;
 
-		// Apply deadzone
-		if (std::abs(normalizedX) < config_.ctrl_deadzone)
-		{
-			normalizedX = 0.0f;
-		}
-		else
-		{
-			if (normalizedX > 0)
-				normalizedX = (normalizedX - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-			else
-				normalizedX = (normalizedX + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-		}
+        // Apply deadzone
+        if (std::abs(normalizedX) < config_.ctrl_deadzone)
+        {
+            normalizedX = 0.0f;
+        }
+        else
+        {
+            if (normalizedX > 0)
+                normalizedX = (normalizedX - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+            else
+                normalizedX = (normalizedX + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+        }
 
-		// Scale Yaw
-		float yawAdjustment = -normalizedX * config_.ctrl_sensitivity;
+        // Scale Yaw
+        float yawAdjustment = -normalizedX * config_.ctrl_sensitivity;
 
-		// Create a quaternion for the yaw adjustment
-		vr::HmdQuaternion_t yawQuatAdjust = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(yawAdjustment));
+        // Create a quaternion for the yaw adjustment
+        vr::HmdQuaternion_t yawQuatAdjust = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(yawAdjustment));
 
-		// Update the current yaw quaternion
-		currentYawQuat = HmdQuaternion_Normalize(yawQuatAdjust * currentYawQuat);
-	}
+        // Update the current yaw quaternion
+        currentYawQuat = HmdQuaternion_Normalize(yawQuatAdjust * currentYawQuat);
+    }
 }
 
 
@@ -1109,11 +1109,11 @@ void StereoDisplayComponent::AdjustYaw(vr::HmdQuaternion_t& currentYawQuat)
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::SetHeight()
 {
-	static float user_height = config_.hmd_height;
-	if (config_.hmd_height == user_height)
-		config_.hmd_height = 0.1;
-	else
-		config_.hmd_height = user_height;
+    static float user_height = config_.hmd_height;
+    if (config_.hmd_height == user_height)
+        config_.hmd_height = 0.1;
+    else
+        config_.hmd_height = user_height;
 }
 
 //-----------------------------------------------------------------------------
@@ -1121,7 +1121,7 @@ void StereoDisplayComponent::SetHeight()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::SetReset()
 {
-	config_.pose_reset = false;
+    config_.pose_reset = false;
 }
 
 
@@ -1130,52 +1130,52 @@ void StereoDisplayComponent::SetReset()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t device_index)
 {
-	auto* vrs = vr::VRSettings();
+    auto* vrs = vr::VRSettings();
 
-	try {
-		config_.depth = vrs->GetFloat(stereo_display_settings_section, (app_name + "/depth").c_str());
-		config_.convergence = vrs->GetFloat(stereo_display_settings_section, (app_name + "/convergence").c_str());
-		config_.hmd_height = vrs->GetFloat(stereo_display_settings_section, (app_name + "/hmd_height").c_str());
-		config_.pitch_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/pitch_enable").c_str());
-		config_.yaw_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/yaw_enable").c_str());
-		config_.pose_reset_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/pose_reset_key").c_str());
-		config_.reset_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/reset_xinput").c_str());
-		config_.ctrl_toggle_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/ctrl_toggle_key").c_str());
-		config_.ctrl_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/ctrl_xinput").c_str());
-		config_.pitch_radius = vrs->GetFloat(stereo_display_settings_section, (app_name + "/pitch_radius").c_str());
-		config_.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_deadzone").c_str());
-		config_.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_sensitivity").c_str());
-		config_.num_user_settings = vrs->GetInt32(stereo_display_settings_section, (app_name + "/num_user_settings").c_str());
+    try {
+        config_.depth = vrs->GetFloat(stereo_display_settings_section, (app_name + "/depth").c_str());
+        config_.convergence = vrs->GetFloat(stereo_display_settings_section, (app_name + "/convergence").c_str());
+        config_.hmd_height = vrs->GetFloat(stereo_display_settings_section, (app_name + "/hmd_height").c_str());
+        config_.pitch_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/pitch_enable").c_str());
+        config_.yaw_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/yaw_enable").c_str());
+        config_.pose_reset_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/pose_reset_key").c_str());
+        config_.reset_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/reset_xinput").c_str());
+        config_.ctrl_toggle_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/ctrl_toggle_key").c_str());
+        config_.ctrl_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/ctrl_xinput").c_str());
+        config_.pitch_radius = vrs->GetFloat(stereo_display_settings_section, (app_name + "/pitch_radius").c_str());
+        config_.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_deadzone").c_str());
+        config_.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_sensitivity").c_str());
+        config_.num_user_settings = vrs->GetInt32(stereo_display_settings_section, (app_name + "/num_user_settings").c_str());
 
-		config_.user_load_key.resize(config_.num_user_settings);
-		config_.user_store_key.resize(config_.num_user_settings);
-		config_.user_key_type.resize(config_.num_user_settings);
-		config_.user_depth.resize(config_.num_user_settings);
-		config_.user_convergence.resize(config_.num_user_settings);
-		config_.prev_depth.resize(config_.num_user_settings);
-		config_.prev_convergence.resize(config_.num_user_settings);
-		config_.was_held.resize(config_.num_user_settings);
-		config_.load_xinput.resize(config_.num_user_settings);
-		config_.sleep_count.resize(config_.num_user_settings);
-		for (int i = 0; i < config_.num_user_settings; i++)
-		{
-			auto si = std::to_string(i + 1);
-			config_.user_load_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_load_key" + si).c_str());
-			config_.user_store_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_store_key" + si).c_str());
-			config_.user_key_type[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_key_type" + si).c_str());
-			config_.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_depth" + si).c_str());
-			config_.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_convergence" + si).c_str());
-			config_.load_xinput[i] = vrs->GetBool(stereo_display_settings_section, (app_name + "/load_xinput" + si).c_str());
-		}
+        config_.user_load_key.resize(config_.num_user_settings);
+        config_.user_store_key.resize(config_.num_user_settings);
+        config_.user_key_type.resize(config_.num_user_settings);
+        config_.user_depth.resize(config_.num_user_settings);
+        config_.user_convergence.resize(config_.num_user_settings);
+        config_.prev_depth.resize(config_.num_user_settings);
+        config_.prev_convergence.resize(config_.num_user_settings);
+        config_.was_held.resize(config_.num_user_settings);
+        config_.load_xinput.resize(config_.num_user_settings);
+        config_.sleep_count.resize(config_.num_user_settings);
+        for (int i = 0; i < config_.num_user_settings; i++)
+        {
+            auto si = std::to_string(i + 1);
+            config_.user_load_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_load_key" + si).c_str());
+            config_.user_store_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_store_key" + si).c_str());
+            config_.user_key_type[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_key_type" + si).c_str());
+            config_.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_depth" + si).c_str());
+            config_.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_convergence" + si).c_str());
+            config_.load_xinput[i] = vrs->GetBool(stereo_display_settings_section, (app_name + "/load_xinput" + si).c_str());
+        }
 
-		AdjustDepth(config_.depth, false, device_index);
+        AdjustDepth(config_.depth, false, device_index);
         AdjustConvergence(config_.convergence, false, device_index);
 
-		DriverLog("Loaded %s profile\n", app_name);
-	}
-	catch (...) {
-		DriverLog("Failed loading settings for %s profile\n", app_name);
-	}
+        DriverLog("Loaded %s profile\n", app_name);
+    }
+    catch (...) {
+        DriverLog("Failed loading settings for %s profile\n", app_name);
+    }
 }
 
 
@@ -1185,8 +1185,8 @@ void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t 
 void StereoDisplayComponent::LoadDefaults(uint32_t device_index)
 {
     config_ = def_config_;
-	AdjustDepth(config_.depth, false, device_index);
-	AdjustConvergence(config_.convergence, false, device_index);
-	DriverLog("Loaded defaults from user config file\n");
-	BeepSuccess();
+    AdjustDepth(config_.depth, false, device_index);
+    AdjustConvergence(config_.convergence, false, device_index);
+    DriverLog("Loaded defaults from user config file\n");
+    BeepSuccess();
 }

@@ -37,15 +37,15 @@ MyDeviceProvider device_provider;
 //-----------------------------------------------------------------------------
 HMD_DLL_EXPORT void *HmdDriverFactory( const char *pInterfaceName, int *pReturnCode )
 {
-	// This is where we return our device provider, if the HmdDriverFactory call asks for it.
-	if ( 0 == strcmp( vr::IServerTrackedDeviceProvider_Version, pInterfaceName ) )
-	{
-		return &device_provider;
-	}
+    // This is where we return our device provider, if the HmdDriverFactory call asks for it.
+    if ( 0 == strcmp( vr::IServerTrackedDeviceProvider_Version, pInterfaceName ) )
+    {
+        return &device_provider;
+    }
 
-	// Otherwise tell the runtime that we don't have this interface.
-	if ( pReturnCode )
-		*pReturnCode = vr::VRInitError_Init_InterfaceNotFound;
+    // Otherwise tell the runtime that we don't have this interface.
+    if ( pReturnCode )
+        *pReturnCode = vr::VRInitError_Init_InterfaceNotFound;
 
-	return NULL;
+    return NULL;
 }
