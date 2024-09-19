@@ -96,7 +96,7 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Signify Operation Successful
+// Purpose: Signify Operation Success
 //-----------------------------------------------------------------------------
 static void BeepSuccess()
 {
@@ -546,12 +546,17 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
 					stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
 				}
-				// Ctrl+F7 Store Depth & Convergence values
+				// Ctrl+F7 Store settings into game profile
 				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
 					save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
 					SaveSettings();
 				}
-				else if (save_sleep > 0) {
+				// Ctrl+F10 Reload settings from default.vrsettings
+				if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
+					save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+					stereo_display_component_->LoadDefaults(device_index_);
+				}
+				if (save_sleep > 0) {
 					save_sleep--;
 				}
 			}
@@ -633,11 +638,11 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
             }
             else
             {
-                DriverLog("No settings found for %s profile\n", app_name.c_str());
+                DriverLog("No settings found for %s profile\n", app_name);
             }
 		}
 		catch (...) {
-			DriverLog("No settings found for %s profile\n", app_name_);
+			DriverLog("No settings found for %s profile\n", app_name);
 		}
         is_loading_ = false;
     }
@@ -708,7 +713,7 @@ void MockControllerDeviceDriver::Deactivate()
 //-----------------------------------------------------------------------------
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
-	: config_( config ), depth_(config.depth), convergence_(config.convergence)
+	: config_( config ), def_config_(config), depth_(config.depth), convergence_(config.convergence)
 {
 }
 
@@ -1171,4 +1176,17 @@ void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t 
 	catch (...) {
 		DriverLog("Failed loading settings for %s profile\n", app_name);
 	}
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Reload settings from default.vrsettings
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::LoadDefaults(uint32_t device_index)
+{
+    config_ = def_config_;
+	AdjustDepth(config_.depth, false, device_index);
+	AdjustConvergence(config_.convergence, false, device_index);
+	DriverLog("Loaded defaults from user config file\n");
+	BeepSuccess();
 }
