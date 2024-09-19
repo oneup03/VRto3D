@@ -24,6 +24,9 @@
 #include <thread>
 #include <vector>
 
+ // Forward declare XINPUT_STATE
+struct _XINPUT_STATE;
+typedef _XINPUT_STATE XINPUT_STATE;
 
 struct StereoDisplayDriverConfiguration
 {
@@ -96,9 +99,9 @@ public:
     void AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index);
     float GetDepth();
     float GetConvergence();
-    void CheckUserSettings(uint32_t device_index);
-    void AdjustPitch(float& currentPitch);
-    void AdjustYaw(vr::HmdQuaternion_t& currentYawQuat);
+    void CheckUserSettings(bool got_xinput, XINPUT_STATE* state, uint32_t device_index);
+    void AdjustPitch(float& currentPitch, XINPUT_STATE* state);
+    void AdjustYaw(vr::HmdQuaternion_t& currentYawQuat, XINPUT_STATE* state);
     void SetHeight();
     void SetReset();
     void LoadSettings(const std::string& app_name, uint32_t device_index);
@@ -143,6 +146,9 @@ private:
     std::atomic< uint32_t > device_index_;
     std::atomic< bool > is_on_top_;
     std::atomic< bool > is_loading_;
+
+    XINPUT_STATE* state_;
+    bool got_xinput_;
 
     std::thread pose_update_thread_;
     std::thread focus_update_thread_;

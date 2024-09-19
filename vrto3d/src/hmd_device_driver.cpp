@@ -23,9 +23,8 @@
 #include <sstream>
 #include <ctime>
 #include <iomanip>
-#include <vector>
 #include <windows.h>
-#include <Xinput.h>
+#include <xinput.h>
 
 // Link the XInput library
 #pragma comment(lib, "XInput.lib")
@@ -113,6 +112,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 {
     // Keep track of whether Activate() has been called
     is_active_ = false;
+
+    state_ = new XINPUT_STATE();
 
     auto* vrs = vr::VRSettings();
 
@@ -431,15 +432,15 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
     pose.qRotation = HmdQuaternion_Identity;
 
     // Adjust pitch based on controller input
-    if (stereo_display_component_->GetConfig().pitch_enable)
+    if (stereo_display_component_->GetConfig().pitch_enable && got_xinput_)
     {
-        stereo_display_component_->AdjustPitch(currentPitch);
+        stereo_display_component_->AdjustPitch(currentPitch, state_);
     }
 
     // Adjust yaw based on controller input
-    if (stereo_display_component_->GetConfig().yaw_enable)
+    if (stereo_display_component_->GetConfig().yaw_enable && got_xinput_)
     {
-        stereo_display_component_->AdjustYaw(currentYawQuat);
+        stereo_display_component_->AdjustYaw(currentYawQuat, state_);
     }
 
     // Reset Pose to origin
@@ -526,6 +527,9 @@ void MockControllerDeviceDriver::PoseUpdateThread()
     {
         if (!is_loading_)
         {
+            ZeroMemory(state_, sizeof(XINPUT_STATE));
+            got_xinput_ = (_XInputGetState(0, state_) == ERROR_SUCCESS);
+
             // Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
             vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, GetPose(), sizeof(vr::DriverPose_t));
 
@@ -578,7 +582,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
             }
 
             // Check User binds
-            stereo_display_component_->CheckUserSettings(device_index_);
+            stereo_display_component_->CheckUserSettings(got_xinput_, state_, device_index_);
         }
         // Update our pose ~ every frame
         std::this_thread::sleep_for( std::chrono::milliseconds(sleep_time));
@@ -916,7 +920,7 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 // Purpose: Check User Settings and act on them
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
+void StereoDisplayComponent::CheckUserSettings(bool got_xinput, XINPUT_STATE* state, uint32_t device_index)
 {
     static bool pitch_set = config_.pitch_enable;
     static bool yaw_set = config_.yaw_enable;
@@ -925,19 +929,16 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     
     // Get the state of the first controller (index 0)
     DWORD xstate = 0x00000000;
-    XINPUT_STATE state;
-    ZeroMemory(&state, sizeof(XINPUT_STATE));
-    DWORD dwResult = _XInputGetState(0, &state);
-    xstate = state.Gamepad.wButtons;
-    if (state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+    xstate = state->Gamepad.wButtons;
+    if (state->Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
         xstate |= XINPUT_GAMEPAD_LEFT_TRIGGER;
     }
-    if (state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
+    if (state->Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
         xstate |= XINPUT_GAMEPAD_RIGHT_TRIGGER;
     }
 
     // Toggle Pitch and Yaw control
-    if (((config_.ctrl_xinput && dwResult == ERROR_SUCCESS &&
+    if (((config_.ctrl_xinput && got_xinput &&
         ((xstate & config_.ctrl_toggle_key) == config_.ctrl_toggle_key))
         || (!config_.ctrl_xinput && (GetAsyncKeyState(config_.ctrl_toggle_key) & 0x8000)))
         && sleep_ctrl == 0)
@@ -955,7 +956,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     }
 
     // Reset HMD position
-    if (((config_.reset_xinput && dwResult == ERROR_SUCCESS &&
+    if (((config_.reset_xinput && got_xinput &&
         ((xstate & config_.pose_reset_key) == config_.pose_reset_key))
         || (!config_.reset_xinput && (GetAsyncKeyState(config_.pose_reset_key) & 0x8000)))
         && sleep_rest == 0)
@@ -976,7 +977,7 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
             config_.sleep_count[i]--;
 
         // Load stored depth & convergence
-        if ((config_.load_xinput[i] && dwResult == ERROR_SUCCESS &&
+        if ((config_.load_xinput[i] && got_xinput &&
             ((xstate & config_.user_load_key[i]) == config_.user_load_key[i]))
             || (!config_.load_xinput[i] && (GetAsyncKeyState(config_.user_load_key[i]) & 0x8000)))
         {
@@ -1033,74 +1034,60 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 //-----------------------------------------------------------------------------
 // Purpose: Adjust HMD Pitch using XInput Right Stick YAxis
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustPitch(float& currentPitch)
+void StereoDisplayComponent::AdjustPitch(float& currentPitch, XINPUT_STATE* state)
 {
-    XINPUT_STATE state;
-    ZeroMemory(&state, sizeof(XINPUT_STATE));
-    DWORD dwResult = XInputGetState(0, &state);
+    SHORT sThumbRY = state->Gamepad.sThumbRY;
+    float normalizedY = sThumbRY / 32767.0f;
 
-    if (dwResult == ERROR_SUCCESS)
+    // Apply deadzone
+    if (std::abs(normalizedY) < config_.ctrl_deadzone)
     {
-        SHORT sThumbRY = state.Gamepad.sThumbRY;
-        float normalizedY = sThumbRY / 32767.0f;
-
-        // Apply deadzone
-        if (std::abs(normalizedY) < config_.ctrl_deadzone)
-        {
-            normalizedY = 0.0f;
-        }
-        else
-        {
-            if (normalizedY > 0)
-                normalizedY = (normalizedY - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-            else
-                normalizedY = (normalizedY + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-        }
-
-        // Scale Pitch
-        currentPitch += (normalizedY * config_.ctrl_sensitivity);
-        if (currentPitch > 90.0f) currentPitch = 90.0f;
-        if (currentPitch < -90.0f) currentPitch = -90.0f;
+        normalizedY = 0.0f;
     }
+    else
+    {
+        if (normalizedY > 0)
+            normalizedY = (normalizedY - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+        else
+            normalizedY = (normalizedY + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+    }
+
+    // Scale Pitch
+    currentPitch += (normalizedY * config_.ctrl_sensitivity);
+    if (currentPitch > 90.0f) currentPitch = 90.0f;
+    if (currentPitch < -90.0f) currentPitch = -90.0f;
 }
 
 
 //-----------------------------------------------------------------------------
 // Purpose: Adjust HMD Yaw using XInput Right Stick XAxis
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustYaw(vr::HmdQuaternion_t& currentYawQuat)
+void StereoDisplayComponent::AdjustYaw(vr::HmdQuaternion_t& currentYawQuat, XINPUT_STATE* state)
 {
-    XINPUT_STATE state;
-    ZeroMemory(&state, sizeof(XINPUT_STATE));
-    DWORD dwResult = XInputGetState(0, &state);
+    SHORT sThumbRX = state->Gamepad.sThumbRX;
+    float normalizedX = sThumbRX / 32767.0f;
 
-    if (dwResult == ERROR_SUCCESS)
+    // Apply deadzone
+    if (std::abs(normalizedX) < config_.ctrl_deadzone)
     {
-        SHORT sThumbRX = state.Gamepad.sThumbRX;
-        float normalizedX = sThumbRX / 32767.0f;
-
-        // Apply deadzone
-        if (std::abs(normalizedX) < config_.ctrl_deadzone)
-        {
-            normalizedX = 0.0f;
-        }
-        else
-        {
-            if (normalizedX > 0)
-                normalizedX = (normalizedX - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-            else
-                normalizedX = (normalizedX + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
-        }
-
-        // Scale Yaw
-        float yawAdjustment = -normalizedX * config_.ctrl_sensitivity;
-
-        // Create a quaternion for the yaw adjustment
-        vr::HmdQuaternion_t yawQuatAdjust = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(yawAdjustment));
-
-        // Update the current yaw quaternion
-        currentYawQuat = HmdQuaternion_Normalize(yawQuatAdjust * currentYawQuat);
+        normalizedX = 0.0f;
     }
+    else
+    {
+        if (normalizedX > 0)
+            normalizedX = (normalizedX - config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+        else
+            normalizedX = (normalizedX + config_.ctrl_deadzone) / (1.0f - config_.ctrl_deadzone);
+    }
+
+    // Scale Yaw
+    float yawAdjustment = -normalizedX * config_.ctrl_sensitivity;
+
+    // Create a quaternion for the yaw adjustment
+    vr::HmdQuaternion_t yawQuatAdjust = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(yawAdjustment));
+
+    // Update the current yaw quaternion
+    currentYawQuat = HmdQuaternion_Normalize(yawQuatAdjust * currentYawQuat);
 }
 
 
