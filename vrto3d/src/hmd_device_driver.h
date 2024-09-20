@@ -100,6 +100,7 @@ public:
     float GetDepth();
     float GetConvergence();
     void CheckUserSettings(bool got_xinput, XINPUT_STATE* state, uint32_t device_index);
+    void AdjustSensitivity(float delta);
     void AdjustPitch(float& currentPitch, XINPUT_STATE* state);
     void AdjustYaw(vr::HmdQuaternion_t& currentYawQuat, XINPUT_STATE* state);
     void SetHeight();

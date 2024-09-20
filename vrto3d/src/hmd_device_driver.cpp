@@ -489,7 +489,7 @@ void MockControllerDeviceDriver::PoseUpdate()
             stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
         }
         // Ctrl+F4 Increase Depth
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
+        else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
             stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
         }
         // Ctrl+F5 Decrease Convergence
@@ -497,7 +497,7 @@ void MockControllerDeviceDriver::PoseUpdate()
             stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
         }
         // Ctrl+F6 Increase Convergence
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
+        else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
             stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
         }
         // Ctrl+F7 Store settings into game profile
@@ -506,11 +506,11 @@ void MockControllerDeviceDriver::PoseUpdate()
             SaveSettings();
         }
         // Ctrl+F10 Reload settings from default.vrsettings
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
+        else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
             save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
             stereo_display_component_->LoadDefaults(device_index_);
         }
-        if (save_sleep > 0) {
+        else if (save_sleep > 0) {
             save_sleep--;
         }
     }
@@ -529,6 +529,14 @@ void MockControllerDeviceDriver::PoseUpdate()
     }
     else if (height_sleep > 0) {
         height_sleep--;
+    }
+    // Ctrl+- Decrease Sensitivity
+    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_MINUS) & 0x8000)) {
+        stereo_display_component_->AdjustSensitivity(-0.001f);
+    }
+    // Ctrl++ Increase Sensitivity
+    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_PLUS) & 0x8000)) {
+        stereo_display_component_->AdjustSensitivity(0.001f);
     }
 
     // Check User binds
@@ -974,6 +982,17 @@ void StereoDisplayComponent::CheckUserSettings(bool got_xinput, XINPUT_STATE* st
             config_.user_convergence[i] = GetConvergence();
         }
     }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust XInput Right Stick sensitivity
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustSensitivity(float delta)
+{
+    config_.ctrl_sensitivity += delta;
+    if (config_.ctrl_sensitivity < 0.0f)
+        config_.ctrl_sensitivity = 0.0f;
 }
 
 
