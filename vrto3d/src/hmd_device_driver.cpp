@@ -1157,6 +1157,7 @@ void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t 
 
         AdjustDepth(config_.depth, false, device_index);
         AdjustConvergence(config_.convergence, false, device_index);
+        config_.pose_reset = true;
 
         DriverLog("Loaded %s profile\n", app_name);
     }
@@ -1174,6 +1175,7 @@ void StereoDisplayComponent::LoadDefaults(uint32_t device_index)
     config_ = def_config_;
     AdjustDepth(config_.depth, false, device_index);
     AdjustConvergence(config_.convergence, false, device_index);
+    config_.pose_reset = true;
     DriverLog("Loaded defaults from user config file\n");
     BeepSuccess();
 }

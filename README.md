@@ -38,6 +38,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Modify the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` for your setup
 - Any changes made to this configuration require a restart of SteamVR to take effect
 - Fields with a `+` next to them will be saved to a game's profile when you press `Ctrl + F7`
+- If you want to change a game's profile, either delete it from `Steam\config\steamvr.vrsettings` or use `Ctrl + F10` to load your current `default.vrsettings` and then `Ctrl + F7` to save the new settings
 - If a game's profile exists in `Steam\config\steamvr.vrsettings` then it will override `default.vrsettings` you will hear a beep to indicate a profile loaded
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
