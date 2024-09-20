@@ -25,7 +25,8 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 ## Hotkeys
 - Adjust Depth with `Ctrl + F3` and `Ctrl + F4`
 - Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
-- Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) with `Ctrl + F7`
+- Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) and all hotkeys and pitch/yaw emulation settings as a profile for the currently running game with `Ctrl + F7` a beep will indicate success
+- Reload the settings from `default.vrsettings` with `Ctrl + F10` a beep will indicate success
 - Toggle locking the SteamVR Headset Window to the foreground with `Ctrl + F8`
 - Toggle HMD Height between 0.1m and configured `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed) and Luke Ross mods (not for other mods)
@@ -34,8 +35,10 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 ## Configuration
 
-- Modify the `vrto3d\resources\settings\default.vrsettings` for your setup:
+- Modify the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` for your setup
 - Any changes made to this configuration require a restart of SteamVR to take effect
+- Fields with a `+` next to them will be saved to a game's profile when you press `Ctrl + F7`
+- If a game's profile exists in `Steam\config\steamvr.vrsettings` then it will override `default.vrsettings` you will hear a beep to indicate a profile loaded
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
@@ -43,11 +46,11 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `window_height`     | `int`   | The height of the application window.                                                       | `1080`         |
 | `render_width`      | `int`   | The width to render per eye (can be higher or lower than the application window)            | `1920`         |
 | `render_height`     | `int`   | The height to render per eye (can be higher or lower than the application window)           | `1080`         |
-| `hmd_height`        | `float` | The height of the simulated HMD.                                                            | `1.0`          |
+| `hmd_height` +      | `float` | The height of the simulated HMD.                                                            | `1.0`          |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`         |
-| `depth`             | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`          |
-| `convergence`       | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.02`         |
+| `depth` +           | `float` | The max depth. Overrides VR's IPD field.                                                    | `0.5`          |
+| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.02`         |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
@@ -55,19 +58,19 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `debug_enable`      | `bool`  | Borderless Windowed. Not 3DVision compatible. Breaks running some mods in OpenVR mode.      | `true`         |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
-| `pitch_enable`      | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
-| `yaw_enable`        | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
-| `pose_reset_key`    | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to reset the HMD position and orientation | `"VK_NUMPAD7"` |
-| `ctrl_toggle_key`   | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
-| `pitch_radius`      | `float` | Radius of curvature for the HMD to pitch along. Useful in 3rd person VR and RealVR games    | `0.0`          |
-| `ctrl_deadzone`     | `float` | Controller Deadzone when using pitch or yaw emulation                                       | `0.05`         |
-| `ctrl_sensitivity`  | `float` | Controller Sensitivity when using pitch or yaw emulation                                    | `1.0`          |
-| `num_user_settings` | `int`   | The number of user settings defined below.                                                  | `3`            |
-| `user_load_key#`    | `string`| The Virtual-Key Code to load user setting # (replace # with integer number)                 | `"VK_NUMPAD1"` |
-| `user_store_key#`   | `string`| The Virtual-Key Code to store user setting # (replace # with integer number)                | `"VK_NUMPAD4"` |
-| `user_key_type#`    | `string`| The store key's behavior ("switch" "toggle" "hold")  (replace # with integer number)        | `"switch"`     |
-| `user_depth#`       | `float` | The depth value for user setting # (replace # with integer number)                          | `0.5`          |
-| `user_convergence#` | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.02`         |
+| `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
+| `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
+| `pose_reset_key` +  | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to reset the HMD position and orientation | `"VK_NUMPAD7"` |
+| `ctrl_toggle_key` + | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
+| `pitch_radius` +    | `float` | Radius of curvature for the HMD to pitch along. Useful in 3rd person VR and RealVR games    | `0.0`          |
+| `ctrl_deadzone` +   | `float` | Controller Deadzone when using pitch or yaw emulation                                       | `0.05`         |
+| `ctrl_sensitivity` +| `float` | Controller Sensitivity when using pitch or yaw emulation                                    | `1.0`          |
+| `num_user_settings` + | `int`   | The number of user settings defined below.                                                  | `3`            |
+| `user_load_key#` +  | `string`| The Virtual-Key Code to load user setting # (replace # with integer number)                 | `"VK_NUMPAD1"` |
+| `user_store_key#` + | `string`| The Virtual-Key Code to store user setting # (replace # with integer number)                | `"VK_NUMPAD4"` |
+| `user_key_type#` +  | `string`| The store key's behavior ("switch" "toggle" "hold")  (replace # with integer number)        | `"switch"`     |
+| `user_depth#` +     | `float` | The depth value for user setting # (replace # with integer number)                          | `0.5`          |
+| `user_convergence#` + | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.02`         |
 
 
 ## Base Installation
