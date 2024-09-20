@@ -650,7 +650,7 @@ void MockControllerDeviceDriver::Deactivate()
 {
     if ( is_active_.exchange( false ) )
     {
-        pose_update_thread_.join();
+        focus_update_thread_.join();
     }
 
     // unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
