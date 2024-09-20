@@ -378,7 +378,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleManualOverride_Bool, true);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
     
-    pose_update_thread_ = std::thread( &MockControllerDeviceDriver::PoseUpdateThread, this );
     focus_update_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
 
     DriverLog("Activation Complete\n");
@@ -415,15 +414,10 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 //-----------------------------------------------------------------------------
 vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 {
-    static const float updateInterval = 1.0f / stereo_display_component_->GetConfig().display_frequency; // Update interval in seconds
-    static const float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
     static float currentPitch = 0.0f; // Keep track of the current pitch
     static vr::HmdQuaternion_t currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f }; // Initial yaw quaternion
-    static float lastPitch = 0.0f;
-    static float lastYaw = 0.0f;
-    static float lastPos[3] = { 0.0f, 0.0f, 0.0f }; // Last position vector
-    static float lastVel[3] = { 0.0f, 0.0f, 0.0f }; // Last velocity vector
-    static float lastAngVel[3] = { 0.0f, 0.0f, 0.0f }; // Last angular velocity vector
+
+    float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
 
     vr::DriverPose_t pose = { 0 };
 
@@ -448,16 +442,6 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
     {
         currentPitch = 0.0f;
         currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f };
-        lastPitch = 0.0f;
-        lastYaw = 0.0f;
-        lastPos[0] = 0.0f;
-        lastPos[1] = 0.0f;
-        lastPos[2] = 0.0f;
-        lastVel[0] = 0.0f;
-        lastVel[1] = 0.0f;
-        lastVel[2] = 0.0f;
-        lastAngVel[0] = 0.0f;
-        lastAngVel[1] = 0.0f;
         stereo_display_component_->SetReset();
     }
 
@@ -473,41 +457,12 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
     pose.vecPosition[1] = stereo_display_component_->GetConfig().hmd_height - radius * sin(pitchRadians);
     pose.vecPosition[2] = radius * cos(pitchRadians) * cos(yawRadians) - radius * cos(yawRadians);
 
-    // Calculate velocity components based on change in position
-    pose.vecVelocity[0] = (pose.vecPosition[0] - lastPos[0]) / updateInterval;
-    pose.vecVelocity[1] = (pose.vecPosition[1] - lastPos[1]) / updateInterval;
-    pose.vecVelocity[2] = (pose.vecPosition[2] - lastPos[2]) / updateInterval;
-
-    // Calculate velocity using known update interval
-    pose.vecAngularVelocity[0] = (pitchRadians - lastPitch) / updateInterval; // Pitch angular velocity
-    pose.vecAngularVelocity[1] = (yawRadians - lastYaw) / updateInterval; // Yaw angular velocity
-    pose.vecAngularVelocity[2] = 0.0f;
-
-    // Calculate acceleration based on change in velocity
-    pose.vecAcceleration[0] = (pose.vecVelocity[0] - lastVel[0]) / updateInterval;
-    pose.vecAcceleration[1] = (pose.vecVelocity[1] - lastVel[1]) / updateInterval;
-    pose.vecAcceleration[2] = (pose.vecVelocity[2] - lastVel[2]) / updateInterval;
-    pose.vecAngularAcceleration[0] = (pose.vecAngularVelocity[0] - lastAngVel[0]) / updateInterval;
-    pose.vecAngularAcceleration[1] = (pose.vecAngularVelocity[1] - lastAngVel[1]) / updateInterval;
-    pose.vecAngularAcceleration[2] = 0.0f;
-
-    // Update for next iteration
-    lastPitch = pitchRadians;
-    lastYaw   = yawRadians;
-    lastPos[0] = pose.vecPosition[0];
-    lastPos[1] = pose.vecPosition[1];
-    lastPos[2] = pose.vecPosition[2];
-    lastVel[0] = pose.vecVelocity[0];
-    lastVel[1] = pose.vecVelocity[1];
-    lastVel[2] = pose.vecVelocity[2];
-    lastAngVel[0] = pose.vecAngularVelocity[0];
-    lastAngVel[1] = pose.vecAngularVelocity[1];
-
     pose.poseIsValid = true;
     pose.deviceIsConnected = true;
     pose.result = vr::TrackingResult_Running_OK;
-    pose.shouldApplyHeadModel = false;
+    pose.shouldApplyHeadModel = true;
     pose.willDriftInYaw = false;
+    pose.poseTimeOffset = 0;
 
     return pose;
 }
@@ -516,77 +471,68 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 //-----------------------------------------------------------------------------
 // Purpose: Update HMD position, Depth, Convergence, and user binds
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::PoseUpdateThread()
+void MockControllerDeviceDriver::PoseUpdate()
 {
-    static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
     static int height_sleep = 0;
     static int top_sleep = 0;
     static int save_sleep = 0;
 
-    while ( is_active_ )
-    {
-        if (!is_loading_)
-        {
-            ZeroMemory(state_, sizeof(XINPUT_STATE));
-            got_xinput_ = (_XInputGetState(0, state_) == ERROR_SUCCESS);
+    ZeroMemory(state_, sizeof(XINPUT_STATE));
+    got_xinput_ = (_XInputGetState(0, state_) == ERROR_SUCCESS);
 
-            // Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
-            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, GetPose(), sizeof(vr::DriverPose_t));
+    // Inform the vrserver that our tracked device's pose has updated, giving it the pose returned by our GetPose().
+    vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, GetPose(), sizeof(vr::DriverPose_t));
 
-            if (!stereo_display_component_->GetConfig().disable_hotkeys) {
-                // Ctrl+F3 Decrease Depth
-                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
-                    stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
-                }
-                // Ctrl+F4 Increase Depth
-                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
-                    stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
-                }
-                // Ctrl+F5 Decrease Convergence
-                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
-                    stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
-                }
-                // Ctrl+F6 Increase Convergence
-                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
-                    stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
-                }
-                // Ctrl+F7 Store settings into game profile
-                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
-                    save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                    SaveSettings();
-                }
-                // Ctrl+F10 Reload settings from default.vrsettings
-                if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
-                    save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                    stereo_display_component_->LoadDefaults(device_index_);
-                }
-                if (save_sleep > 0) {
-                    save_sleep--;
-                }
-            }
-            // Ctrl+F8 Toggle Always On Top
-            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
-                top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                is_on_top_ = !is_on_top_;
-            }
-            else if (top_sleep > 0) {
-                top_sleep--;
-            }
-            // Ctrl+F9 Toggle HMD height
-            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
-                height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                stereo_display_component_->SetHeight();
-            }
-            else if (height_sleep > 0) {
-                height_sleep--;
-            }
-
-            // Check User binds
-            stereo_display_component_->CheckUserSettings(got_xinput_, state_, device_index_);
+    if (!stereo_display_component_->GetConfig().disable_hotkeys) {
+        // Ctrl+F3 Decrease Depth
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
+            stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
         }
-        // Update our pose ~ every frame
-        std::this_thread::sleep_for( std::chrono::milliseconds(sleep_time));
+        // Ctrl+F4 Increase Depth
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
+            stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
+        }
+        // Ctrl+F5 Decrease Convergence
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
+            stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
+        }
+        // Ctrl+F6 Increase Convergence
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
+            stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
+        }
+        // Ctrl+F7 Store settings into game profile
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
+            save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            SaveSettings();
+        }
+        // Ctrl+F10 Reload settings from default.vrsettings
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
+            save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            stereo_display_component_->LoadDefaults(device_index_);
+        }
+        if (save_sleep > 0) {
+            save_sleep--;
+        }
     }
+    // Ctrl+F8 Toggle Always On Top
+    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
+        top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+        is_on_top_ = !is_on_top_;
+    }
+    else if (top_sleep > 0) {
+        top_sleep--;
+    }
+    // Ctrl+F9 Toggle HMD height
+    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
+        height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+        stereo_display_component_->SetHeight();
+    }
+    else if (height_sleep > 0) {
+        height_sleep--;
+    }
+
+    // Check User binds
+    stereo_display_component_->CheckUserSettings(got_xinput_, state_, device_index_);
 }
 
 

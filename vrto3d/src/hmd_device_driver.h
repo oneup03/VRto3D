@@ -128,7 +128,7 @@ public:
     vr::DriverPose_t GetPose() override;
     void Deactivate() override;
 
-    void PoseUpdateThread();
+    void PoseUpdate();
     void FocusUpdateThread();
 
     void LoadSettings(const std::string& app_name);
@@ -150,6 +150,5 @@ private:
     XINPUT_STATE* state_;
     bool got_xinput_;
 
-    std::thread pose_update_thread_;
     std::thread focus_update_thread_;
 };
