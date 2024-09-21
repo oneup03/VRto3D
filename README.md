@@ -25,8 +25,8 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 ## Hotkeys
 - Adjust Depth with `Ctrl + F3` and `Ctrl + F4`
 - Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
-- Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) and all hotkeys and pitch/yaw emulation settings as a profile for the currently running game with `Ctrl + F7` a beep will indicate success
-- Reload the settings from `default.vrsettings` with `Ctrl + F10` a beep will indicate success
+- Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) and all hotkeys and pitch/yaw emulation settings as a profile for the currently running game with `Ctrl + F7` A beep will indicate success
+- Reload the startup settings with `Ctrl + F10` A beep will indicate success
 - Toggle locking the SteamVR Headset Window to the foreground with `Ctrl + F8`
 - Toggle HMD Height between 0.1m and configured `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed) and Luke Ross mods (not for other mods)
@@ -38,8 +38,8 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Modify the `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings` for your setup
 - Any changes made to this configuration require a restart of SteamVR to take effect
 - Fields with a `+` next to them will be saved to a game's profile when you press `Ctrl + F7`
-- If you want to change a game's profile, either delete it from `Steam\config\steamvr.vrsettings` or use `Ctrl + F10` to load your current `default.vrsettings` and then `Ctrl + F7` to save the new settings
-- If a game's profile exists in `Steam\config\steamvr.vrsettings` then it will override `default.vrsettings` you will hear a beep to indicate a profile loaded
+- If a game's profile exists in `Steam\config\steamvr.vrsettings` then it will override `default.vrsettings` You will hear a beep to indicate a profile loaded
+- If you want to change a game's profile, either delete it from `Steam\config\steamvr.vrsettings` or use `Ctrl + F10` to load your startup settings and then `Ctrl + F7` to save over the game's profile
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|

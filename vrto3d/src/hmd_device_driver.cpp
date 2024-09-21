@@ -140,13 +140,13 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     display_configuration.render_height = vrs->GetInt32(stereo_display_settings_section, "render_height");
 
     display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
-
+    
     display_configuration.aspect_ratio = vrs->GetFloat(stereo_display_settings_section, "aspect_ratio");
     display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
     display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
     display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
     display_configuration.disable_hotkeys = vrs->GetBool(stereo_display_settings_section, "disable_hotkeys");
-    
+
     display_configuration.debug_enable = vrs->GetBool(stereo_display_settings_section, "debug_enable");
     display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
     display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
@@ -417,7 +417,7 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
     static float currentPitch = 0.0f; // Keep track of the current pitch
     static vr::HmdQuaternion_t currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f }; // Initial yaw quaternion
 
-    float radius = stereo_display_component_->GetConfig().pitch_radius; // Configurable radius for pitch
+    auto config = stereo_display_component_->GetConfig();
 
     vr::DriverPose_t pose = { 0 };
 
@@ -426,19 +426,19 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
     pose.qRotation = HmdQuaternion_Identity;
 
     // Adjust pitch based on controller input
-    if (stereo_display_component_->GetConfig().pitch_enable && got_xinput_)
+    if (config.pitch_enable && got_xinput_)
     {
         stereo_display_component_->AdjustPitch(currentPitch, state_);
     }
 
     // Adjust yaw based on controller input
-    if (stereo_display_component_->GetConfig().yaw_enable && got_xinput_)
+    if (config.yaw_enable && got_xinput_)
     {
         stereo_display_component_->AdjustYaw(currentYawQuat, state_);
     }
 
     // Reset Pose to origin
-    if (stereo_display_component_->GetConfig().pose_reset)
+    if (config.pose_reset)
     {
         currentPitch = 0.0f;
         currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f };
@@ -453,9 +453,9 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
     pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
     
     // Calculate the new position relative to the current pitch & yaw
-    pose.vecPosition[0] = radius * cos(pitchRadians) * sin(yawRadians) - radius * sin(yawRadians);
-    pose.vecPosition[1] = stereo_display_component_->GetConfig().hmd_height - radius * sin(pitchRadians);
-    pose.vecPosition[2] = radius * cos(pitchRadians) * cos(yawRadians) - radius * cos(yawRadians);
+    pose.vecPosition[0] = config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
+    pose.vecPosition[1] = config.hmd_height - config.pitch_radius * sin(pitchRadians);
+    pose.vecPosition[2] = config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
 
     pose.poseIsValid = true;
     pose.deviceIsConnected = true;
