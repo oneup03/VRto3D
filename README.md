@@ -215,7 +215,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
     - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
-    - Both of these keys can be set to XInput buttons & combinations or single keyboard keys as outlined in User Settings - Load Keys
+    - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Settings - Load Keys
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
 
 #### User Settings
@@ -225,10 +225,10 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - The `num_user_settings` field in the default.vrsettings must match the number of user defined configurations - as many as you want
 - Each configuration's Field Names should end with an integer, starting from 1
 - A Load key and a Store key can be configured to load and save Depth and Convergence settings for a configuration set
-    - Load keys can use XInput buttons & combinations as well as single keyboard keys
+    - Load keys can use XInput buttons & combinations as well as single keyboard/mouse keys
         - The Guide button can be used, but not in combinations
         - XInput Combinations can be set like this `"XINPUT_GAMEPAD_A+XINPUT_GAMEPAD_B"`
-    - Store keys can only use single keyboard keys
+    - Store keys can only use single keyboard/mouse keys
     - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for the keys
 - The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the user and current every 1.5s, or `"hold"` the user setting until the key is released
 - The Store key will update your user Depth and Convergence setting to the current value
