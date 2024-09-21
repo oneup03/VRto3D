@@ -40,6 +40,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Fields with a `+` next to them will be saved to a game's profile when you press `Ctrl + F7`
 - If a game's profile exists in `Steam\config\steamvr.vrsettings` then it will override `default.vrsettings` You will hear a beep to indicate a profile loaded
 - If you want to change a game's profile, either delete it from `Steam\config\steamvr.vrsettings` or use `Ctrl + F10` to load your startup settings and then `Ctrl + F7` to save over the game's profile
+- Reference [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) strings for user hotkeys
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
@@ -61,7 +62,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
-| `pose_reset_key` +  | `string`| The [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to reset the HMD position and orientation | `"VK_NUMPAD7"` |
+| `pose_reset_key` +  | `string`| The Virtual-Key Code to reset the HMD position and orientation                              | `"VK_NUMPAD7"` |
 | `ctrl_toggle_key` + | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
 | `pitch_radius` +    | `float` | Radius of curvature for the HMD to pitch along. Useful in 3rd person VR and RealVR games    | `0.0`          |
 | `ctrl_deadzone` +   | `float` | Controller Deadzone when using pitch or yaw emulation                                       | `0.05`         |
@@ -213,23 +214,24 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
 - Several VR controller only games can be made to work by using [Driver4VR](https://www.driver4vr.com/), a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
+    - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for these hotkeys
     - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Settings - Load Keys
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
 
 #### User Settings
-- Depth and Convergence (including ones temporarily set with the `user_store_keys`) are saved to your `Steam\config\steamvr.vrsettings` when you press `Ctrl+F7`. There are only global settings, no per-game ones.
+- Depth and Convergence (including ones temporarily set with the `user_store_keys`) and all hotkeys and pitch/yaw emulation settings are saved as a profile for the currently running game to your `Steam\config\steamvr.vrsettings` when you press `Ctrl+F7`
 - If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen. So if you experience black bars, find a setting you like, save it, and then restart the game
 - It is recommended to use a single convergence setting for all your presets
 - The `num_user_settings` field in the default.vrsettings must match the number of user defined configurations - as many as you want
-- Each configuration's Field Names should end with an integer, starting from 1
+- Each configuration's Field Names should end with an integer, starting from `1`
 - A Load key and a Store key can be configured to load and save Depth and Convergence settings for a configuration set
     - Load keys can use XInput buttons & combinations as well as single keyboard/mouse keys
         - The Guide button can be used, but not in combinations
         - XInput Combinations can be set like this `"XINPUT_GAMEPAD_A+XINPUT_GAMEPAD_B"`
     - Store keys can only use single keyboard/mouse keys
-    - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for the keys
+    - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for these hotkeys
 - The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the user and current every 1.5s, or `"hold"` the user setting until the key is released
 - The Store key will update your user Depth and Convergence setting to the current value
 - If a User Depth and Convergence setting is in `Steam\config\steamvr.vrsettings` then it will override `Steam\steamapps\common\SteamVR\drivers\vrto3d\resources\settings\default.vrsettings`
