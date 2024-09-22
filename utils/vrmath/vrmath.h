@@ -80,6 +80,14 @@ static vr::HmdQuaternion_t HmdQuaternion_FromSwingTwist( const vr::HmdVector2_t 
     return result;
 }
 
+static float AngleDifference(float currentAngle, float lastAngle)
+{
+    float diff = currentAngle - lastAngle;
+    while (diff > M_PI) diff -= 2 * M_PI;
+    while (diff < -M_PI) diff += 2 * M_PI;
+    return diff;
+}
+
 static vr::HmdQuaternion_t HmdQuaternion_Normalize( const vr::HmdQuaternion_t &q )
 {
     vr::HmdQuaternion_t result{};

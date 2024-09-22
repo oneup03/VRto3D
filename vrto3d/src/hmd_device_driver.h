@@ -22,6 +22,7 @@
 #include "openvr_driver.h"
 #include <atomic>
 #include <thread>
+#include <shared_mutex>
 #include <vector>
 
  // Forward declare XINPUT_STATE
@@ -99,10 +100,8 @@ public:
     void AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index);
     float GetDepth();
     float GetConvergence();
-    void CheckUserSettings(bool got_xinput, XINPUT_STATE* state, uint32_t device_index);
+    void CheckUserSettings(uint32_t device_index);
     void AdjustSensitivity(float delta);
-    void AdjustPitch(float& currentPitch, XINPUT_STATE* state);
-    void AdjustYaw(vr::HmdQuaternion_t& currentYawQuat, XINPUT_STATE* state);
     void SetHeight();
     void SetReset();
     void LoadSettings(const std::string& app_name, uint32_t device_index);
@@ -113,6 +112,8 @@ private:
     StereoDisplayDriverConfiguration def_config_;
     std::atomic< float > depth_;
     std::atomic< float > convergence_;
+
+    std::shared_mutex  cfg_mutex_;
 };
 
 //-----------------------------------------------------------------------------
@@ -129,7 +130,8 @@ public:
     vr::DriverPose_t GetPose() override;
     void Deactivate() override;
 
-    void PoseUpdate();
+    void PoseUpdateThread();
+    void PollHotkeysThread();
     void FocusUpdateThread();
 
     void LoadSettings(const std::string& app_name);
@@ -146,10 +148,11 @@ private:
     std::atomic< bool > is_active_;
     std::atomic< uint32_t > device_index_;
     std::atomic< bool > is_on_top_;
-    std::atomic< bool > is_loading_;
 
-    XINPUT_STATE* state_;
-    bool got_xinput_;
+    std::mutex pose_mutex_;
+    vr::DriverPose_t curr_pose_;
 
-    std::thread focus_update_thread_;
+    std::thread pose_thread_;
+    std::thread hotkey_thread_;
+    std::thread focus_thread_;
 };

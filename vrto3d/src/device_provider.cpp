@@ -69,9 +69,6 @@ bool MyDeviceProvider::ShouldBlockStandbyMode()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::RunFrame()
 {
-    // Run user control tasks
-    my_hmd_device_->PoseUpdate();
-
     vr::VREvent_t vrEvent;
     while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent)))
     {
