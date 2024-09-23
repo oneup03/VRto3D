@@ -645,6 +645,14 @@ void MockControllerDeviceDriver::PollHotkeysThread()
         if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_PLUS) & 0x8000)) {
             stereo_display_component_->AdjustSensitivity(0.01f);
         }
+        // Ctrl+[ Decrease Pitch Radius
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_4) & 0x8000)) {
+            stereo_display_component_->AdjustRadius(-0.01f);
+        }
+        // Ctrl+] Increase Pitch Radius
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_6) & 0x8000)) {
+            stereo_display_component_->AdjustRadius(0.01f);
+        }
 
         // Check User binds
         stereo_display_component_->CheckUserSettings(device_index_);
@@ -1120,9 +1128,27 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 void StereoDisplayComponent::AdjustSensitivity(float delta)
 {
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
-    config_.ctrl_sensitivity += delta;
-    if (config_.ctrl_sensitivity < 0.0f)
-        config_.ctrl_sensitivity = 0.0f;
+    if (config_.pitch_enable || config_.yaw_enable)
+    {
+        config_.ctrl_sensitivity += delta;
+        if (config_.ctrl_sensitivity < 0.0f)
+            config_.ctrl_sensitivity = 0.0f;
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust XInput Pitch Radius
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustRadius(float delta)
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    if (config_.pitch_enable)
+    {
+        config_.pitch_radius += delta;
+        if (config_.pitch_radius < 0.0f)
+            config_.pitch_radius = 0.0f;
+    }
 }
 
 
@@ -1139,6 +1165,7 @@ void StereoDisplayComponent::SetHeight()
     else
         config_.hmd_height = user_height;
 }
+
 
 //-----------------------------------------------------------------------------
 // Purpose: Toggle Reset off

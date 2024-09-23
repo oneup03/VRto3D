@@ -93,6 +93,8 @@ static std::unordered_map<std::string, int> VirtualKeyMappings = {
     {"VK_F24", VK_F24},
     {"VK_OEM_MINUS", VK_OEM_MINUS},
     {"VK_OEM_PLUS", VK_OEM_PLUS},
+    {"VK_LBRACKET", VK_OEM_4}, // [
+    {"VK_RBRACKET", VK_OEM_6}, // ]
 };
 // XInput gamepad buttons
 #define XINPUT_GAMEPAD_LEFT_TRIGGER  0x10000

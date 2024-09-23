@@ -102,6 +102,7 @@ public:
     float GetConvergence();
     void CheckUserSettings(uint32_t device_index);
     void AdjustSensitivity(float delta);
+    void AdjustRadius(float delta);
     void SetHeight();
     void SetReset();
     void LoadSettings(const std::string& app_name, uint32_t device_index);
