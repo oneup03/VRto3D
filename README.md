@@ -65,15 +65,16 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
 | `pose_reset_key` +  | `string`| The Virtual-Key Code to reset the HMD position and orientation                              | `"VK_NUMPAD7"` |
 | `ctrl_toggle_key` + | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
+| `ctrl_toggle_type` + | `string`| The ctrl_toggle_key's behavior ("toggle" "hold")                                           | `"toggle"`     |
 | `pitch_radius` +    | `float` | Radius of curvature for the HMD to pitch along. Useful in 3rd person VR and RealVR games    | `0.0`          |
 | `ctrl_deadzone` +   | `float` | Controller Deadzone when using pitch or yaw emulation                                       | `0.05`         |
 | `ctrl_sensitivity` +| `float` | Controller Sensitivity when using pitch or yaw emulation                                    | `1.0`          |
-| `num_user_settings` + | `int`   | The number of user settings defined below.                                                  | `3`            |
+| `num_user_settings` + | `int` | The number of user settings defined below.                                                  | `3`            |
 | `user_load_key#` +  | `string`| The Virtual-Key Code to load user setting # (replace # with integer number)                 | `"VK_NUMPAD1"` |
 | `user_store_key#` + | `string`| The Virtual-Key Code to store user setting # (replace # with integer number)                | `"VK_NUMPAD4"` |
 | `user_key_type#` +  | `string`| The store key's behavior ("switch" "toggle" "hold")  (replace # with integer number)        | `"switch"`     |
 | `user_depth#` +     | `float` | The depth value for user setting # (replace # with integer number)                          | `0.5`          |
-| `user_convergence#` + | `float` | The convergence value for user setting # (replace # with integer number)                    | `0.02`         |
+| `user_convergence#` + | `float`| The convergence value for user setting # (replace # with integer number)                   | `0.02`         |
 
 
 ## Base Installation
@@ -216,7 +217,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Several VR controller only games can be made to work by using [Driver4VR](https://www.driver4vr.com/), a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
     - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for these hotkeys
-    - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
+    - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true). The `ctrl_toggle_type` can be set to either `"toggle"` them on/off or `"hold"` that disables them while the button is held
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Settings - Load Keys
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place

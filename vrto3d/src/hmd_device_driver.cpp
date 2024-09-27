@@ -192,6 +192,9 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
         }
         display_configuration.ctrl_xinput = true;
     }
+    char ctrl_toggle_type[1024];
+    vrs->GetString(stereo_display_settings_section, "ctrl_toggle_type", ctrl_toggle_type, sizeof(ctrl_toggle_type));
+    display_configuration.ctrl_type = KeyBindTypes[ctrl_toggle_type];
     display_configuration.pitch_radius = vrs->GetFloat(stereo_display_settings_section, "pitch_radius");
     display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
     display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
@@ -741,6 +744,7 @@ void MockControllerDeviceDriver::SaveSettings()
     vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/pose_reset_key").c_str(), config.pose_reset_key);
     vrs->SetBool(stereo_display_settings_section, (app_name_ + "/reset_xinput").c_str(), config.reset_xinput);
     vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/ctrl_toggle_key").c_str(), config.ctrl_toggle_key);
+    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/ctrl_toggle_type").c_str(), config.ctrl_type);
     vrs->SetBool(stereo_display_settings_section, (app_name_ + "/ctrl_xinput").c_str(), config.ctrl_xinput);
     vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/pitch_radius").c_str(), config.pitch_radius);
     vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/ctrl_deadzone").c_str(), config.ctrl_deadzone);
@@ -1025,20 +1029,34 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     auto config = GetConfig();
 
     // Toggle Pitch and Yaw control
-    if (((config.ctrl_xinput && got_xinput &&
+    if ((config.ctrl_xinput && got_xinput &&
         ((xstate & config.ctrl_toggle_key) == config.ctrl_toggle_key))
         || (!config.ctrl_xinput && (GetAsyncKeyState(config.ctrl_toggle_key) & 0x8000)))
-        && sleep_ctrl == 0)
     {
-        sleep_ctrl = config.sleep_count_max;
-        if (pitch_set) {
-            config.pitch_enable = !config.pitch_enable;
+        if (config.ctrl_type == HOLD && !config.ctrl_held)
+        {
+            config.ctrl_held = true;
+            config.pitch_enable = false;
+            config.yaw_enable = false;
         }
-        if (yaw_set) {
-            config.yaw_enable = !config.yaw_enable;
+        else if ((config.ctrl_type == TOGGLE || config.ctrl_type == SWITCH) && sleep_ctrl < 1)
+        {
+            sleep_ctrl = config.sleep_count_max;
+            if (pitch_set) {
+                config.pitch_enable = !config.pitch_enable;
+            }
+            if (yaw_set) {
+                config.yaw_enable = !config.yaw_enable;
+            }
         }
     }
-    else if (sleep_ctrl > 0) {
+    else if (config.ctrl_type == HOLD && config.ctrl_held)
+    {
+        config.ctrl_held = false;
+        config.pitch_enable = pitch_set;
+        config.yaw_enable = yaw_set;
+    }
+    if (sleep_ctrl > 0) {
         sleep_ctrl--;
     }
 
@@ -1194,6 +1212,7 @@ void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t 
         config_.pose_reset_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/pose_reset_key").c_str());
         config_.reset_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/reset_xinput").c_str());
         config_.ctrl_toggle_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/ctrl_toggle_key").c_str());
+        config_.ctrl_type = vrs->GetInt32(stereo_display_settings_section, (app_name + "/ctrl_toggle_type").c_str());
         config_.ctrl_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/ctrl_xinput").c_str());
         config_.pitch_radius = vrs->GetFloat(stereo_display_settings_section, (app_name + "/pitch_radius").c_str());
         config_.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_deadzone").c_str());

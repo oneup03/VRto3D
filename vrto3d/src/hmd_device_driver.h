@@ -64,6 +64,8 @@ struct StereoDisplayDriverConfiguration
     bool pose_reset;
     int32_t ctrl_toggle_key;
     bool ctrl_xinput;
+    int32_t ctrl_type;
+    bool ctrl_held;
     float pitch_radius;
     float ctrl_deadzone;
     float ctrl_sensitivity;

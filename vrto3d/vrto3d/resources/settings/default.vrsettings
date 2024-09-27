@@ -25,6 +25,7 @@
         "yaw_enable": false,
         "pose_reset_key": "VK_NUMPAD7",
         "ctrl_toggle_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
+        "ctrl_toggle_type": "toggle",
         "pitch_radius": 0.0,
         "ctrl_deadzone": 0.05,
         "ctrl_sensitivity": 1.0,
