@@ -15,75 +15,18 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 #pragma once
-
-#include <array>
-#include <string>
-
 #include "openvr_driver.h"
 #include <atomic>
 #include <thread>
 #include <shared_mutex>
-#include <vector>
+#include <string>
+
+#include "json_manager.h"
 
  // Forward declare XINPUT_STATE
 struct _XINPUT_STATE;
 typedef _XINPUT_STATE XINPUT_STATE;
 
-struct StereoDisplayDriverConfiguration
-{
-    int32_t window_x;
-    int32_t window_y;
-
-    int32_t window_width;
-    int32_t window_height;
-
-    int32_t render_width;
-    int32_t render_height;
-
-    float hmd_height;
-
-    float aspect_ratio;
-    float fov;
-    float depth;
-    float convergence;
-    bool disable_hotkeys;
-
-    bool tab_enable;
-    bool reverse_enable;
-    bool depth_gauge;
-    bool debug_enable;
-
-    float display_latency;
-    float display_frequency;
-    int sleep_count_max;
-
-    bool pitch_enable;
-    bool yaw_enable;
-    bool pitch_set;
-    bool yaw_set;
-    int32_t pose_reset_key;
-    bool reset_xinput;
-    bool pose_reset;
-    int32_t ctrl_toggle_key;
-    bool ctrl_xinput;
-    int32_t ctrl_type;
-    bool ctrl_held;
-    float pitch_radius;
-    float ctrl_deadzone;
-    float ctrl_sensitivity;
-
-    int32_t num_user_settings;
-    std::vector<int32_t> user_load_key;
-    std::vector<int32_t> user_store_key;
-    std::vector<int32_t> user_key_type;
-    std::vector<float> user_depth;
-    std::vector<float> user_convergence;
-    std::vector<float> prev_depth;
-    std::vector<float> prev_convergence;
-    std::vector<bool> was_held;
-    std::vector<bool> load_xinput;
-    std::vector<int32_t> sleep_count;
-};
 
 class StereoDisplayComponent : public vr::IVRDisplayComponent
 {

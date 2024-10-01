@@ -18,12 +18,11 @@
 #include "key_mappings.h"
 #include "driverlog.h"
 #include "vrmath.h"
-#include "json_manager.h"
 
 #include <string>
 #include <sstream>
 #include <ctime>
-#include <iomanip>
+
 #include <windows.h>
 #include <xinput.h>
 #include <nlohmann/json.hpp>
@@ -80,21 +79,6 @@ static void SwitchToXinpuGetStateEx()
 }
 
 
-//-----------------------------------------------------------------------------
-// Purpose: Split a string by a delimiter
-//-----------------------------------------------------------------------------
-std::vector<std::string> split(const std::string& str, char delimiter) {
-    std::vector<std::string> tokens;
-    std::stringstream ss(str);
-    std::string token;
-
-    while (std::getline(ss, token, delimiter)) {
-        tokens.push_back(token);
-    }
-
-    return tokens;
-}
-
 
 //-----------------------------------------------------------------------------
 // Purpose: Signify Operation Success
@@ -118,6 +102,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     app_name_ = "";
 
     auto* vrs = vr::VRSettings();
+    JsonManager json_manager;
+    nlohmann::json jsonConfig = json_manager.readJsonFromFile("default_config.json");
 
     char model_number[ 1024 ];
     vrs->GetString( stereo_main_settings_section, "model_number", model_number, sizeof( model_number ) );
@@ -136,116 +122,35 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     display_configuration.window_x = 0;
     display_configuration.window_y = 0;
 
-    display_configuration.window_width = vrs->GetInt32( stereo_display_settings_section, "window_width" );
-    display_configuration.window_height = vrs->GetInt32( stereo_display_settings_section, "window_height" );
-    display_configuration.render_width = vrs->GetInt32(stereo_display_settings_section, "render_width");
-    display_configuration.render_height = vrs->GetInt32(stereo_display_settings_section, "render_height");
+    try {
+        const nlohmann::json& vrto3d_display = jsonConfig.at("vrto3d_display");
 
-    display_configuration.aspect_ratio = vrs->GetFloat(stereo_display_settings_section, "aspect_ratio");
-    display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
+        // Load values with defaults if not found in JSON
+        display_configuration.window_width = vrto3d_display.value("window_width", 1920);
+        display_configuration.window_height = vrto3d_display.value("window_height", 1080);
+        display_configuration.render_width = vrto3d_display.value("render_width", 1920);
+        display_configuration.render_height = vrto3d_display.value("render_height", 1080);
+
+        display_configuration.aspect_ratio = vrto3d_display.value("aspect_ratio", 1.77778f);
+        display_configuration.fov = vrto3d_display.value("fov", 90.0f);
+
+        display_configuration.disable_hotkeys = vrto3d_display.value("disable_hotkeys", false);
+        display_configuration.debug_enable = vrto3d_display.value("debug_enable", true);
+        display_configuration.tab_enable = vrto3d_display.value("tab_enable", false);
+        display_configuration.reverse_enable = vrto3d_display.value("reverse_enable", false);
+        display_configuration.depth_gauge = vrto3d_display.value("depth_gauge", false);
+
+        display_configuration.display_latency = vrto3d_display.value("display_latency", 0.011f);
+        display_configuration.display_frequency = vrto3d_display.value("display_frequency", 60.0f);
+    }
+    catch (const nlohmann::json::exception& e) {
+        DriverLog("Error reading default_config.json: %s\n", e.what());
+    }
     
-    display_configuration.disable_hotkeys = vrs->GetBool(stereo_display_settings_section, "disable_hotkeys");
-    display_configuration.debug_enable = vrs->GetBool(stereo_display_settings_section, "debug_enable");
-    display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
-    display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
-    display_configuration.depth_gauge = vrs->GetBool(stereo_display_settings_section, "depth_gauge");
-
-    display_configuration.display_latency = vrs->GetFloat(stereo_display_settings_section, "display_latency");
-    display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
     display_configuration.sleep_count_max = (int)(floor(1600.0 / (1000.0 / display_configuration.display_frequency)));
 
     // Profile settings
-    display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
-    display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
-    display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
-
-    // Controller settings
-    display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");
-    display_configuration.pitch_set = display_configuration.pitch_enable;
-    display_configuration.yaw_enable = vrs->GetBool(stereo_display_settings_section, "yaw_enable");
-    display_configuration.yaw_set = display_configuration.yaw_enable;
-    char pose_reset_key[1024];
-    vrs->GetString(stereo_display_settings_section, "pose_reset_key", pose_reset_key, sizeof(pose_reset_key));
-    if (VirtualKeyMappings.find(pose_reset_key) != VirtualKeyMappings.end()) {
-        display_configuration.pose_reset_key = VirtualKeyMappings[pose_reset_key];
-        display_configuration.reset_xinput = false;
-    }
-    else if (XInputMappings.find(pose_reset_key) != XInputMappings.end() || std::string(pose_reset_key).find('+') != std::string::npos) {
-        display_configuration.pose_reset_key = 0x0;
-        auto hotkeys = split(pose_reset_key, '+');
-        for (const auto& hotkey : hotkeys) {
-            if (XInputMappings.find(hotkey) != XInputMappings.end()) {
-                display_configuration.pose_reset_key |= XInputMappings[hotkey];
-            }
-        }
-        display_configuration.reset_xinput = true;
-    }
-    display_configuration.pose_reset = false;
-    char ctrl_toggle_key[1024];
-    vrs->GetString(stereo_display_settings_section, "ctrl_toggle_key", ctrl_toggle_key, sizeof(ctrl_toggle_key));
-    if (VirtualKeyMappings.find(ctrl_toggle_key) != VirtualKeyMappings.end()) {
-        display_configuration.ctrl_toggle_key = VirtualKeyMappings[ctrl_toggle_key];
-        display_configuration.ctrl_xinput = false;
-    }
-    else if (XInputMappings.find(ctrl_toggle_key) != XInputMappings.end() || std::string(ctrl_toggle_key).find('+') != std::string::npos) {
-        display_configuration.ctrl_toggle_key = 0x0;
-        auto hotkeys = split(ctrl_toggle_key, '+');
-        for (const auto& hotkey : hotkeys) {
-            if (XInputMappings.find(hotkey) != XInputMappings.end()) {
-                display_configuration.ctrl_toggle_key |= XInputMappings[hotkey];
-            }
-        }
-        display_configuration.ctrl_xinput = true;
-    }
-    char ctrl_toggle_type[1024];
-    vrs->GetString(stereo_display_settings_section, "ctrl_toggle_type", ctrl_toggle_type, sizeof(ctrl_toggle_type));
-    display_configuration.ctrl_type = KeyBindTypes[ctrl_toggle_type];
-    display_configuration.pitch_radius = vrs->GetFloat(stereo_display_settings_section, "pitch_radius");
-    display_configuration.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, "ctrl_deadzone");
-    display_configuration.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, "ctrl_sensitivity");
-
-    // Read user binds
-    display_configuration.num_user_settings = vrs->GetInt32(stereo_display_settings_section, "num_user_settings");
-    display_configuration.user_load_key.resize(display_configuration.num_user_settings);
-    display_configuration.user_store_key.resize(display_configuration.num_user_settings);
-    display_configuration.user_key_type.resize(display_configuration.num_user_settings);
-    display_configuration.user_depth.resize(display_configuration.num_user_settings);
-    display_configuration.user_convergence.resize(display_configuration.num_user_settings);
-    display_configuration.prev_depth.resize(display_configuration.num_user_settings);
-    display_configuration.prev_convergence.resize(display_configuration.num_user_settings);
-    display_configuration.was_held.resize(display_configuration.num_user_settings);
-    display_configuration.load_xinput.resize(display_configuration.num_user_settings);
-    display_configuration.sleep_count.resize(display_configuration.num_user_settings);
-    for (int i = 0; i < display_configuration.num_user_settings; i++)
-    {
-        char user_key[1024];
-        auto si = std::to_string(i + 1);
-        vrs->GetString(stereo_display_settings_section, ("user_load_key" + si).c_str(), user_key, sizeof(user_key));
-        if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
-            display_configuration.user_load_key[i] = VirtualKeyMappings[user_key];
-            display_configuration.load_xinput[i] = false;
-        }
-        else if (XInputMappings.find(user_key) != XInputMappings.end() || std::string(user_key).find('+') != std::string::npos) {
-            display_configuration.user_load_key[i] = 0x0;
-            auto hotkeys = split(user_key, '+');
-            for (const auto& hotkey : hotkeys) {
-                if (XInputMappings.find(hotkey) != XInputMappings.end()) {
-                    display_configuration.user_load_key[i] |= XInputMappings[hotkey];
-                }
-            }
-            display_configuration.load_xinput[i] = true;
-        }
-        vrs->GetString(stereo_display_settings_section, ("user_store_key" + si).c_str(), user_key, sizeof(user_key));
-        if (VirtualKeyMappings.find(user_key) != VirtualKeyMappings.end()) {
-            display_configuration.user_store_key[i] = VirtualKeyMappings[user_key];
-        }
-        vrs->GetString(stereo_display_settings_section, ("user_key_type" + si).c_str(), user_key, sizeof(user_key));
-        if (KeyBindTypes.find(user_key) != KeyBindTypes.end()) {
-            display_configuration.user_key_type[i] = KeyBindTypes[user_key];
-        }
-        display_configuration.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, ("user_depth" + si).c_str());
-        display_configuration.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, ("user_convergence" + si).c_str());
-    }
+    auto found_cfg = json_manager.LoadConfigFromJson("default_config.json", display_configuration);
 
     // Instantiate our display component
     stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
