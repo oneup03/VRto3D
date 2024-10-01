@@ -16,15 +16,17 @@
  */
 #include "hmd_device_driver.h"
 #include "key_mappings.h"
-
 #include "driverlog.h"
 #include "vrmath.h"
+#include "json_manager.h"
+
 #include <string>
 #include <sstream>
 #include <ctime>
 #include <iomanip>
 #include <windows.h>
 #include <xinput.h>
+#include <nlohmann/json.hpp>
 
 // Link the XInput library
 #pragma comment(lib, "XInput.lib")
@@ -699,70 +701,62 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Load Game Specific Settings from Steam\config\steamvr.vrsettings
+// Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
 {
     if (app_name != app_name_)
     {
         app_name_ = app_name;
-        auto* vrs = vr::VRSettings();
-
-        try {
-            bool profile = vrs->GetBool(stereo_display_settings_section, app_name.c_str());
-            if (profile)
-            {
-                stereo_display_component_->LoadSettings(app_name, device_index_);
-                BeepSuccess();
-            }
-            else
-            {
-                DriverLog("No settings found for %s profile\n", app_name);
-            }
-        }
-        catch (...) {
-            DriverLog("No settings found for %s profile\n", app_name);
-        }
+        stereo_display_component_->LoadSettings(app_name, device_index_);
     }
 }
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Save Game Specific Settings to Steam\config\steamvr.vrsettings
+// Purpose: Save Game Specific Settings to Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::SaveSettings()
-{
-    auto* vrs = vr::VRSettings();
+void MockControllerDeviceDriver::SaveSettings() {
+    // Create a JSON object to hold all the configuration data
+    nlohmann::json jsonConfig;
     auto config = stereo_display_component_->GetConfig();
 
-    vrs->SetBool(stereo_display_settings_section, app_name_.c_str(), true);
-    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/depth").c_str(), stereo_display_component_->GetDepth());
-    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/convergence").c_str(), stereo_display_component_->GetConvergence());
-    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/hmd_height").c_str(), config.hmd_height);
-    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/pitch_enable").c_str(), config.pitch_enable);
-    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/yaw_enable").c_str(), config.yaw_enable);
-    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/pose_reset_key").c_str(), config.pose_reset_key);
-    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/reset_xinput").c_str(), config.reset_xinput);
-    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/ctrl_toggle_key").c_str(), config.ctrl_toggle_key);
-    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/ctrl_toggle_type").c_str(), config.ctrl_type);
-    vrs->SetBool(stereo_display_settings_section, (app_name_ + "/ctrl_xinput").c_str(), config.ctrl_xinput);
-    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/pitch_radius").c_str(), config.pitch_radius);
-    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/ctrl_deadzone").c_str(), config.ctrl_deadzone);
-    vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/ctrl_sensitivity").c_str(), config.ctrl_sensitivity);
-    vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/num_user_settings").c_str(), config.num_user_settings);
+    // Populate the JSON object with settings
+    jsonConfig["depth"] = stereo_display_component_->GetDepth();
+    jsonConfig["convergence"] = stereo_display_component_->GetConvergence();
+    jsonConfig["hmd_height"] = config.hmd_height;
+    jsonConfig["pitch_enable"] = config.pitch_enable;
+    jsonConfig["yaw_enable"] = config.yaw_enable;
+    jsonConfig["pose_reset_key"] = config.pose_reset_key;
+    jsonConfig["reset_xinput"] = config.reset_xinput;
+    jsonConfig["ctrl_toggle_key"] = config.ctrl_toggle_key;
+    jsonConfig["ctrl_toggle_type"] = config.ctrl_type;
+    jsonConfig["ctrl_xinput"] = config.ctrl_xinput;
+    jsonConfig["pitch_radius"] = config.pitch_radius;
+    jsonConfig["ctrl_deadzone"] = config.ctrl_deadzone;
+    jsonConfig["ctrl_sensitivity"] = config.ctrl_sensitivity;
+    jsonConfig["num_user_settings"] = config.num_user_settings;
 
-    for (int i = 0; i < config.num_user_settings; i++)
-    {
-        auto si = std::to_string(i + 1);
-        vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_load_key" + si).c_str(), config.user_load_key[i]);
-        vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_store_key" + si).c_str(), config.user_store_key[i]);
-        vrs->SetInt32(stereo_display_settings_section, (app_name_ + "/user_key_type" + si).c_str(), config.user_key_type[i]);
-        vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_depth" + si).c_str(), config.user_depth[i]);
-        vrs->SetFloat(stereo_display_settings_section, (app_name_ + "/user_convergence" + si).c_str(), config.user_convergence[i]);
-        vrs->SetBool(stereo_display_settings_section, (app_name_ + "/load_xinput" + si).c_str(), config.load_xinput[i]);
+    // Store user settings as an array
+    for (int i = 0; i < config.num_user_settings; i++) {
+        nlohmann::json userSettings;
+        userSettings["user_load_key"] = config.user_load_key[i];
+        userSettings["user_store_key"] = config.user_store_key[i];
+        userSettings["user_key_type"] = config.user_key_type[i];
+        userSettings["user_depth"] = config.user_depth[i];
+        userSettings["user_convergence"] = config.user_convergence[i];
+        userSettings["load_xinput"] = config.load_xinput[i];
+
+        // Append to JSON array in the main config
+        jsonConfig["user_settings"].push_back(userSettings);
     }
-    DriverLog("Saved to %s profile\n", app_name_);
-    BeepSuccess();
+
+    // Now write this JSON object to a file
+    JsonManager json_manager;
+    if (json_manager.writeJsonToFile(app_name_ + "_config.json", jsonConfig)) {
+        DriverLog("Settings saved to %s profile\n", app_name_.c_str());
+        BeepSuccess();
+    }
 }
 
 
@@ -1196,59 +1190,78 @@ void StereoDisplayComponent::SetReset()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Load Game Specific Settings from Steam\config\steamvr.vrsettings
+// Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t device_index)
-{
-    auto* vrs = vr::VRSettings();
-    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t device_index) {
+    JsonManager json_manager;
+    auto config = GetConfig();
+
+    // Attempt to read the JSON settings file
+    nlohmann::json jsonConfig = json_manager.readJsonFromFile(app_name + "_config.json");
+
+    // Check if the JSON file was successfully read
+    if (jsonConfig.is_null()) {
+        DriverLog("No profile found for %s\n", app_name.c_str());
+        return;
+    }
 
     try {
-        config_.depth = vrs->GetFloat(stereo_display_settings_section, (app_name + "/depth").c_str());
-        config_.convergence = vrs->GetFloat(stereo_display_settings_section, (app_name + "/convergence").c_str());
-        config_.hmd_height = vrs->GetFloat(stereo_display_settings_section, (app_name + "/hmd_height").c_str());
-        config_.pitch_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/pitch_enable").c_str());
-        config_.yaw_enable = vrs->GetBool(stereo_display_settings_section, (app_name + "/yaw_enable").c_str());
-        config_.pose_reset_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/pose_reset_key").c_str());
-        config_.reset_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/reset_xinput").c_str());
-        config_.ctrl_toggle_key = vrs->GetInt32(stereo_display_settings_section, (app_name + "/ctrl_toggle_key").c_str());
-        config_.ctrl_type = vrs->GetInt32(stereo_display_settings_section, (app_name + "/ctrl_toggle_type").c_str());
-        config_.ctrl_xinput = vrs->GetBool(stereo_display_settings_section, (app_name + "/ctrl_xinput").c_str());
-        config_.pitch_radius = vrs->GetFloat(stereo_display_settings_section, (app_name + "/pitch_radius").c_str());
-        config_.ctrl_deadzone = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_deadzone").c_str());
-        config_.ctrl_sensitivity = vrs->GetFloat(stereo_display_settings_section, (app_name + "/ctrl_sensitivity").c_str());
-        config_.num_user_settings = vrs->GetInt32(stereo_display_settings_section, (app_name + "/num_user_settings").c_str());
+        // Attempt to load all settings from the JSON object
+        config.depth = jsonConfig.at("depth").get<float>();
+        config.convergence = jsonConfig.at("convergence").get<float>();
+        config.hmd_height = jsonConfig.at("hmd_height").get<float>();
+        config.pitch_enable = jsonConfig.at("pitch_enable").get<bool>();
+        config.yaw_enable = jsonConfig.at("yaw_enable").get<bool>();
+        config.pose_reset_key = jsonConfig.at("pose_reset_key").get<int>();
+        config.reset_xinput = jsonConfig.at("reset_xinput").get<bool>();
+        config.ctrl_toggle_key = jsonConfig.at("ctrl_toggle_key").get<int>();
+        config.ctrl_type = jsonConfig.at("ctrl_toggle_type").get<int>();
+        config.ctrl_xinput = jsonConfig.at("ctrl_xinput").get<bool>();
+        config.pitch_radius = jsonConfig.at("pitch_radius").get<float>();
+        config.ctrl_deadzone = jsonConfig.at("ctrl_deadzone").get<float>();
+        config.ctrl_sensitivity = jsonConfig.at("ctrl_sensitivity").get<float>();
+        config.num_user_settings = jsonConfig.at("num_user_settings").get<int>();
 
-        config_.user_load_key.resize(config_.num_user_settings);
-        config_.user_store_key.resize(config_.num_user_settings);
-        config_.user_key_type.resize(config_.num_user_settings);
-        config_.user_depth.resize(config_.num_user_settings);
-        config_.user_convergence.resize(config_.num_user_settings);
-        config_.prev_depth.resize(config_.num_user_settings);
-        config_.prev_convergence.resize(config_.num_user_settings);
-        config_.was_held.resize(config_.num_user_settings);
-        config_.load_xinput.resize(config_.num_user_settings);
-        config_.sleep_count.resize(config_.num_user_settings);
-        for (int i = 0; i < config_.num_user_settings; i++)
-        {
-            auto si = std::to_string(i + 1);
-            config_.user_load_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_load_key" + si).c_str());
-            config_.user_store_key[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_store_key" + si).c_str());
-            config_.user_key_type[i] = vrs->GetInt32(stereo_display_settings_section, (app_name + "/user_key_type" + si).c_str());
-            config_.user_depth[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_depth" + si).c_str());
-            config_.user_convergence[i] = vrs->GetFloat(stereo_display_settings_section, (app_name + "/user_convergence" + si).c_str());
-            config_.load_xinput[i] = vrs->GetBool(stereo_display_settings_section, (app_name + "/load_xinput" + si).c_str());
+        // Resize vectors based on the number of user settings
+        config.user_load_key.resize(config.num_user_settings);
+        config.user_store_key.resize(config.num_user_settings);
+        config.user_key_type.resize(config.num_user_settings);
+        config.user_depth.resize(config.num_user_settings);
+        config.user_convergence.resize(config.num_user_settings);
+        config.prev_depth.resize(config.num_user_settings);
+        config.prev_convergence.resize(config.num_user_settings);
+        config.was_held.resize(config.num_user_settings);
+        config.load_xinput.resize(config.num_user_settings);
+        config.sleep_count.resize(config.num_user_settings);
+
+        // Load the user settings array
+        const auto& userSettingsArray = jsonConfig.at("user_settings");
+        for (int i = 0; i < config.num_user_settings; i++) {
+            const auto& userSetting = userSettingsArray.at(i);
+
+            config.user_load_key[i] = userSetting.at("user_load_key").get<int>();
+            config.user_store_key[i] = userSetting.at("user_store_key").get<int>();
+            config.user_key_type[i] = userSetting.at("user_key_type").get<int>();
+            config.user_depth[i] = userSetting.at("user_depth").get<float>();
+            config.user_convergence[i] = userSetting.at("user_convergence").get<float>();
+            config.load_xinput[i] = userSetting.at("load_xinput").get<bool>();
         }
-
-        AdjustDepth(config_.depth, false, device_index);
-        AdjustConvergence(config_.convergence, false, device_index);
-        config_.pose_reset = true;
-
-        DriverLog("Loaded %s profile\n", app_name);
     }
-    catch (...) {
-        DriverLog("Failed loading settings for %s profile\n", app_name);
+    catch (const nlohmann::json::exception& e) {
+        // Catch any JSON-related exceptions (missing field, wrong type, etc.)
+        DriverLog("Profile corrupt or missing fields %s: %s\n", app_name.c_str(), e.what());
+        return;
     }
+
+    // Apply loaded settings
+    AdjustDepth(config.depth, false, device_index);
+    AdjustConvergence(config.convergence, false, device_index);
+    config.pose_reset = true;
+    
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    config_ = config;
+    DriverLog("Loaded %s profile\n", app_name.c_str());
+    BeepSuccess();
 }
 
 

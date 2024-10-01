@@ -98,7 +98,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -121,7 +122,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -144,7 +146,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -167,7 +170,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -188,10 +192,12 @@
     <ClCompile Include="src\hmd_device_driver.cpp" />
     <ClCompile Include="src\device_provider.cpp" />
     <ClCompile Include="src\hmd_driver_factory.cpp" />
+    <ClCompile Include="src\json_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
     <ClInclude Include="src\device_provider.h" />
+    <ClInclude Include="src\json_manager.h" />
     <ClInclude Include="src\key_mappings.h" />
   </ItemGroup>
   <ItemGroup>
