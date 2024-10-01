@@ -59,6 +59,8 @@ struct StereoDisplayDriverConfiguration
 
     bool pitch_enable;
     bool yaw_enable;
+    bool pitch_set;
+    bool yaw_set;
     int32_t pose_reset_key;
     bool reset_xinput;
     bool pose_reset;

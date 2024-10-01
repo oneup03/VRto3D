@@ -141,14 +141,10 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     display_configuration.render_width = vrs->GetInt32(stereo_display_settings_section, "render_width");
     display_configuration.render_height = vrs->GetInt32(stereo_display_settings_section, "render_height");
 
-    display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
-    
     display_configuration.aspect_ratio = vrs->GetFloat(stereo_display_settings_section, "aspect_ratio");
     display_configuration.fov = vrs->GetFloat(stereo_display_settings_section, "fov");
-    display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
-    display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
+    
     display_configuration.disable_hotkeys = vrs->GetBool(stereo_display_settings_section, "disable_hotkeys");
-
     display_configuration.debug_enable = vrs->GetBool(stereo_display_settings_section, "debug_enable");
     display_configuration.tab_enable = vrs->GetBool(stereo_display_settings_section, "tab_enable");
     display_configuration.reverse_enable = vrs->GetBool(stereo_display_settings_section, "reverse_enable");
@@ -158,9 +154,16 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     display_configuration.display_frequency = vrs->GetFloat(stereo_display_settings_section, "display_frequency");
     display_configuration.sleep_count_max = (int)(floor(1600.0 / (1000.0 / display_configuration.display_frequency)));
 
+    // Profile settings
+    display_configuration.hmd_height = vrs->GetFloat(stereo_display_settings_section, "hmd_height");
+    display_configuration.depth = vrs->GetFloat(stereo_display_settings_section, "depth");
+    display_configuration.convergence = vrs->GetFloat(stereo_display_settings_section, "convergence");
+
     // Controller settings
     display_configuration.pitch_enable = vrs->GetBool(stereo_display_settings_section, "pitch_enable");
+    display_configuration.pitch_set = display_configuration.pitch_enable;
     display_configuration.yaw_enable = vrs->GetBool(stereo_display_settings_section, "yaw_enable");
+    display_configuration.yaw_set = display_configuration.yaw_enable;
     char pose_reset_key[1024];
     vrs->GetString(stereo_display_settings_section, "pose_reset_key", pose_reset_key, sizeof(pose_reset_key));
     if (VirtualKeyMappings.find(pose_reset_key) != VirtualKeyMappings.end()) {
@@ -1001,8 +1004,6 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 {
-    static bool pitch_set = config_.pitch_enable;
-    static bool yaw_set = config_.yaw_enable;
     static int sleep_ctrl = 0;
     static int sleep_rest = 0;
     
@@ -1036,10 +1037,10 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
         else if ((config.ctrl_type == TOGGLE || config.ctrl_type == SWITCH) && sleep_ctrl < 1)
         {
             sleep_ctrl = config.sleep_count_max;
-            if (pitch_set) {
+            if (config.pitch_set) {
                 config.pitch_enable = !config.pitch_enable;
             }
-            if (yaw_set) {
+            if (config.yaw_set) {
                 config.yaw_enable = !config.yaw_enable;
             }
         }
@@ -1047,8 +1048,8 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     else if (config.ctrl_type == HOLD && config.ctrl_held)
     {
         config.ctrl_held = false;
-        config.pitch_enable = pitch_set;
-        config.yaw_enable = yaw_set;
+        config.pitch_enable = config.pitch_set;
+        config.yaw_enable = config.yaw_set;
     }
     if (sleep_ctrl > 0) {
         sleep_ctrl--;
@@ -1211,7 +1212,9 @@ void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t 
         config.convergence = jsonConfig.at("convergence").get<float>();
         config.hmd_height = jsonConfig.at("hmd_height").get<float>();
         config.pitch_enable = jsonConfig.at("pitch_enable").get<bool>();
+        config.pitch_set = config.pitch_enable;
         config.yaw_enable = jsonConfig.at("yaw_enable").get<bool>();
+        config.yaw_set = config.yaw_enable;
         config.pose_reset_key = jsonConfig.at("pose_reset_key").get<int>();
         config.reset_xinput = jsonConfig.at("reset_xinput").get<bool>();
         config.ctrl_toggle_key = jsonConfig.at("ctrl_toggle_key").get<int>();
