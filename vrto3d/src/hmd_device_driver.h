@@ -52,12 +52,10 @@ public:
     void AdjustRadius(float delta);
     void SetHeight();
     void SetReset();
-    void LoadSettings(const std::string& app_name, uint32_t device_index);
-    void LoadDefaults(uint32_t device_index);
+    void LoadSettings(StereoDisplayDriverConfiguration& config, uint32_t device_index);
 
 private:
     StereoDisplayDriverConfiguration config_;
-    StereoDisplayDriverConfiguration def_config_;
     std::atomic< float > depth_;
     std::atomic< float > convergence_;
 

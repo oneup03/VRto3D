@@ -103,7 +103,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
     auto* vrs = vr::VRSettings();
     JsonManager json_manager;
-    nlohmann::json jsonConfig = json_manager.readJsonFromFile("default_config.json");
+    json_manager.EnsureDefaultConfigExists();
 
     char model_number[ 1024 ];
     vrs->GetString( stereo_main_settings_section, "model_number", model_number, sizeof( model_number ) );
@@ -121,36 +121,10 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     StereoDisplayDriverConfiguration display_configuration{};
     display_configuration.window_x = 0;
     display_configuration.window_y = 0;
-
-    try {
-        const nlohmann::json& vrto3d_display = jsonConfig.at("vrto3d_display");
-
-        // Load values with defaults if not found in JSON
-        display_configuration.window_width = vrto3d_display.value("window_width", 1920);
-        display_configuration.window_height = vrto3d_display.value("window_height", 1080);
-        display_configuration.render_width = vrto3d_display.value("render_width", 1920);
-        display_configuration.render_height = vrto3d_display.value("render_height", 1080);
-
-        display_configuration.aspect_ratio = vrto3d_display.value("aspect_ratio", 1.77778f);
-        display_configuration.fov = vrto3d_display.value("fov", 90.0f);
-
-        display_configuration.disable_hotkeys = vrto3d_display.value("disable_hotkeys", false);
-        display_configuration.debug_enable = vrto3d_display.value("debug_enable", true);
-        display_configuration.tab_enable = vrto3d_display.value("tab_enable", false);
-        display_configuration.reverse_enable = vrto3d_display.value("reverse_enable", false);
-        display_configuration.depth_gauge = vrto3d_display.value("depth_gauge", false);
-
-        display_configuration.display_latency = vrto3d_display.value("display_latency", 0.011f);
-        display_configuration.display_frequency = vrto3d_display.value("display_frequency", 60.0f);
-    }
-    catch (const nlohmann::json::exception& e) {
-        DriverLog("Error reading default_config.json: %s\n", e.what());
-    }
-    
-    display_configuration.sleep_count_max = (int)(floor(1600.0 / (1000.0 / display_configuration.display_frequency)));
+    json_manager.LoadParamsFromJson(display_configuration);
 
     // Profile settings
-    auto found_cfg = json_manager.LoadConfigFromJson("default_config.json", display_configuration);
+    json_manager.LoadProfileFromJson(DEF_CFG, display_configuration);
 
     // Instantiate our display component
     stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
@@ -522,13 +496,25 @@ void MockControllerDeviceDriver::PollHotkeysThread()
             }
             // Ctrl+F7 Store settings into game profile
             if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
-                save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                SaveSettings();
+                auto config = stereo_display_component_->GetConfig();
+                save_sleep = config.sleep_count_max;
+                config.depth = stereo_display_component_->GetDepth();
+                config.convergence = stereo_display_component_->GetConvergence();
+                JsonManager json_manager;
+                json_manager.SaveProfileToJson(app_name_ + "_config.json", config);
+                BeepSuccess();
             }
             // Ctrl+F10 Reload settings from default.vrsettings
             else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
-                save_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                stereo_display_component_->LoadDefaults(device_index_);
+                auto config = stereo_display_component_->GetConfig();
+                save_sleep = config.sleep_count_max;
+                JsonManager json_manager;
+                if (json_manager.LoadProfileFromJson(DEF_CFG, config))
+                {
+                    stereo_display_component_->LoadSettings(config, device_index_);
+                    DriverLog("Loaded %s profile\n", DEF_CFG.c_str());
+                    BeepSuccess();
+                }
             }
             else if (save_sleep > 0) {
                 save_sleep--;
@@ -616,54 +602,16 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
     if (app_name != app_name_)
     {
         app_name_ = app_name;
-        stereo_display_component_->LoadSettings(app_name, device_index_);
-    }
-}
+        auto config = stereo_display_component_->GetConfig();
 
-
-//-----------------------------------------------------------------------------
-// Purpose: Save Game Specific Settings to Documents\My games\vrto3d\app_name_config.json
-//-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::SaveSettings() {
-    // Create a JSON object to hold all the configuration data
-    nlohmann::json jsonConfig;
-    auto config = stereo_display_component_->GetConfig();
-
-    // Populate the JSON object with settings
-    jsonConfig["depth"] = stereo_display_component_->GetDepth();
-    jsonConfig["convergence"] = stereo_display_component_->GetConvergence();
-    jsonConfig["hmd_height"] = config.hmd_height;
-    jsonConfig["pitch_enable"] = config.pitch_enable;
-    jsonConfig["yaw_enable"] = config.yaw_enable;
-    jsonConfig["pose_reset_key"] = config.pose_reset_key;
-    jsonConfig["reset_xinput"] = config.reset_xinput;
-    jsonConfig["ctrl_toggle_key"] = config.ctrl_toggle_key;
-    jsonConfig["ctrl_toggle_type"] = config.ctrl_type;
-    jsonConfig["ctrl_xinput"] = config.ctrl_xinput;
-    jsonConfig["pitch_radius"] = config.pitch_radius;
-    jsonConfig["ctrl_deadzone"] = config.ctrl_deadzone;
-    jsonConfig["ctrl_sensitivity"] = config.ctrl_sensitivity;
-    jsonConfig["num_user_settings"] = config.num_user_settings;
-
-    // Store user settings as an array
-    for (int i = 0; i < config.num_user_settings; i++) {
-        nlohmann::json userSettings;
-        userSettings["user_load_key"] = config.user_load_key[i];
-        userSettings["user_store_key"] = config.user_store_key[i];
-        userSettings["user_key_type"] = config.user_key_type[i];
-        userSettings["user_depth"] = config.user_depth[i];
-        userSettings["user_convergence"] = config.user_convergence[i];
-        userSettings["load_xinput"] = config.load_xinput[i];
-
-        // Append to JSON array in the main config
-        jsonConfig["user_settings"].push_back(userSettings);
-    }
-
-    // Now write this JSON object to a file
-    JsonManager json_manager;
-    if (json_manager.writeJsonToFile(app_name_ + "_config.json", jsonConfig)) {
-        DriverLog("Settings saved to %s profile\n", app_name_.c_str());
-        BeepSuccess();
+        // Attempt to read the JSON settings file
+        JsonManager json_manager;
+        if (json_manager.LoadProfileFromJson(app_name + "_config.json", config))
+        {
+            stereo_display_component_->LoadSettings(config, device_index_);
+            DriverLog("Loaded %s profile\n", app_name.c_str());
+            BeepSuccess();
+        }
     }
 }
 
@@ -698,7 +646,7 @@ void MockControllerDeviceDriver::Deactivate()
 //-----------------------------------------------------------------------------
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
-    : config_( config ), def_config_(config), depth_(config.depth), convergence_(config.convergence)
+    : config_( config ), depth_(config.depth), convergence_(config.convergence)
 {
 }
 
@@ -1098,91 +1046,12 @@ void StereoDisplayComponent::SetReset()
 //-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::LoadSettings(const std::string& app_name, uint32_t device_index) {
-    JsonManager json_manager;
-    auto config = GetConfig();
-
-    // Attempt to read the JSON settings file
-    nlohmann::json jsonConfig = json_manager.readJsonFromFile(app_name + "_config.json");
-
-    // Check if the JSON file was successfully read
-    if (jsonConfig.is_null()) {
-        DriverLog("No profile found for %s\n", app_name.c_str());
-        return;
-    }
-
-    try {
-        // Attempt to load all settings from the JSON object
-        config.depth = jsonConfig.at("depth").get<float>();
-        config.convergence = jsonConfig.at("convergence").get<float>();
-        config.hmd_height = jsonConfig.at("hmd_height").get<float>();
-        config.pitch_enable = jsonConfig.at("pitch_enable").get<bool>();
-        config.pitch_set = config.pitch_enable;
-        config.yaw_enable = jsonConfig.at("yaw_enable").get<bool>();
-        config.yaw_set = config.yaw_enable;
-        config.pose_reset_key = jsonConfig.at("pose_reset_key").get<int>();
-        config.reset_xinput = jsonConfig.at("reset_xinput").get<bool>();
-        config.ctrl_toggle_key = jsonConfig.at("ctrl_toggle_key").get<int>();
-        config.ctrl_type = jsonConfig.at("ctrl_toggle_type").get<int>();
-        config.ctrl_xinput = jsonConfig.at("ctrl_xinput").get<bool>();
-        config.pitch_radius = jsonConfig.at("pitch_radius").get<float>();
-        config.ctrl_deadzone = jsonConfig.at("ctrl_deadzone").get<float>();
-        config.ctrl_sensitivity = jsonConfig.at("ctrl_sensitivity").get<float>();
-        config.num_user_settings = jsonConfig.at("num_user_settings").get<int>();
-
-        // Resize vectors based on the number of user settings
-        config.user_load_key.resize(config.num_user_settings);
-        config.user_store_key.resize(config.num_user_settings);
-        config.user_key_type.resize(config.num_user_settings);
-        config.user_depth.resize(config.num_user_settings);
-        config.user_convergence.resize(config.num_user_settings);
-        config.prev_depth.resize(config.num_user_settings);
-        config.prev_convergence.resize(config.num_user_settings);
-        config.was_held.resize(config.num_user_settings);
-        config.load_xinput.resize(config.num_user_settings);
-        config.sleep_count.resize(config.num_user_settings);
-
-        // Load the user settings array
-        const auto& userSettingsArray = jsonConfig.at("user_settings");
-        for (int i = 0; i < config.num_user_settings; i++) {
-            const auto& userSetting = userSettingsArray.at(i);
-
-            config.user_load_key[i] = userSetting.at("user_load_key").get<int>();
-            config.user_store_key[i] = userSetting.at("user_store_key").get<int>();
-            config.user_key_type[i] = userSetting.at("user_key_type").get<int>();
-            config.user_depth[i] = userSetting.at("user_depth").get<float>();
-            config.user_convergence[i] = userSetting.at("user_convergence").get<float>();
-            config.load_xinput[i] = userSetting.at("load_xinput").get<bool>();
-        }
-    }
-    catch (const nlohmann::json::exception& e) {
-        // Catch any JSON-related exceptions (missing field, wrong type, etc.)
-        DriverLog("Profile corrupt or missing fields %s: %s\n", app_name.c_str(), e.what());
-        return;
-    }
-
+void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& config, uint32_t device_index)
+{
     // Apply loaded settings
     AdjustDepth(config.depth, false, device_index);
     AdjustConvergence(config.convergence, false, device_index);
-    config.pose_reset = true;
     
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_ = config;
-    DriverLog("Loaded %s profile\n", app_name.c_str());
-    BeepSuccess();
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Reload settings from default.vrsettings
-//-----------------------------------------------------------------------------
-void StereoDisplayComponent::LoadDefaults(uint32_t device_index)
-{
-    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
-    config_ = def_config_;
-    AdjustDepth(config_.depth, false, device_index);
-    AdjustConvergence(config_.convergence, false, device_index);
-    config_.pose_reset = true;
-    DriverLog("Loaded defaults from user config file\n");
-    BeepSuccess();
 }
