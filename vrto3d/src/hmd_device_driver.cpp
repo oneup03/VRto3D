@@ -92,7 +92,6 @@ static void BeepSuccess()
 
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
-static const char *stereo_display_settings_section = "vrto3d_display";
 
 MockControllerDeviceDriver::MockControllerDeviceDriver()
 {
