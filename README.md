@@ -81,10 +81,11 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 - A multi-display configuration setup in fullscreen mode will be the most compatible - see [notes](#displays) for working setups, but single displays can be used. Some mods or games may not work with a single display
 - Install SteamVR
-- In Steam->Settings->Controller
+- If you want to use Steam Input
+    - Open Steam->Settings->Controller
     - Toggle on `Enable Steam Input for Xbox Controllers`
     - Click `Edit` on the `Desktop Layout` and then select `Disable Steam Input`
-- On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
+    - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
 - Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamvR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
 - Close SteamVR
