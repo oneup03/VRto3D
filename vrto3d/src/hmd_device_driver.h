@@ -81,7 +81,6 @@ public:
     void FocusUpdateThread();
 
     void LoadSettings(const std::string& app_name);
-    void SaveSettings();
 
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;

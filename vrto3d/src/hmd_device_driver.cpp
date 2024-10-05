@@ -1027,7 +1027,7 @@ void StereoDisplayComponent::SetHeight()
 
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     if (config_.hmd_height == user_height)
-        config_.hmd_height = 0.1;
+        config_.hmd_height = 0.1f;
     else
         config_.hmd_height = user_height;
 }

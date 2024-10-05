@@ -32,7 +32,10 @@
 
 JsonManager::JsonManager() {
     vrto3dFolder = getDocumentsFolderPath();
-    createFolderIfNotExist(vrto3dFolder);
+    if (vrto3dFolder != "")
+    {
+        createFolderIfNotExist(vrto3dFolder);
+    }
 }
 
 
@@ -51,6 +54,7 @@ std::string JsonManager::getDocumentsFolderPath() {
     }
     else {
         DriverLog("Failed to get Documents folder path\n");
+        return "";
     }
 }
 

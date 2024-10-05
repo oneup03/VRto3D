@@ -42,6 +42,8 @@ public:
 private:
     std::unique_ptr<MockControllerDeviceDriver> my_hmd_device_;
 
+    void* global_mtx_;
+
     std::unordered_set<std::string> skip_processes_ = {
         "vrcompositor.exe",
         "vrserver.exe",

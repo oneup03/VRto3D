@@ -15,7 +15,7 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 #include <algorithm> 
-#include <windows.h>
+#include <Windows.h>
 #include <psapi.h>
 #include <tchar.h>
 
@@ -28,6 +28,8 @@
 //-----------------------------------------------------------------------------
 vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 {
+    global_mtx_ = CreateMutex(NULL, TRUE, L"Global\\VRto3DDriver");
+
     // We need to initialise our driver context to make calls to the server.
     // OpenVR provides a macro to do this for us.
     VR_INIT_SERVER_DRIVER_CONTEXT( pDriverContext );
@@ -116,6 +118,11 @@ void MyDeviceProvider::LeaveStandby()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::Cleanup()
 {
+    if (global_mtx_)
+    {
+        CloseHandle((HANDLE)global_mtx_);
+    }
+
     // Our controller devices will have already deactivated. Let's now destroy them.
     my_hmd_device_ = nullptr;
 }
@@ -140,10 +147,9 @@ std::string MyDeviceProvider::GetProcessName(uint32_t processID)
         {
             GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
         }
+        // Release the handle to the process.
+        CloseHandle(hProcess);
     }
-
-    // Release the handle to the process.
-    CloseHandle(hProcess);
 
     // Convert TCHAR to std::string and return
     std::wstring ws(processName);

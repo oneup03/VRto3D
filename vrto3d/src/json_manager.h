@@ -70,7 +70,7 @@ struct StereoDisplayDriverConfiguration
     float ctrl_deadzone;
     float ctrl_sensitivity;
 
-    int32_t num_user_settings;
+    size_t num_user_settings;
     std::vector<int32_t> user_load_key;
     std::vector<std::string> user_load_str;
     std::vector<int32_t> user_store_key;
