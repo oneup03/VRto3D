@@ -36,6 +36,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 ## Configuration
 
+- VRto3D has to be installed and SteamVR launched once for this config file to show up
 - Modify the `Documents\My Games\vrto3d\default_config.json` for your setup
 - Most changes made to this configuration require a restart of SteamVR to take effect
 - Fields with a `+` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from `default_config.json` using `Ctrl + F10`
@@ -89,7 +90,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Close SteamVR
 - Edit the `Documents\My Games\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
     - Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
-    - Set your render resolution per eye to what you want - can save some performance by reducing this
+    - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
     - Single Display Mode: make sure the `debug_enable` flag is set to `true` to make more games work (not 3DVision compatible)
 - Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
