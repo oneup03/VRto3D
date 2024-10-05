@@ -38,13 +38,27 @@ jobs:
     - name: Build
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}}
 
+    - name: Install md-to-pdf
+      run: npm install -g md-to-pdf
+
+    - name: Install Ghostscript
+      run: choco install ghostscript --yes
+
+    - name: Convert README.md to PDF
+      run: md-to-pdf README.md
+
+    - name: Convert PDF to JPG
+      run: |
+        magick -density 300 README.pdf README-%d.jpg
+        magick README-*.jpg -append -quality 90 README_combined.jpg
+
     - name: Compress artifacts
       uses: vimtor/action-zip@v1.1
       with:
         files: output/drivers/ README.md LICENSE
         dest: "output/${{github.event.repository.name}}.zip"
 
-    - name: Upload artifacts
+    - name: Upload zip artifact
       uses: actions/upload-artifact@v4
       with:
         name: "VRto3D-${{env.CommitHashShort}}"
@@ -57,4 +71,6 @@ jobs:
         automatic_release_tag: "latest"
         prerelease: true
         title: "[${{env.CurrentDate}}] ${{github.event.repository.name}} r${{env.CommitCount}}@${{env.CommitHashShort}}"
-        files: "output/${{github.event.repository.name}}.zip"
+        files: |
+          output/${{github.event.repository.name}}.zip
+          README_combined.jpg
