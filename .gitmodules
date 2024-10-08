@@ -4,3 +4,6 @@
 [submodule "external/json"]
 	path = external/json
 	url = https://github.com/nlohmann/json.git
+[submodule "wiki"]
+	path = wiki
+	url = https://github.com/oneup03/VRto3D.wiki.git

@@ -1,2 +1,11 @@
+markdown: kramdown
+kramdown:
+  input: GFM
 exclude:
   - external
+include:
+  - wiki
+collections:
+  wiki:
+    output: true
+    permalink: /wiki/:path/
