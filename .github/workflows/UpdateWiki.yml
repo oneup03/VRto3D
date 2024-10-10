@@ -1,0 +1,38 @@
+name: Update Wiki Submodule
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  update-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          submodules: true  # Ensures submodules are checked out
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Update Wiki Submodule
+        run: |
+          git submodule update --remote wiki || true
+          cd wiki
+          git fetch origin
+          git merge origin/master --allow-unrelated-histories || true
+          cd ..
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Changes detected, committing..."
+            git add wiki
+            git commit -m "Automated update of wiki submodule"
+            git push
+          else
+            echo "No changes detected, skipping commit."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
