@@ -16,7 +16,7 @@
 - Lume Pad - works great, a bit more expensive, requires [Sunshine/Gamestream + Moonlight](https://support.leiainc.com/lume-pad-2/apps/moonlight3d)
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, currently expensive
 - 3D Vision hardware (only RTX 20x or older) - will have game compatibility issues, hardware is hard to find
-- Virtual Desktop with a VR headset apparently works, but falls under the category of not officially supported
+- Virtual Desktop with a VR headset - apparently works, but will not be officially supported
  
 
 ## Compatible VR Games & Mods
