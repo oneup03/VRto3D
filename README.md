@@ -235,18 +235,42 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen. So if you experience black bars, find a setting you like, save it, and then restart the game
 - It is recommended to use a single convergence setting for all your presets
 - Create any number of user depth & convergence hotkeys in the `user_settings` area of the `default_config.json`
-- A Load key and a Store key can be configured to load and save Depth and Convergence settings for a configuration set
+    - A user preset looks like this:
+    - ```
+        {
+            "user_load_key": "VK_NUMPAD1",
+            "user_store_key": "VK_NUMPAD4",
+            "user_key_type": "switch",
+            "user_depth": 0.5,
+            "user_convergence": 0.1
+        },
+      ```
+- A Load key and a Store key can be configured to load and save Depth and Convergence settings for a preset
     - Load keys can use XInput buttons & combinations as well as single keyboard/mouse keys
         - The Guide button can be used, but not in combinations
         - XInput Combinations can be set like this `"XINPUT_GAMEPAD_A+XINPUT_GAMEPAD_B"`
     - Store keys can only use single keyboard/mouse keys
     - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for these hotkeys
-- The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the user and current every 1.5s, or `"hold"` the user setting until the key is released
-- The Store key will update your user Depth and Convergence setting to the current value
+- The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the preset and the previous setting every 1.5s, or `"hold"` the user setting until the key is released
+- The Store key will update your user Depth and Convergence setting to the current value (this only saves while the game is running - you need to create a game profile to store it permanently)
+- It is recommended to have a single user preset of `"switch"` type that matches the default depth & convergence so you can easily get back to the default
+- Profile Creation Steps:
+    1. Modify or copy and create user preset(s) in `default_config.json` for the game you want to play
+    2. If applicable, modify `hmd_height, pitch_enable, yaw_enable, pose_reset_key, ctrl_toggle_key, ctrl_toggle_type, pitch_radius, ctrl_deadzone, ctrl_sensitivity` for the game profile
+    3. If the game is already running, use `Ctrl + F10` to reload the `default_config.json` with your new settings and presets
+    4. Adjust depth (`Ctrl + F3` and `Ctrl + F4`) & convergence (`Ctrl + F5` and `Ctrl + F6`) for a preset
+    5. Use the configured `user_store_key` to temporarily save the current depth & convergence values to the preset
+    6. Repeat 4 & 5 for each preset you need
+    7. Adjust depth & convergence back to what you want the default to be (if you have a default `"switch"` preset, you can use its configured `user_load_key`)
+    8. If applicable, adjust the `ctrl_sensitivity` with `Ctrl -` and `Ctrl +` and the `pitch_radius` with `Ctrl [` and `Ctrl ]`
+    9. Save the profile with `Ctrl + F7`
+    10. Open your new profile from `Documents\My Games\vrto3d` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
+    11. Close out of SteamVR and the game and restart them. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still repeat steps 4-10 if needed
+    12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
 
 #### Displays
 - Here are some example multi-display configurations that are confirmed to work:
-    - A single display connected to your computer twice in extended mode - switch between the inputs on the monitor as needed to move windows around
+    - A single display connected to your computer twice in extended mode - switch between the inputs on the monitor as needed to move windows around (may need a dummy passthrough for 3dVision)
     - Multiple displays connected in extended mode - easier to move things around and manage
     - A virtual monitor will work, but will prove tricky
         - [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/) for anything except 3DVision
