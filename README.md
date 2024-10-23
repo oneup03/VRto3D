@@ -3,8 +3,8 @@
 - OpenVR Driver that can render in SbS or TaB 3D with other formats converted to through ReShade
 - Compatible games play great with a XInput controller. No motion controls required!
 - Currently targeting OpenVR 2.5.1.
-- Windows-only solution currently, but there are other solutions on Linux like MonadoVR.
-- Check out the video guide here:
+- Windows-only solution currently, but there are other solutions on Linux like Monado XR.
+- Check out the video guide here (there are 2 parts):
 
 [![Video guide available here](https://img.youtube.com/vi/0caYbmcthkg/hqdefault.jpg)](https://www.youtube.com/watch?v=0caYbmcthkg)
 
@@ -26,12 +26,12 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 ## Hotkeys
 - Adjust Depth with `Ctrl + F3` and `Ctrl + F4`
 - Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
-- Save all Depth & Convergence settings (including ones temporarily set with the `user_store_keys`) and all hotkeys and pitch/yaw emulation settings as a profile for the currently running game with `Ctrl + F7` A beep will indicate success
-- Reload the profile settings (ones with a `+`) from `default_config.json` with `Ctrl + F10` A beep will indicate success
+- Save all current settings (ones indicated with a `"+"` under [Configuration](#configuration)) as a profile for the currently running game with `Ctrl + F7` A beep will indicate success
+- Reload the profile settings (ones with a `"+"`) from `default_config.json` with `Ctrl + F10` A beep will indicate success
 - Toggle locking the SteamVR Headset Window to the foreground with `Ctrl + F8`
 - Toggle HMD Height between 0.1m and configured `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed)
-- Check the [User Settings](#user-settings) section for instructions on setting up your own Depth and Convergence presets and also reference the Configuration table below
+- Check the [User Presets](#user-presets) section for instructions on setting up your own Depth and Convergence presets and also reference the Configuration table below
 - When Pitch/Yaw emulation is enabled, you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
 
 
@@ -40,10 +40,9 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - VRto3D has to be installed and SteamVR launched once for this config file to show up
 - Modify the `Documents\My Games\vrto3d\default_config.json` for your setup
 - Most changes made to this configuration require a restart of SteamVR to take effect
-- Fields with a `+` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from `default_config.json` using `Ctrl + F10`
-- If a game's profile exists in `Documents\My Games\vrto3d` then it will override `default_config.json` You will hear a beep to indicate a profile loaded
-- If you want to change a game's profile, either delete it from `Documents\My Games\vrto3d` or use `Ctrl + F10` to reload your `default_config.json` and then `Ctrl + F7` to save over the game's profile
+- Fields with a `"+"` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from `default_config.json` using `Ctrl + F10`
 - Reference [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) strings for user hotkeys
+- Reference [Profile Creation Steps](#profile-creation-steps) for creating a game-specific profile
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
@@ -88,14 +87,14 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Click `Edit` on the `Desktop Layout` and then select `Disable Steam Input`
     - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
 - Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
-- Launch SteamvR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
+- Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
 - Close SteamVR
 - Edit the `Documents\My Games\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
     - Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
     - Single Display Mode: make sure the `debug_enable` flag is set to `true` to make more games work (not 3DVision compatible)
-- Run SteamVR at least once to verify that you see a Headset window. This is usually not needed before running games.
+- Run SteamVR to verify that you see the Headset window covering your entire display. This is usually not needed before running games.
     - The Headset window must be on your primary 3D display
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
 - Try launching a VR game
@@ -230,10 +229,9 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Settings - Load Keys
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
 
-#### User Settings
-- Press `Ctrl + F7` to save all Depth and Convergence (including ones temporarily set with the `user_store_keys`) and all hotkeys and pitch/yaw emulation settings as a profile for the currently running game to your `Documents\My Games\vrto3d` folder
-- If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen. So if you experience black bars, find a setting you like, save it, and then restart the game
-- It is recommended to use a single convergence setting for all your presets
+#### User Presets
+- If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen or you may not see a change immediately. If you reload/restart/reinitialize the VR mod, you should see the change
+- It is recommended to use a single convergence setting for all your presets given the above issue with some VR mods
 - Create any number of user depth & convergence hotkeys in the `user_settings` area of the `default_config.json`
     - A user preset looks like this:
     - ```
@@ -254,19 +252,20 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - The Load key can be configured to `"switch"` to the user depth & convergence setting, `"toggle"` between the preset and the previous setting every 1.5s, or `"hold"` the user setting until the key is released
 - The Store key will update your user Depth and Convergence setting to the current value (this only saves while the game is running - you need to create a game profile to store it permanently)
 - It is recommended to have a single user preset of `"switch"` type that matches the default depth & convergence so you can easily get back to the default
-- Profile Creation Steps:
-    1. Modify or copy and create user preset(s) in `default_config.json` for the game you want to play
-    2. If applicable, modify `hmd_height, pitch_enable, yaw_enable, pose_reset_key, ctrl_toggle_key, ctrl_toggle_type, pitch_radius, ctrl_deadzone, ctrl_sensitivity` for the game profile
-    3. If the game is already running, use `Ctrl + F10` to reload the `default_config.json` with your new settings and presets
-    4. Adjust depth (`Ctrl + F3` and `Ctrl + F4`) & convergence (`Ctrl + F5` and `Ctrl + F6`) for a preset
-    5. Use the configured `user_store_key` to temporarily save the current depth & convergence values to the preset
-    6. Repeat 4 & 5 for each preset you need
-    7. Adjust depth & convergence back to what you want the default to be (if you have a default `"switch"` preset, you can use its configured `user_load_key`)
-    8. If applicable, adjust the `ctrl_sensitivity` with `Ctrl -` and `Ctrl +` and the `pitch_radius` with `Ctrl [` and `Ctrl ]`
-    9. Save the profile with `Ctrl + F7`
-    10. Open your new profile from `Documents\My Games\vrto3d` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
-    11. Close out of SteamVR and the game and restart them. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still repeat steps 4-10 if needed
-    12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
+
+#### Profile Creation Steps:
+1. Modify or copy and create user preset(s) in `default_config.json` for the game you want to play
+2. If applicable, modify `hmd_height, pitch_enable, yaw_enable, pose_reset_key, ctrl_toggle_key, ctrl_toggle_type, pitch_radius, ctrl_deadzone, ctrl_sensitivity` for the game profile
+3. If the game is already running, use `Ctrl + F10` to reload the `default_config.json` with your new settings and presets
+4. Adjust depth (`Ctrl + F3` and `Ctrl + F4`) & convergence (`Ctrl + F5` and `Ctrl + F6`) for a preset
+5. Use the configured `user_store_key` to temporarily save the current depth & convergence values to the preset
+6. Repeat 4 & 5 for each preset you need
+7. Adjust depth & convergence back to what you want the default to be (if you have a default `"switch"` preset, you can use its configured `user_load_key`)
+8. If applicable, adjust the `ctrl_sensitivity` with `Ctrl -` and `Ctrl +` and the `pitch_radius` with `Ctrl [` and `Ctrl ]`
+9. Save the profile with `Ctrl + F7`
+10. Open your new profile from `Documents\My Games\vrto3d` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
+11. Close out of SteamVR and the game and restart the game. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still repeat steps 4-10 if needed
+12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
 
 #### Displays
 - Here are some example multi-display configurations that are confirmed to work:
@@ -285,6 +284,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Change to the `Startup / Shutdown` tab
     - Click `Manage Add-Ons`
     - Turn `Off` any virtual HMD drivers (ALVR, VRidge, OpenTrack, VCR, iVRy, etc)
+    - You can also try forcing SteamVR to use the VRto3D driver by editing `Steam\config\steamvr.vrsettings` and under the `"steamvr" : {` section, add this line: `"forcedDriver" : "vrto3d",`
     - if issues still arise, try a [Clean SteamVR Install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/) and delete your `Steam\steamapps\common\SteamVR` folder
 - If you have a VR headset and run into issues with this driver, here's some things to try:
     - Disconnect VR headset from computer
