@@ -52,11 +52,14 @@ jobs:
         magick -density 300 README.pdf README-%d.jpg
         magick README-*.jpg -append -quality 90 README_combined.jpg
 
-    - name: Compress artifacts
+    - name: Compress main artifacts
       uses: vimtor/action-zip@v1.1
       with:
         files: output/drivers/ README.md LICENSE
         dest: "output/${{github.event.repository.name}}.zip"
+
+    - name: Zip vrto3d_profiles folder
+      run: Compress-Archive -Path vrto3d_profiles/* -DestinationPath vrto3d_profiles.zip
 
     - name: Upload zip artifact
       uses: actions/upload-artifact@v4
@@ -73,4 +76,6 @@ jobs:
         title: "[${{env.CurrentDate}}] ${{github.event.repository.name}} r${{env.CommitCount}}@${{env.CommitHashShort}}"
         files: |
           output/${{github.event.repository.name}}.zip
+          vrto3d_profiles.zip
           README_combined.jpg
+          
