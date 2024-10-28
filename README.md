@@ -2,6 +2,7 @@
 
 - OpenVR Driver that can render in SbS or TaB 3D with other formats converted to through ReShade
 - Compatible games play great with a XInput controller. No motion controls required!
+- VRto3D itself does not "fix" games for 3D, but it allows you to run VR modded (fixed) games on a 3D Display
 - Currently targeting OpenVR 2.5.1.
 - Windows-only solution currently, but there are other solutions on Linux like Monado XR.
 - Check out the video guide here (there are 2 parts):
@@ -39,7 +40,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 - VRto3D has to be installed and SteamVR launched once for this config file to show up
 - Modify the `Documents\My Games\vrto3d\default_config.json` for your setup
-- Most changes made to this configuration require a restart of SteamVR to take effect
+- Some changes made to this configuration require a restart of SteamVR to take effect
 - Fields with a `"+"` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from `default_config.json` using `Ctrl + F10`
 - Reference [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) strings for user hotkeys
 - Reference [Profile Creation Steps](#profile-creation-steps) for creating a game-specific profile
@@ -94,6 +95,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
     - Single Display Mode: make sure the `debug_enable` flag is set to `true` to make more games work (not 3DVision compatible)
+- Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Documents\My Games\vrto3d\` folder
 - Run SteamVR to verify that you see the Headset window covering your entire display. This is usually not needed before running games.
     - The Headset window must be on your primary 3D display
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
