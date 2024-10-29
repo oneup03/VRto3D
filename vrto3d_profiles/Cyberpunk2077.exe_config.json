@@ -31,6 +31,13 @@
             "user_key_type": "hold",
             "user_depth": 0.01699967123568058,
             "user_convergence": 0
+        },
+        {
+            "user_load_key": "VK_RMOUSE",
+            "user_store_key": "VK_NUMPAD6",
+            "user_key_type": "hold",
+            "user_depth": 0.01699967123568058,
+            "user_convergence": 0
         }
     ]
 }
