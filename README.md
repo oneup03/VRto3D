@@ -100,25 +100,27 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - The Headset window must be on your primary 3D display
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
 - Try launching a VR game
-- Multi-Display setups:
-    - Move all windows besides the `Headset Window` over to your second display
-        - Can use mouse to drag over
-        - Can use Windows shortcut keys to move windowed programs around `Win + Left/Right`
-        - Can use Windows shortcut keys to move fullscreen programs and the SteamVR Headset Window around `Shift + Win + Left/Right`
-        - May need to make the game windowed either in-game settings or with `Alt + Enter`
-    - If running SteamVR in fullscreen mode (not the default but can be set with debug_enable=false)
-        - Click on the headset window to make it fullscreen on your primary display
-        - If the Headset Window isn't fullscreen then you may get a black screen or some UI may not render in-game
-        - AVOID using `Alt + Tab` as this is more likely to exit fullscreen
-        - SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice or the headset window again to fix it
-    - Click on the game's window on your second display for control input to work
-- Single Display setup:
-    - Mouse controls will not be usable in single display mode as you will click on the headset window in the foreground and input will not register in-game.
-    - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
-    - Make the SteamVR Headset Window in focus on your display
-    - Press `Ctrl + F8` to toggle locking the headset window to the foreground
-    - Use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
-    - To quit, `Alt + Tab` to switch to the headset window and press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
+#### Multi-Display Setup:
+- Keyboard and Mouse are usable, but make sure the mouse is captured by the 2D game's window
+- Move all windows besides the `Headset Window` over to your second display
+    - Some games provide the option to change which display to use - this is preferred over the options below
+    - Can use mouse to drag over
+    - Can use Windows shortcut keys to move windowed programs around `Win + Left/Right`
+    - Can use Windows shortcut keys to move fullscreen programs and the SteamVR Headset Window around `Shift + Win + Left/Right`
+    - May need to make the game windowed either in-game settings or with `Alt + Enter`
+- If running SteamVR in fullscreen mode (not the default but can be set with debug_enable=false)
+    - Click on the headset window to make it fullscreen on your primary display
+    - If the Headset Window isn't fullscreen then you may get a black screen or some UI may not render in-game
+    - AVOID using `Alt + Tab` as this is more likely to exit fullscreen
+    - SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice or the headset window again to fix it
+- Click on the game's window on your second display for control input to work
+#### Single-Display Setup:
+- Mouse controls will not be usable in single display mode as you will click on the headset window in the foreground and input will not register in-game.
+- Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
+- Make the SteamVR Headset Window in focus on your display
+- Press `Ctrl + F8` to toggle locking the headset window to the foreground
+- Use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
+- To quit, `Alt + Tab` to switch to the headset window and press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
 
 
 ## Interlaced, Checkerboard, and Anaglyph Installation (only if you need this output format)
@@ -176,38 +178,47 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 - This will be the worst experience due to the finicky nature of 3DVision drivers. It is highly recommended to get a different 3D Display to use moving forward.
 - Only Driver v425.31 or 452.06 may work, so only RTX20 series or older
-    - Some DX12 games are not compatible with these old drivers (crashes)
-    - Having 3DVision enabled will crash DX12 games
-    - Make sure your game runs on old drivers with 3D disabled before attempting to get it working with VRto3D
+    - Some DX12 games are not compatible with these old drivers (crashes), but the majority will still work and all UEVR games are compatible thus far
+    - Having 3DVision enabled will crash DX12 games when you launch them
+    - Make sure your game runs on old drivers with 3D disabled before attempting to get it working with VRto3D (some games will complain about your driver but still run fine)
     - If you get a black screen while trying to run SteamVR + 3DVision, you may have to hard reset
     - Only Multi-Display setups will work due to 3DVision needing to always be fullscreen to activate
+    - You need multiple displays plugged into you Nvidia GPU - software virtual monitors will not work, but a [hardware-based passthrough](https://a.co/d/gUkhWda) or [dummy plug](https://a.co/d/9T6ZBkB) should work
     - If you run into one-eye issues or other weirdness, try using DDU and reinstalling the driver
-- Complete the [Base Installation](#base-installation) section
-- If you want full resolution per eye, enable DSR 4x in Nvidia Control Panel -> Manage 3D Settings
-- Modify the `window_width` and `window_height` in `Documents\My Games\vrto3d\default_config.json` to match your fullscreen resolution
-    - This should match your DSR 4x resolution if you're using DSR
-- Modify the `render_width` and `render_height` to be the resolution you want per eye, can be lower or higher than the window setting
-    - Recommended to set this to your monitors normal non-DSR resolution to avoid the performance hit
-- Set the `debug_enable` flag to `false` to enable fullscreen mode ***3D will not work if you miss this setting***
+#### 3DVision Initial Setup
+- Complete the [Base Installation](#base-installation) section and follow the multi-display setup
+- If you want full resolution per eye, enable DSR 4x in Nvidia Control Panel -> Manage 3D Settings, and then set your desktop resolution to match
+- Edit the `Documents\My Games\vrto3d\default_config.json` config file
+    - Set the `window_width` and `window_height` to match your fullscreen desktop resolution
+    - Set the `render_width` and `render_height` to be the resolution you want per eye, can be lower or higher than the window setting, 1920x1080 recommended for 2080ti
+    - Set the `debug_enable` flag to `false` to enable fullscreen mode ***3D will not work if you miss this setting***
 - Download Bo3b's [SbS to 3DVision](https://bo3b.s3.amazonaws.com/SD3D_eng.7z) tool and extract the contents to your `Steam\steamapps\common\SteamVR\bin\win64` folder
 - Enable 3D and Global hack. [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) can do this
-- Run SteamVR from Steam - you will have to do this before running any game with a 3DVision setup
-- This configuration step should only need to be done once:
-    - Press `Home` to bring up the ReShade menu and select the SBS `SBS_to_Double.fx` shader and click `Reload`
-    - Enable ReShade's `Performance Mode` checkbox
-    - The Headset window has to be in focus for 3DVision to trigger - try clicking on it
-    - May need to press `Ctrl + T` to get 3D to trigger
-    - If it's still not working, try closing SteamVR and trying again
-    - If 3D flickers on and off, try toggling 3D in Nvidia Control Panel
+- Run SteamVR from Steam
+- Press `Home` to bring up the ReShade menu and select the SBS `SBS_to_Double.fx` shader and click `Reload`
+- Enable ReShade's `Performance Mode` checkbox
+- The Headset window has to be in focus for 3DVision to trigger - try clicking on it
+- May need to press `Ctrl + T` to get 3D to trigger
+- If it's still not working, try closing SteamVR and trying again
+- If 3D flickers on and off, try toggling 3D in Nvidia Control Panel
+- Close SteamVR
+#### 3DVision Steps to Run any game (must be done every time)
+- Enable 3D from Nvidia Control Panel
+    - If you use 3D Fix Manager instead of Nvidia Control Panel for these steps, your PC may crash
+- Launch SteamVR and verify that 3DVision is displaying properly with just SteamVR
+- Use `Ctrl + Alt + Insert` to dismiss the 3DVision Green text
 - Disable 3D from Nvidia Control Panel (This may not be needed if you are running a VR-native game)
-- Run your Game
-- Move Game window to your second display
+    - It is normal for the SteamVR window to display `Warning: attempt to run Stereoscopic 3D in non-stereo display mode`
+- Launch your Game
+- Make Game display in Windowed mode in-game or via `Alt + Enter`
+- Move Game window to your second display - reference [Multi-Display Setup](#multi-display-setup) section for methods to do this
 - If needed, inject VR mod
-- Make SteamVR Headset window fullscreen on main display by clicking on it
-    - If you get complaints about running in a non-stereo mode, Enable 3D in Nvidia Control Panel again
+- Verify that SteamVR Headset window is displaying the game alongside the 2D Game window
+- Enable 3D from Nvidia Control Panel (if you disabled it)
+- Make SteamVR Headset window fullscreen on 3DVision display by clicking in it
     - SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice or the headset window again to fix it
-- Click back on the game window on second display and hopefully input works and 3D is still displaying
-    - Changing the game window to windowed mode may help to make sure it doesn't trigger a go-fullscreen event and thus disable 3D on your 3D display
+- Click back on the 2D game window on your second display and hopefully input works and 3D is still displaying
+    - `Alt + Tab` will break 3DVision, so don't use it and just move the mouse to your second display instead
 
 
 ## Notes
