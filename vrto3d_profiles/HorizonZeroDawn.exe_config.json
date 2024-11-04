@@ -25,8 +25,22 @@
             "user_depth": 0.01599999889731407,
             "user_convergence": 0
         },
+		{
+            "user_load_key": "VK_NUMPAD2",
+            "user_store_key": "VK_NUMPAD5",
+            "user_key_type": "toggle",
+            "user_depth": 0.01599999889731407,
+            "user_convergence": 0
+        },
         {
             "user_load_key": "XINPUT_GAMEPAD_LEFT_TRIGGER",
+            "user_store_key": "VK_NUMPAD6",
+            "user_key_type": "hold",
+            "user_depth": 0.25,
+            "user_convergence": 0
+        },
+		{
+            "user_load_key": "VK_RMOUSE",
             "user_store_key": "VK_NUMPAD6",
             "user_key_type": "hold",
             "user_depth": 0.25,
