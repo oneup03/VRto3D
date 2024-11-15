@@ -13,7 +13,7 @@
 ## Compatible 3D Displays
 - 3D TVs - work great if you can find one
 - 3D Projectors - work great, but need more space and may be expensive
-- AR Glasses (Rokid, Xreal, Viture) - work great, relatively inexpensive. If you don't have a USBC port with DP-Alt mode on your PC, they require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) - choose one with SBS and audio support. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
+- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, relatively inexpensive. If you don't have a USBC port with DP-Alt mode on your PC, they require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) - choose one with SBS and audio support. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
 - Lume Pad - works great, a bit more expensive, requires [Sunshine/Gamestream + Moonlight](https://support.leiainc.com/lume-pad-2/apps/moonlight3d)
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, currently expensive
 - 3D Vision hardware (only RTX 20x or older) - will have game compatibility issues, hardware is hard to find
@@ -201,6 +201,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - May need to press `Ctrl + T` to get 3D to trigger
 - If it's still not working, try closing SteamVR and trying again
 - If 3D flickers on and off, try toggling 3D in Nvidia Control Panel
+- If the 3D Headset Window goes black, try temporarily moving the game window back to your 3D display, get 3D to trigger once, then move the game window to your 2nd display
 - Close SteamVR
 #### 3DVision Steps to Run any game (must be done every time)
 - Enable 3D from Nvidia Control Panel
@@ -282,11 +283,12 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 #### Displays
 - Here are some example multi-display configurations that are confirmed to work:
-    - A single display connected to your computer twice in extended mode - switch between the inputs on the monitor as needed to move windows around (may need a dummy passthrough for 3dVision)
+    - A single display connected to your computer twice in extended mode - switch between the inputs on the monitor as needed to move windows around (may need a dummy passthrough for 3DVision)
     - Multiple displays connected in extended mode - easier to move things around and manage
     - A virtual monitor will work, but will prove tricky
         - [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/) for anything except 3DVision
-        - A [hardware-based passthrough](https://a.co/d/gUkhWda) or [dummy plug](https://a.co/d/9T6ZBkB) should work with 3dVision
+        - [This one also works](https://www.amyuni.com/forum/viewtopic.php?t=3030) but also probably won't work with 3DVision
+        - A [hardware-based passthrough](https://a.co/d/gUkhWda) or [dummy plug](https://a.co/d/9T6ZBkB) should work with 3DVision
         - Sunshine/Moonlight is compatible
 
 #### Troubleshooting
