@@ -182,8 +182,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Having 3DVision enabled will crash DX12 games when you launch them
     - Make sure your game runs on old drivers with 3D disabled before attempting to get it working with VRto3D (some games will complain about your driver but still run fine)
     - If you get a black screen while trying to run SteamVR + 3DVision, you may have to hard reset
-    - Only Multi-Display setups will work due to 3DVision needing to always be fullscreen to activate
-    - You need multiple displays plugged into you Nvidia GPU - software virtual monitors will not work, but a [hardware-based passthrough](https://a.co/d/gUkhWda) or [dummy plug](https://a.co/d/9T6ZBkB) should work
+    - You can use a single monitor, but only Multi-Display mode will work due to 3DVision needing to always be fullscreen to activate. See [Displays](#displays) for options
     - If you run into one-eye issues or other weirdness, try using DDU and reinstalling the driver
 #### 3DVision Initial Setup
 - Complete the [Base Installation](#base-installation) section and follow the multi-display setup
@@ -208,7 +207,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - If you use 3D Fix Manager instead of Nvidia Control Panel for these steps, your PC may crash
 - Launch SteamVR and verify that 3DVision is displaying properly with just SteamVR
 - Use `Ctrl + Alt + Insert` to dismiss the 3DVision Green text
-- Disable 3D from Nvidia Control Panel (This may not be needed if you are running a VR-native game)
+- Disable 3D from Nvidia Control Panel (This may not be needed if you are running a VR-native or non-DX12 game)
     - It is normal for the SteamVR window to display `Warning: attempt to run Stereoscopic 3D in non-stereo display mode`
 - Launch your Game
 - Make Game display in Windowed mode in-game or via `Alt + Enter`
@@ -282,14 +281,15 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
 
 #### Displays
+- Make sure you set your displays to ***EXTENDED MODE*** or this will not work
 - Here are some example multi-display configurations that are confirmed to work:
-    - A single display connected to your computer twice in extended mode - switch between the inputs on the monitor as needed to move windows around (may need a dummy passthrough for 3DVision)
-    - Multiple displays connected in extended mode - easier to move things around and manage
-    - A virtual monitor will work, but will prove tricky
-        - [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/) for anything except 3DVision
-        - [This one also works](https://www.amyuni.com/forum/viewtopic.php?t=3030) but also probably won't work with 3DVision
-        - A [hardware-based passthrough](https://a.co/d/gUkhWda) or [dummy plug](https://a.co/d/9T6ZBkB) should work with 3DVision
-        - Sunshine/Moonlight is compatible
+- A single display connected to your computer twice - switch between the inputs on the monitor as needed to move windows around
+- Multiple displays connected - easier to move things around and manage
+- A [dummy passthrough](https://a.co/d/gUkhWda) or [dummy plug](https://a.co/d/9T6ZBkB) works, but you may not be able to see what you're doing
+- A software virtual monitor will work for non-3DVision setups, but will prove tricky
+    - [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/)
+    - [This one also works](https://www.amyuni.com/forum/viewtopic.php?t=3030)
+    - Sunshine/Moonlight is compatible
 
 #### Troubleshooting
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings`
