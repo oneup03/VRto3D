@@ -139,8 +139,8 @@ void JsonManager::EnsureDefaultConfigExists()
             {"hmd_height", 1.0},
             {"aspect_ratio", 1.77778},
             {"fov", 90.0},
-            {"depth", 0.5},
-            {"convergence", 0.02},
+            {"depth", 0.2},
+            {"convergence", 3.0},
             {"disable_hotkeys", false},
             {"tab_enable", false},
             {"reverse_enable", false},
@@ -161,22 +161,22 @@ void JsonManager::EnsureDefaultConfigExists()
                     {"user_load_key", "VK_NUMPAD1"},
                     {"user_store_key", "VK_NUMPAD4"},
                     {"user_key_type", "switch"},
-                    {"user_depth", 0.5},
-                    {"user_convergence", 0.02}
+                    {"user_depth", 0.4},
+                    {"user_convergence", 3.0}
                 },
                 {
                     {"user_load_key", "XINPUT_GAMEPAD_GUIDE"},
                     {"user_store_key", "VK_NUMPAD5"},
                     {"user_key_type", "toggle"},
                     {"user_depth", 0.1},
-                    {"user_convergence", 0.02}
+                    {"user_convergence", 3.0}
                 },
                 {
                     {"user_load_key", "XINPUT_GAMEPAD_LEFT_TRIGGER"},
                     {"user_store_key", "VK_NUMPAD6"},
                     {"user_key_type", "hold"},
                     {"user_depth", 0.25},
-                    {"user_convergence", 0.02}
+                    {"user_convergence", 3.0}
                 }
             }}
         };
@@ -203,10 +203,10 @@ void JsonManager::EnsureDefaultConfigExists()
 //-----------------------------------------------------------------------------
 void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
 {
-    // Read the JSON configuration from the file
-    nlohmann::json jsonConfig = readJsonFromFile(DEF_CFG);
-    
     try {
+        // Read the JSON configuration from the file
+        nlohmann::json jsonConfig = readJsonFromFile(DEF_CFG);
+
         // Load values directly from the base level of the JSON
         config.window_width = jsonConfig.at("window_width").get<int>();
         config.window_height = jsonConfig.at("window_height").get<int>();
@@ -237,15 +237,15 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
 //-----------------------------------------------------------------------------
 bool JsonManager::LoadProfileFromJson(const std::string& filename, StereoDisplayDriverConfiguration& config)
 {
-    // Read the JSON configuration from the file
-    nlohmann::json jsonConfig = readJsonFromFile(filename);
-
-    if (jsonConfig.is_null() && filename != DEF_CFG) {
-        DriverLog("No profile found for %s\n", filename.c_str());
-        return false;
-    }
-
     try {
+        // Read the JSON configuration from the file
+        nlohmann::json jsonConfig = readJsonFromFile(filename);
+
+        if (jsonConfig.is_null() && filename != DEF_CFG) {
+            DriverLog("No profile found for %s\n", filename.c_str());
+            return false;
+        }
+
         // Profile settings
         config.hmd_height = jsonConfig.at("hmd_height").get<float>();
         config.depth = jsonConfig.at("depth").get<float>();
