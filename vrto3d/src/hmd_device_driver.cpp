@@ -487,11 +487,11 @@ void MockControllerDeviceDriver::PollHotkeysThread()
             }
             // Ctrl+F5 Decrease Convergence
             if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
-                stereo_display_component_->AdjustConvergence(-0.001f, true, device_index_);
+                stereo_display_component_->AdjustConvergence(0.01f, true, device_index_);
             }
             // Ctrl+F6 Increase Convergence
             else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
-                stereo_display_component_->AdjustConvergence(0.001f, true, device_index_);
+                stereo_display_component_->AdjustConvergence(-0.01f, true, device_index_);
             }
             // Ctrl+F7 Store settings into game profile
             if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
@@ -733,28 +733,28 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
 void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, float *pfRight, float *pfTop, float *pfBottom )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
+
     // Convert horizontal FOV from degrees to radians
     float horFovRadians = tan((config_.fov * (M_PI / 180.0f)) / 2);
 
-    // Calculate the vertical FOV in radians
-    float verFovRadians = tan(atan(horFovRadians / config_.aspect_ratio));
+    // Calculate vertical FOV in radians
+    float verFovRadians = horFovRadians / config_.aspect_ratio;
 
-    // Get convergence value
-    float convergence = GetConvergence();
+    // IPD-based horizontal offset
+    float depth = GetDepth();
+    float eyeOffset = (eEye == vr::Eye_Left) ? -depth * 0.5f : depth * 0.5f;
 
-    // Calculate the raw projection values
+    float focalLength = GetConvergence();
+
+    // Shift in tangent space based on focal length
+    float horizontalShift = eyeOffset / focalLength;
+
+    // Set frustum bounds
     *pfTop = -verFovRadians;
     *pfBottom = verFovRadians;
+    *pfLeft = -horFovRadians + horizontalShift;
+    *pfRight = horFovRadians + horizontalShift;
 
-    // Adjust the frustum based on the eye
-    if (eEye == vr::Eye_Left) {
-        *pfLeft = -horFovRadians + convergence;
-        *pfRight = horFovRadians + convergence;
-    }
-    else {
-        *pfLeft = -horFovRadians - convergence;
-        *pfRight = horFovRadians - convergence;
-    }
 }
 
 //-----------------------------------------------------------------------------
@@ -804,8 +804,10 @@ StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_t device_index)
 {
     float cur_depth = GetDepth();
-    if (is_delta)
+    if (is_delta) {
         new_depth += cur_depth;
+        new_depth = (new_depth < 0) ? 0 : new_depth;
+    }
     while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
     vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index);
     vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
@@ -818,8 +820,10 @@ void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_
 void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index)
 {
     float cur_conv = GetConvergence();
-    if (is_delta)
+    if (is_delta) {
         new_conv += cur_conv;
+        new_conv = (new_conv < 0.1) ? 0.1 : new_conv;
+    }
     if (cur_conv == new_conv)
         return;
     while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
