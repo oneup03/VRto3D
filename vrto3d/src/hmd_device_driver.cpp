@@ -741,20 +741,15 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
     float verFovRadians = horFovRadians / config_.aspect_ratio;
 
     // IPD-based horizontal offset
-    float depth = GetDepth();
-    float eyeOffset = (eEye == vr::Eye_Left) ? -depth * 0.5f : depth * 0.5f;
-
-    float focalLength = GetConvergence();
-
-    // Shift in tangent space based on focal length
-    float horizontalShift = eyeOffset / focalLength;
+    float sep = GetDepth();
+    float conv = GetConvergence();
+    float eyeOffset = (eEye == vr::Eye_Left) ? sep * 0.5f / conv : -sep * 0.5f / conv;
 
     // Set frustum bounds
     *pfTop = -verFovRadians;
     *pfBottom = verFovRadians;
-    *pfLeft = -horFovRadians + horizontalShift;
-    *pfRight = horFovRadians + horizontalShift;
-
+    *pfLeft = -horFovRadians + eyeOffset;
+    *pfRight = horFovRadians + eyeOffset;
 }
 
 //-----------------------------------------------------------------------------

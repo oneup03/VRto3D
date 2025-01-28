@@ -55,7 +55,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
 | `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`         |
 | `depth` +           | `float` | The max separation. Overrides VR's IPD field.                                               | `0.5`          |
-| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `0.02`         |
+| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `10.0`         |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
@@ -75,7 +75,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `user_store_key` +  | `string`| The Virtual-Key Code to store user preset temporarily                                       | `"VK_NUMPAD4"` |
 | `user_key_type` +   | `string`| The store key's behavior ("switch" "toggle" "hold")                                         | `"switch"`     |
 | `user_depth` +      | `float` | The separation value for a user preset                                                      | `0.5`          |
-| `user_convergence` +| `float` | The convergence value for a user preset                                                     | `0.02`         |
+| `user_convergence` +| `float` | The convergence value for a user preset                                                     | `10.0`         |
 
 
 ## Base Installation
