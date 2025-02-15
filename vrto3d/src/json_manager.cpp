@@ -214,7 +214,6 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         config.render_height = jsonConfig.at("render_height").get<int>();
 
         config.aspect_ratio = jsonConfig.at("aspect_ratio").get<float>();
-        config.fov = jsonConfig.at("fov").get<float>();
 
         config.disable_hotkeys = jsonConfig.at("disable_hotkeys").get<bool>();
         config.debug_enable = jsonConfig.at("debug_enable").get<bool>();
@@ -248,6 +247,7 @@ bool JsonManager::LoadProfileFromJson(const std::string& filename, StereoDisplay
 
         // Profile settings
         config.hmd_height = jsonConfig.at("hmd_height").get<float>();
+        config.fov = jsonConfig.at("fov").get<float>();
         config.depth = jsonConfig.at("depth").get<float>();
         config.convergence = jsonConfig.at("convergence").get<float>();
 
@@ -370,6 +370,7 @@ void JsonManager::SaveProfileToJson(const std::string& filename, StereoDisplayDr
 
     // Populate the JSON object with settings
     jsonConfig["hmd_height"] = config.hmd_height;
+    jsonConfig["fov"] = config.fov;
     jsonConfig["depth"] = config.depth;
     jsonConfig["convergence"] = config.convergence;
     jsonConfig["pitch_enable"] = config.pitch_enable;
