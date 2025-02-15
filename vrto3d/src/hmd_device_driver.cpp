@@ -266,6 +266,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
     focus_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
+    depth_thread_ = std::thread(&MockControllerDeviceDriver::AutoDepthThread, this);
 
     HANDLE thread_handle = pose_thread_.native_handle();
 
@@ -594,6 +595,94 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 
 
 //-----------------------------------------------------------------------------
+// Purpose: Receive Depth Values from Game
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::AutoDepthThread() {
+    const std::string pipeName = R"(\\.\pipe\AutoDepth)";
+
+    while (is_active_) {
+        // Create the named pipe in NON-BLOCKING mode
+        HANDLE hPipe = CreateNamedPipeA(
+            pipeName.c_str(),
+            PIPE_ACCESS_INBOUND,        // Read-only access
+            PIPE_TYPE_MESSAGE |         // Message-type pipe
+            PIPE_READMODE_MESSAGE |     // Message read mode
+            PIPE_NOWAIT,                // Non-blocking mode (prevents blocking when client disconnects)
+            1,                          // Max instances
+            512,                        // Output buffer size
+            512,                        // Input buffer size
+            0,                          // Default timeout
+            NULL                        // Default security attributes
+        );
+
+        if (hPipe == INVALID_HANDLE_VALUE) {
+            DriverLog("Failed to create named pipe. Error: %d\n", GetLastError());
+            std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Prevent CPU overuse
+            continue;
+        }
+
+        DriverLog("Waiting for depth client to connect...\n");
+
+        while (is_active_) {
+            // Check if a client is trying to connect
+            BOOL connected = ConnectNamedPipe(hPipe, NULL);
+            DWORD err = GetLastError();
+
+            if (connected || err == ERROR_PIPE_CONNECTED) {
+                DriverLog("Client connected! Receiving values...\n");
+                break; // Proceed to read data
+            }
+            else if (err == ERROR_NO_DATA || err == ERROR_PIPE_LISTENING) {
+                //DriverLog("No client yet, waiting...\n");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Prevent tight loop
+            }
+            else {
+                DriverLog("Failed to connect to client. Error: %d\n", err);
+                CloseHandle(hPipe);
+                break; // Recreate pipe
+            }
+
+            // Check if we should exit immediately
+            if (!is_active_) {
+                DriverLog("Exiting connection loop...\n");
+                CloseHandle(hPipe);
+                return;
+            }
+        }
+
+        char buffer[16]; // Buffer for received data
+        DWORD bytesRead;
+
+        // Read data continuously until client disconnects
+        while (is_active_) {
+            BOOL success = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL);
+            if (!success || bytesRead == 0) {
+                DWORD readErr = GetLastError();
+                if (readErr == ERROR_NO_DATA || readErr == ERROR_PIPE_LISTENING) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Prevent busy waiting
+                    continue;
+                }
+
+                DriverLog("Depth client disconnected. Reconnecting...\n");
+                break; // Exit inner loop and recreate the pipe
+            }
+
+            // Null-terminate received data
+            buffer[bytesRead] = '\0';
+            //DriverLog("Received value: %s\n", buffer);
+
+            // Convert to float safely
+            float depthValue = strtof(buffer, nullptr);
+            stereo_display_component_->AdjustDepth(depthValue, false, device_index_);
+        }
+
+        // Close the current pipe handle (ready to reconnect)
+        CloseHandle(hPipe);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
@@ -633,6 +722,7 @@ void MockControllerDeviceDriver::Deactivate()
         pose_thread_.join();
         hotkey_thread_.join();
         focus_thread_.join();
+        depth_thread_.join();
     }
 
     // unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called

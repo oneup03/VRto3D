@@ -79,6 +79,7 @@ public:
     void PoseUpdateThread();
     void PollHotkeysThread();
     void FocusUpdateThread();
+    void AutoDepthThread();
 
     void LoadSettings(const std::string& app_name);
 
@@ -100,4 +101,5 @@ private:
     std::thread pose_thread_;
     std::thread hotkey_thread_;
     std::thread focus_thread_;
+    std::thread depth_thread_;
 };
