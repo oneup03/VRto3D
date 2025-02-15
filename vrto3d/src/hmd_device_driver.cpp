@@ -86,7 +86,7 @@ static void SwitchToXinpuGetStateEx()
 static void BeepSuccess()
 {
     // High beep for success
-    Beep(1800, 400);
+    Beep(400, 400);
 }
 
 
