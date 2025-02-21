@@ -617,7 +617,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 
         if (hPipe == INVALID_HANDLE_VALUE) {
             DriverLog("Failed to create named pipe. Error: %d\n", GetLastError());
-            std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Prevent CPU overuse
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
             continue;
         }
 
@@ -633,8 +633,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
                 break; // Proceed to read data
             }
             else if (err == ERROR_NO_DATA || err == ERROR_PIPE_LISTENING) {
-                //DriverLog("No client yet, waiting...\n");
-                std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Prevent tight loop
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
             else {
                 DriverLog("Failed to connect to client. Error: %d\n", err);
@@ -650,7 +649,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
             }
         }
 
-        char buffer[16]; // Buffer for received data
+        char buffer[16];
         DWORD bytesRead;
 
         // Read data continuously until client disconnects
@@ -659,7 +658,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
             if (!success || bytesRead == 0) {
                 DWORD readErr = GetLastError();
                 if (readErr == ERROR_NO_DATA || readErr == ERROR_PIPE_LISTENING) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Prevent busy waiting
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
                     continue;
                 }
 
@@ -667,11 +666,8 @@ void MockControllerDeviceDriver::AutoDepthThread() {
                 break; // Exit inner loop and recreate the pipe
             }
 
-            // Null-terminate received data
+            // Convert to float
             buffer[bytesRead] = '\0';
-            //DriverLog("Received value: %s\n", buffer);
-
-            // Convert to float safely
             float depthValue = strtof(buffer, nullptr);
             stereo_display_component_->AdjustDepth(depthValue, false, device_index_);
         }
