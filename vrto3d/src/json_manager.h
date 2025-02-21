@@ -107,8 +107,8 @@ private:
         {"hmd_height", 1.0},
         {"aspect_ratio", 1.77778},
         {"fov", 90.0},
-        {"depth", 0.5},
-        {"convergence", 10.0},
+        {"depth", 0.4},
+        {"convergence", 4.0},
         {"disable_hotkeys", false},
         {"tab_enable", false},
         {"reverse_enable", false},
@@ -129,22 +129,22 @@ private:
                 {"user_load_key", "VK_NUMPAD1"},
                 {"user_store_key", "VK_NUMPAD4"},
                 {"user_key_type", "switch"},
-                {"user_depth", 0.5},
-                {"user_convergence", 10.0}
+                {"user_depth", 0.4},
+                {"user_convergence", 4.0}
             },
             {
                 {"user_load_key", "XINPUT_GAMEPAD_GUIDE"},
                 {"user_store_key", "VK_NUMPAD5"},
                 {"user_key_type", "toggle"},
                 {"user_depth", 0.1},
-                {"user_convergence", 10.0}
+                {"user_convergence", 4.0}
             },
             {
                 {"user_load_key", "XINPUT_GAMEPAD_LEFT_TRIGGER"},
                 {"user_store_key", "VK_NUMPAD6"},
                 {"user_key_type", "hold"},
                 {"user_depth", 0.25},
-                {"user_convergence", 10.0}
+                {"user_convergence", 4.0}
             }
         }}
     };

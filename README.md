@@ -34,6 +34,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed)
 - Check the [User Presets](#user-presets) section for instructions on setting up your own Depth/Separation and Convergence presets and also reference the Configuration table below
 - When Pitch/Yaw emulation is enabled, you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
+- Toggle Auto Depth listener off/on with `Ctrl + F11`
 
 
 ## Configuration
@@ -53,9 +54,9 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `render_height`     | `int`   | The height to render per eye (can be higher or lower than the application window)           | `1080`         |
 | `hmd_height` +      | `float` | The height of the simulated HMD.                                                            | `1.0`          |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
-| `fov`               | `float` | The field of view (FoV) for the VR rendering.                                               | `90.0`         |
-| `depth` +           | `float` | The max separation. Overrides VR's IPD field.                                               | `0.5`          |
-| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `10.0`         |
+| `fov` +             | `float` | The horizontal field of view (FoV) for the VR rendering.                                    | `90.0`         |
+| `depth` +           | `float` | The max separation. Overrides VR's IPD field.                                               | `0.4`          |
+| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `4.0`          |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
@@ -74,8 +75,8 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `user_load_key` +   | `string`| The Virtual-Key Code to load user preset                                                    | `"VK_NUMPAD1"` |
 | `user_store_key` +  | `string`| The Virtual-Key Code to store user preset temporarily                                       | `"VK_NUMPAD4"` |
 | `user_key_type` +   | `string`| The store key's behavior ("switch" "toggle" "hold")                                         | `"switch"`     |
-| `user_depth` +      | `float` | The separation value for a user preset                                                      | `0.5`          |
-| `user_convergence` +| `float` | The convergence value for a user preset                                                     | `10.0`         |
+| `user_depth` +      | `float` | The separation value for a user preset                                                      | `0.4`          |
+| `user_convergence` +| `float` | The convergence value for a user preset                                                     | `4.0`          |
 
 
 ## Base Installation
@@ -87,6 +88,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Toggle on `Enable Steam Input for Xbox Controllers`
     - Click `Edit` on the `Desktop Layout` and then select `Disable Steam Input`
     - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
+    - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
 - Close SteamVR
@@ -146,6 +148,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Don't touch `Perspective Slider`
 - Enable ReShade's `Performance Mode` checkbox
 - Once configuration is complete, you can run everything the same way as the Base Installation
+- If settings don't save, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
 
 
 ## SR (Simulated Reality) Displays (only if you need this output format)
@@ -172,53 +175,12 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Click on the `Home` tab
     - Enable ReShade's `Performance Mode` checkbox
 - Once configuration is complete, you can run everything the same way as the Base Installation
+- If settings don't save, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
 
 
-## 3DVision Installation (only if you need this output format)
+## Frame Sequential (WibbleWobble) Installation (only if you need this output format)
 
-- This will be the worst experience due to the finicky nature of 3DVision drivers. It is highly recommended to get a different 3D Display to use moving forward.
-- Only Driver v425.31 or 452.06 may work, so only RTX20 series or older
-    - Some DX12 games are not compatible with these old drivers (crashes), but the majority will still work and all UEVR games are compatible thus far
-    - Having 3DVision enabled will crash DX12 games when you launch them
-    - Make sure your game runs on old drivers with 3D disabled before attempting to get it working with VRto3D (some games will complain about your driver but still run fine)
-    - If you get a black screen while trying to run SteamVR + 3DVision, you may have to hard reset
-    - You can use a single monitor, but only Multi-Display mode will work due to 3DVision needing to always be fullscreen to activate. See [Displays](#displays) for options
-    - If you run into one-eye issues or other weirdness, try using DDU and reinstalling the driver
-#### 3DVision Initial Setup
-- Complete the [Base Installation](#base-installation) section and follow the multi-display setup
-- If you want full resolution per eye, enable DSR 4x in Nvidia Control Panel -> Manage 3D Settings, and then set your desktop resolution to match
-- Edit the `Documents\My Games\vrto3d\default_config.json` config file
-    - Set the `window_width` and `window_height` to match your fullscreen desktop resolution
-    - Set the `render_width` and `render_height` to be the resolution you want per eye, can be lower or higher than the window setting, 1920x1080 recommended for 2080ti
-    - Set the `debug_enable` flag to `false` to enable fullscreen mode ***3D will not work if you miss this setting***
-- Download Bo3b's [SbS to 3DVision](https://bo3b.s3.amazonaws.com/SD3D_eng.7z) tool and extract the contents to your `Steam\steamapps\common\SteamVR\bin\win64` folder
-- Enable 3D and Global hack. [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) can do this
-- Run SteamVR from Steam
-- Press `Home` to bring up the ReShade menu and select the SBS `SBS_to_Double.fx` shader and click `Reload`
-- Enable ReShade's `Performance Mode` checkbox
-- The Headset window has to be in focus for 3DVision to trigger - try clicking on it
-- May need to press `Ctrl + T` to get 3D to trigger
-- If it's still not working, try closing SteamVR and trying again
-- If 3D flickers on and off, try toggling 3D in Nvidia Control Panel
-- If the 3D Headset Window goes black, try temporarily moving the game window back to your 3D display, get 3D to trigger once, then move the game window to your 2nd display
-- Close SteamVR
-#### 3DVision Steps to Run any game (must be done every time)
-- Enable 3D from Nvidia Control Panel
-    - If you use 3D Fix Manager instead of Nvidia Control Panel for these steps, your PC may crash
-- Launch SteamVR and verify that 3DVision is displaying properly with just SteamVR
-- Use `Ctrl + Alt + Insert` to dismiss the 3DVision Green text
-- Disable 3D from Nvidia Control Panel (This may not be needed if you are running a VR-native or non-DX12 game)
-    - It is normal for the SteamVR window to display `Warning: attempt to run Stereoscopic 3D in non-stereo display mode`
-- Launch your Game
-- Make Game display in Windowed mode in-game or via `Alt + Enter`
-- Move Game window to your second display - reference [Multi-Display Setup](#multi-display-setup) section for methods to do this
-- If needed, inject VR mod
-- Verify that SteamVR Headset window is displaying the game alongside the 2D Game window
-- Enable 3D from Nvidia Control Panel (if you disabled it)
-- Make SteamVR Headset window fullscreen on 3DVision display by clicking in it
-    - SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice or the headset window again to fix it
-- Click back on the 2D game window on your second display and hopefully input works and 3D is still displaying
-    - `Alt + Tab` will break 3DVision, so don't use it and just move the mouse to your second display instead
+- Coming Soon
 
 
 ## Notes
@@ -229,6 +191,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Overlays generally won't work on this virtual HMD
 - XInput controller is recommended (required for Single-Display mode)
 - SteamVR doesn't support HDR currently
+    - AutoHDR may work, but some games will be too dark or too bright
 - Some mods/games may override your VR settings
 - DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not
 
