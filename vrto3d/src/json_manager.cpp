@@ -181,6 +181,7 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         config.tab_enable = getValue<bool>(jsonConfig, "tab_enable");
         config.reverse_enable = getValue<bool>(jsonConfig, "reverse_enable");
         config.depth_gauge = getValue<bool>(jsonConfig, "depth_gauge");
+        config.dash_enable = getValue<bool>(jsonConfig, "dash_enable");
 
         config.display_latency = getValue<float>(jsonConfig, "display_latency");
         config.display_frequency = getValue<float>(jsonConfig, "display_frequency");

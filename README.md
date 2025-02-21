@@ -58,10 +58,11 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `depth` +           | `float` | The max separation. Overrides VR's IPD field.                                               | `0.4`          |
 | `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `4.0`          |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
-| `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB) 3D output (Side by Side is default)                  | `false`        |
+| `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB/OU) 3D output (Side by Side is default)               | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD gauge display.                                                | `false`        |
-| `debug_enable`      | `bool`  | Borderless Windowed. Not 3DVision compatible. Breaks running some mods in OpenVR mode.      | `true`         |
+| `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home.                                               | `false`        |
+| `debug_enable`      | `bool`  | Borderless Windowed. Should always be used.                                                 | `true`         |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
@@ -96,7 +97,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
-    - Single Display Mode: make sure the `debug_enable` flag is set to `true` to make more games work (not 3DVision compatible)
+    - Single Display Mode: make sure the `debug_enable` flag is set to `true` to make more games work
 - Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Documents\My Games\vrto3d\` folder
 - Run SteamVR to verify that you see the Headset window covering your entire display. This is usually not needed before running games.
     - The Headset window must be on your primary 3D display
