@@ -94,6 +94,7 @@ private:
     std::atomic< bool > is_active_;
     std::atomic< uint32_t > device_index_;
     std::atomic< bool > is_on_top_;
+    std::atomic< bool > use_auto_depth_;
 
     std::mutex pose_mutex_;
     vr::DriverPose_t curr_pose_;

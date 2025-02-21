@@ -139,6 +139,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     device_index_ = unObjectId;
     is_active_ = true;
     is_on_top_ = false;
+    use_auto_depth_ = true;
 
     // A list of properties available is contained in vr::ETrackedDeviceProperty.
     auto* vrp = vr::VRProperties();
@@ -474,6 +475,7 @@ void MockControllerDeviceDriver::PollHotkeysThread()
     static int height_sleep = 0;
     static int top_sleep = 0;
     static int save_sleep = 0;
+    static int depth_sleep = 0;
 
     while (is_active_)
     {
@@ -518,6 +520,14 @@ void MockControllerDeviceDriver::PollHotkeysThread()
             }
             else if (save_sleep > 0) {
                 save_sleep--;
+            }
+            // Ctrl+F11 Toggle Auto Depth
+            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F11) & 0x8000) && depth_sleep == 0) {
+                depth_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                use_auto_depth_ = !use_auto_depth_;
+            }
+            else if (depth_sleep > 0) {
+                depth_sleep--;
             }
         }
         // Ctrl+F8 Toggle Always On Top
@@ -666,10 +676,13 @@ void MockControllerDeviceDriver::AutoDepthThread() {
                 break; // Exit inner loop and recreate the pipe
             }
 
-            // Convert to float
-            buffer[bytesRead] = '\0';
-            float depthValue = strtof(buffer, nullptr);
-            stereo_display_component_->AdjustDepth(depthValue, false, device_index_);
+            if (use_auto_depth_)
+            {
+                // Convert to float
+                buffer[bytesRead] = '\0';
+                float depthValue = strtof(buffer, nullptr);
+                stereo_display_component_->AdjustDepth(depthValue, false, device_index_);
+            }
         }
 
         // Close the current pipe handle (ready to reconnect)
