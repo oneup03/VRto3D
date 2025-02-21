@@ -921,13 +921,7 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, ui
     if (cur_conv == new_conv)
         return;
     while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
-    // Regenerate the Projection
-    vr::HmdRect2_t eyeLeft, eyeRight;
-    GetProjectionRaw(vr::Eye_Left, &eyeLeft.vTopLeft.v[0], &eyeLeft.vBottomRight.v[0], &eyeLeft.vTopLeft.v[1], &eyeLeft.vBottomRight.v[1]);
-    GetProjectionRaw(vr::Eye_Right, &eyeRight.vTopLeft.v[0], &eyeRight.vBottomRight.v[0], &eyeRight.vTopLeft.v[1], &eyeRight.vBottomRight.v[1]);
-    vr::VREvent_Data_t temp;
-    vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index, eyeLeft, eyeRight);
-    vr::VRServerDriverHost()->VendorSpecificEvent(device_index, vr::VREvent_LensDistortionChanged, temp, 0.0f);
+    ResetProjection(device_index);
 }
 
 
@@ -1151,4 +1145,21 @@ void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& conf
     
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_ = config;
+    lock.unlock();
+    ResetProjection(device_index);
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Reset per-eye FoV calculation
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::ResetProjection(uint32_t device_index)
+{
+    // Regenerate the Projection
+    vr::HmdRect2_t eyeLeft, eyeRight;
+    GetProjectionRaw(vr::Eye_Left, &eyeLeft.vTopLeft.v[0], &eyeLeft.vBottomRight.v[0], &eyeLeft.vTopLeft.v[1], &eyeLeft.vBottomRight.v[1]);
+    GetProjectionRaw(vr::Eye_Right, &eyeRight.vTopLeft.v[0], &eyeRight.vBottomRight.v[0], &eyeRight.vTopLeft.v[1], &eyeRight.vBottomRight.v[1]);
+    vr::VREvent_Data_t temp;
+    vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index, eyeLeft, eyeRight);
+    vr::VRServerDriverHost()->VendorSpecificEvent(device_index, vr::VREvent_LensDistortionChanged, temp, 0.0f);
 }

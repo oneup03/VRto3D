@@ -53,6 +53,7 @@ public:
     void SetHeight();
     void SetReset();
     void LoadSettings(StereoDisplayDriverConfiguration& config, uint32_t device_index);
+    void ResetProjection(uint32_t device_index);
 
 private:
     StereoDisplayDriverConfiguration config_;
