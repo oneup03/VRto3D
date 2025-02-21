@@ -130,61 +130,10 @@ void JsonManager::EnsureDefaultConfigExists()
     if (!std::filesystem::exists(filePath)) {
         DriverLog("%s does not exist. Writing default config to file...\n", DEF_CFG.c_str());
 
-        // Create the example default JSON
-        nlohmann::ordered_json defaultConfig = {
-            {"window_width", 1920},
-            {"window_height", 1080},
-            {"render_width", 1920},
-            {"render_height", 1080},
-            {"hmd_height", 1.0},
-            {"aspect_ratio", 1.77778},
-            {"fov", 90.0},
-            {"depth", 0.5},
-            {"convergence", 10.0},
-            {"disable_hotkeys", false},
-            {"tab_enable", false},
-            {"reverse_enable", false},
-            {"depth_gauge", false},
-            {"debug_enable", true},
-            {"display_latency", 0.011},
-            {"display_frequency", 60.0},
-            {"pitch_enable", false},
-            {"yaw_enable", false},
-            {"pose_reset_key", "VK_NUMPAD7"},
-            {"ctrl_toggle_key", "XINPUT_GAMEPAD_RIGHT_THUMB"},
-            {"ctrl_toggle_type", "toggle"},
-            {"pitch_radius", 0.0},
-            {"ctrl_deadzone", 0.05},
-            {"ctrl_sensitivity", 1.0},
-            {"user_settings", {
-                {
-                    {"user_load_key", "VK_NUMPAD1"},
-                    {"user_store_key", "VK_NUMPAD4"},
-                    {"user_key_type", "switch"},
-                    {"user_depth", 0.5},
-                    {"user_convergence", 10.0}
-                },
-                {
-                    {"user_load_key", "XINPUT_GAMEPAD_GUIDE"},
-                    {"user_store_key", "VK_NUMPAD5"},
-                    {"user_key_type", "toggle"},
-                    {"user_depth", 0.1},
-                    {"user_convergence", 10.0}
-                },
-                {
-                    {"user_load_key", "XINPUT_GAMEPAD_LEFT_TRIGGER"},
-                    {"user_store_key", "VK_NUMPAD6"},
-                    {"user_key_type", "hold"},
-                    {"user_depth", 0.25},
-                    {"user_convergence", 10.0}
-                }
-            }}
-        };
-
         // Write the default JSON to file
         std::ofstream file(filePath);
         if (file.is_open()) {
-            file << defaultConfig.dump(4); // Pretty-print with 4 spaces of indentation
+            file << default_config_.dump(4); // Pretty-print with 4 spaces of indentation
             file.close();
             DriverLog("Default config written to %s\n", DEF_CFG.c_str());
         }
@@ -199,6 +148,18 @@ void JsonManager::EnsureDefaultConfigExists()
 
 
 //-----------------------------------------------------------------------------
+// Purpose: Get a value from jsonConfig or fallback to defaultConfig
+//-----------------------------------------------------------------------------
+template <typename T>
+T JsonManager::getValue(const nlohmann::json& jsonConfig, const std::string& key) {
+    if (jsonConfig.contains(key)) {
+        return jsonConfig[key].get<T>();
+    }
+    return default_config_[key].get<T>();
+}
+
+
+//-----------------------------------------------------------------------------
 // Purpose: Load the VRto3D display from a JSON file
 //-----------------------------------------------------------------------------
 void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
@@ -208,21 +169,21 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         nlohmann::json jsonConfig = readJsonFromFile(DEF_CFG);
 
         // Load values directly from the base level of the JSON
-        config.window_width = jsonConfig.at("window_width").get<int>();
-        config.window_height = jsonConfig.at("window_height").get<int>();
-        config.render_width = jsonConfig.at("render_width").get<int>();
-        config.render_height = jsonConfig.at("render_height").get<int>();
+        config.window_width = getValue<int>(jsonConfig, "window_width");
+        config.window_height = getValue<int>(jsonConfig, "window_height");
+        config.render_width = getValue<int>(jsonConfig, "render_width");
+        config.render_height = getValue<int>(jsonConfig, "render_height");
 
-        config.aspect_ratio = jsonConfig.at("aspect_ratio").get<float>();
+        config.aspect_ratio = getValue<float>(jsonConfig, "aspect_ratio");
 
-        config.disable_hotkeys = jsonConfig.at("disable_hotkeys").get<bool>();
-        config.debug_enable = jsonConfig.at("debug_enable").get<bool>();
-        config.tab_enable = jsonConfig.at("tab_enable").get<bool>();
-        config.reverse_enable = jsonConfig.at("reverse_enable").get<bool>();
-        config.depth_gauge = jsonConfig.at("depth_gauge").get<bool>();
+        config.disable_hotkeys = getValue<bool>(jsonConfig, "disable_hotkeys");
+        config.debug_enable = getValue<bool>(jsonConfig, "debug_enable");
+        config.tab_enable = getValue<bool>(jsonConfig, "tab_enable");
+        config.reverse_enable = getValue<bool>(jsonConfig, "reverse_enable");
+        config.depth_gauge = getValue<bool>(jsonConfig, "depth_gauge");
 
-        config.display_latency = jsonConfig.at("display_latency").get<float>();
-        config.display_frequency = jsonConfig.at("display_frequency").get<float>();
+        config.display_latency = getValue<float>(jsonConfig, "display_latency");
+        config.display_frequency = getValue<float>(jsonConfig, "display_frequency");
         config.sleep_count_max = (int)(floor(1600.0 / (1000.0 / config.display_frequency)));
     }
     catch (const nlohmann::json::exception& e) {
@@ -246,18 +207,18 @@ bool JsonManager::LoadProfileFromJson(const std::string& filename, StereoDisplay
         }
 
         // Profile settings
-        config.hmd_height = jsonConfig.at("hmd_height").get<float>();
-        config.fov = jsonConfig.at("fov").get<float>();
-        config.depth = jsonConfig.at("depth").get<float>();
-        config.convergence = jsonConfig.at("convergence").get<float>();
+        config.hmd_height = getValue<float>(jsonConfig, "hmd_height");
+        config.fov = getValue<float>(jsonConfig, "fov");
+        config.depth = getValue<float>(jsonConfig, "depth");
+        config.convergence = getValue<float>(jsonConfig, "convergence");
 
         // Controller settings
-        config.pitch_enable = jsonConfig.at("pitch_enable").get<bool>();
+        config.pitch_enable = getValue<bool>(jsonConfig, "pitch_enable");
         config.pitch_set = config.pitch_enable;
-        config.yaw_enable = jsonConfig.at("yaw_enable").get<bool>();
+        config.yaw_enable = getValue<bool>(jsonConfig, "yaw_enable");
         config.yaw_set = config.yaw_enable;
 
-        config.pose_reset_str = jsonConfig.at("pose_reset_key").get<std::string>();
+        config.pose_reset_str = getValue<std::string>(jsonConfig, "pose_reset_key");
         
         if (VirtualKeyMappings.find(config.pose_reset_str) != VirtualKeyMappings.end()) {
             config.pose_reset_key = VirtualKeyMappings[config.pose_reset_str];
@@ -275,7 +236,7 @@ bool JsonManager::LoadProfileFromJson(const std::string& filename, StereoDisplay
         }
         config.pose_reset = true;
 
-        config.ctrl_toggle_str = jsonConfig.at("ctrl_toggle_key").get<std::string>();
+        config.ctrl_toggle_str = getValue<std::string>(jsonConfig, "ctrl_toggle_key");
         if (VirtualKeyMappings.find(config.ctrl_toggle_str) != VirtualKeyMappings.end()) {
             config.ctrl_toggle_key = VirtualKeyMappings[config.ctrl_toggle_str];
             config.ctrl_xinput = false;
@@ -291,12 +252,12 @@ bool JsonManager::LoadProfileFromJson(const std::string& filename, StereoDisplay
             config.ctrl_xinput = true;
         }
 
-        config.ctrl_type_str = jsonConfig.at("ctrl_toggle_type").get<std::string>();
+        config.ctrl_type_str = getValue<std::string>(jsonConfig, "ctrl_toggle_type");
         config.ctrl_type = KeyBindTypes[config.ctrl_type_str];
 
-        config.pitch_radius = jsonConfig.at("pitch_radius").get<float>();
-        config.ctrl_deadzone = jsonConfig.at("ctrl_deadzone").get<float>();
-        config.ctrl_sensitivity = jsonConfig.at("ctrl_sensitivity").get<float>();
+        config.pitch_radius = getValue<float>(jsonConfig, "pitch_radius");
+        config.ctrl_deadzone = getValue<float>(jsonConfig, "ctrl_deadzone");
+        config.ctrl_sensitivity = getValue<float>(jsonConfig, "ctrl_sensitivity");
 
         // Read user binds from user_settings array
         const auto& user_settings_array = jsonConfig.at("user_settings");

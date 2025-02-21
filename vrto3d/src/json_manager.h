@@ -97,10 +97,65 @@ public:
     void SaveProfileToJson(const std::string& filename, StereoDisplayDriverConfiguration& config);
 
 private:
+    
+    // Create the example default JSON
+    nlohmann::ordered_json default_config_ = {
+        {"window_width", 1920},
+        {"window_height", 1080},
+        {"render_width", 1920},
+        {"render_height", 1080},
+        {"hmd_height", 1.0},
+        {"aspect_ratio", 1.77778},
+        {"fov", 90.0},
+        {"depth", 0.5},
+        {"convergence", 10.0},
+        {"disable_hotkeys", false},
+        {"tab_enable", false},
+        {"reverse_enable", false},
+        {"depth_gauge", false},
+        {"debug_enable", true},
+        {"display_latency", 0.011},
+        {"display_frequency", 60.0},
+        {"pitch_enable", false},
+        {"yaw_enable", false},
+        {"pose_reset_key", "VK_NUMPAD7"},
+        {"ctrl_toggle_key", "XINPUT_GAMEPAD_RIGHT_THUMB"},
+        {"ctrl_toggle_type", "toggle"},
+        {"pitch_radius", 0.0},
+        {"ctrl_deadzone", 0.05},
+        {"ctrl_sensitivity", 1.0},
+        {"user_settings", {
+            {
+                {"user_load_key", "VK_NUMPAD1"},
+                {"user_store_key", "VK_NUMPAD4"},
+                {"user_key_type", "switch"},
+                {"user_depth", 0.5},
+                {"user_convergence", 10.0}
+            },
+            {
+                {"user_load_key", "XINPUT_GAMEPAD_GUIDE"},
+                {"user_store_key", "VK_NUMPAD5"},
+                {"user_key_type", "toggle"},
+                {"user_depth", 0.1},
+                {"user_convergence", 10.0}
+            },
+            {
+                {"user_load_key", "XINPUT_GAMEPAD_LEFT_TRIGGER"},
+                {"user_store_key", "VK_NUMPAD6"},
+                {"user_key_type", "hold"},
+                {"user_depth", 0.25},
+                {"user_convergence", 10.0}
+            }
+        }}
+    };
+    
     std::string vrto3dFolder;
     std::string getDocumentsFolderPath();
     void writeJsonToFile(const std::string& fileName, const nlohmann::ordered_json& jsonData);
     nlohmann::json readJsonFromFile(const std::string& fileName);
     void createFolderIfNotExist(const std::string& path);
     std::vector<std::string> split(const std::string& str, char delimiter);
+
+    template <typename T>
+    T getValue(const nlohmann::json& jsonConfig, const std::string& key);
 };
