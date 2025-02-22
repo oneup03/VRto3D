@@ -67,6 +67,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
+| `use_open_track`    | `bool`  | Enables or disables OpenTrack 3DoF HMD Control                                              | `false`        |
 | `pose_reset_key` +  | `string`| The Virtual-Key Code to reset the HMD position and orientation                              | `"VK_NUMPAD7"` |
 | `ctrl_toggle_key` + | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
 | `ctrl_toggle_type` +| `string`| The ctrl_toggle_key's behavior ("toggle" "hold")                                            | `"toggle"`     |
@@ -205,6 +206,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Settings - Load Keys
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
+- OpenTrack 3DoF support is available over UDP loopback at the default 4242 port when `use_open_track` is true. It can be used in combination with Pitch/Yaw emulation
 
 #### User Presets
 - If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen or you may not see a change immediately. If you reload/restart/reinitialize the VR mod, you should see the change

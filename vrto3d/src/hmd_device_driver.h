@@ -77,6 +77,7 @@ public:
     vr::DriverPose_t GetPose() override;
     void Deactivate() override;
 
+    void OpenTrackThread();
     void PoseUpdateThread();
     void PollHotkeysThread();
     void FocusUpdateThread();
@@ -104,4 +105,8 @@ private:
     std::thread hotkey_thread_;
     std::thread focus_thread_;
     std::thread depth_thread_;
+    std::thread track_thread_;
+
+    vr::HmdQuaternion_t open_track_att_;
+    std::shared_mutex  trk_mutex_;
 };

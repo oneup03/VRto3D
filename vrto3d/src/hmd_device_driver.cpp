@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
+#define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
 #include "key_mappings.h"
 #include "driverlog.h"
@@ -23,6 +24,9 @@
 #include <sstream>
 #include <ctime>
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment (lib, "WSock32.Lib")
 #include <windows.h>
 #include <xinput.h>
 #include <nlohmann/json.hpp>
@@ -268,6 +272,10 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
     focus_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
     depth_thread_ = std::thread(&MockControllerDeviceDriver::AutoDepthThread, this);
+    if (stereo_display_component_->GetConfig().use_open_track) {
+        open_track_att_ = HmdQuaternion_Identity;
+        track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
+    }
 
     HANDLE thread_handle = pose_thread_.native_handle();
 
@@ -303,6 +311,73 @@ void MockControllerDeviceDriver::DebugRequest( const char *pchRequest, char *pch
 {
     if ( unResponseBufferSize >= 1 )
         pchResponseBuffer[ 0 ] = 0;
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Receive OpenTrack 3DoF updates
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::OpenTrackThread()
+{
+    SOCKET socket_s;
+    struct sockaddr_in from = {};
+    int from_len = sizeof(from);
+    struct TOpenTrack {
+        double X;
+        double Y;
+        double Z;
+        double Yaw;
+        double Pitch;
+        double Roll;
+    };
+    TOpenTrack open_track;
+
+    WSADATA wsaData;
+    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        DriverLog("WSAStartup failed: %d", iResult);
+    }
+    else {
+        struct sockaddr_in local = {};
+        local.sin_family = AF_INET;
+        local.sin_port = htons(4242);
+        local.sin_addr.s_addr = INADDR_ANY;
+
+        socket_s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (socket_s == INVALID_SOCKET) {
+            DriverLog("Socket creation failed: %d", WSAGetLastError());
+            WSACleanup();  // Cleanup only if socket creation fails
+        }
+        else {
+            // Set non-blocking mode
+            u_long nonblocking_enabled = 1;
+            if (ioctlsocket(socket_s, FIONBIO, &nonblocking_enabled) == SOCKET_ERROR) {
+                DriverLog("Failed to set non-blocking mode: %d", WSAGetLastError());
+                closesocket(socket_s);
+                WSACleanup();
+            }
+            else if (bind(socket_s, (struct sockaddr*)&local, sizeof(local)) == SOCKET_ERROR) {
+                DriverLog("Bind failed: %d", WSAGetLastError());
+                closesocket(socket_s);
+                WSACleanup();
+            }
+        }
+    }
+
+    while (is_active_) {
+        //Read UDP socket with OpenTrack data
+        memset(&open_track, 0, sizeof(open_track));
+        auto bytes_read = recvfrom(socket_s, (char*)(&open_track), sizeof(open_track), 0, (sockaddr*)&from, &from_len);
+
+        if (bytes_read > 0) {
+            std::unique_lock<std::shared_mutex> lock(trk_mutex_);
+            open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(open_track.Yaw));
+            lock.unlock();
+        }
+        else Sleep(1);
+    }
+    closesocket(socket_s);
+    WSACleanup();
 }
 
 
@@ -402,7 +477,17 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 
         // Recompose the rotation quaternion from pitch and yaw
         vr::HmdQuaternion_t pitchQuaternion = QuaternionFromAxisAngle(1.0f, 0.0f, 0.0f, pitchRadians);
-        pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
+
+        if (config.use_open_track)
+        {
+            std::unique_lock<std::shared_mutex> lock(trk_mutex_);
+            pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion * open_track_att_);
+            lock.unlock();
+        }
+        else
+        {
+            pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
+        }
 
         // Calculate the new position relative to the current pitch & yaw
         pose.vecPosition[0] = config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
@@ -732,6 +817,9 @@ void MockControllerDeviceDriver::Deactivate()
         hotkey_thread_.join();
         focus_thread_.join();
         depth_thread_.join();
+        if (track_thread_.joinable()) {
+            track_thread_.join();
+        }
     }
 
     // unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
