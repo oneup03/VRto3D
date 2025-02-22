@@ -1,7 +1,7 @@
 {
     "hmd_height": 1.0,
 	"fov": 70.0,
-    "depth": 0.5,
+    "depth": 0.4,
     "convergence": 4.0,
     "pitch_enable": false,
     "yaw_enable": false,
@@ -16,7 +16,7 @@
             "user_load_key": "VK_NUMPAD1",
             "user_store_key": "VK_NUMPAD4",
             "user_key_type": "switch",
-            "user_depth": 0.5,
+            "user_depth": 0.4,
             "user_convergence": 4.0
         },
         {
