@@ -182,7 +182,70 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 ## Frame Sequential (WibbleWobble) Installation (only if you need this output format)
 
-- Coming Soon
+- Using WibbleWobble is at your own risk to your monitor/emitter/glasses. It works well but is unofficial
+- WibbleWobble works with 3DVision, Open3DOLED, and several DIY hardware solutions
+- If you don't need VRto3D features (User Presets, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the [WibbleWobbleVR plugin directly](https://github.com/PHARTGAMES/WibbleWobbleCore#steamvr-setup-openvr-client)
+### Initial Install
+- 3DVision installation detailed below. See WibbleWobble GitHub for other configurations
+- Complete the [Base Installation](#base-installation) section
+    - Set the Window and Render Resolutions to match your Fullscreen Resolution or something lower for performance
+    - Leave it in the default SBS display mode and leave `debug_enable` as true
+- Use [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) to install the 3D Vision Driver
+    - If the emitter driver didn't install, browse to the place you installed the manager and run the `Drivers\3DVisionControllerDriver\3dvisioncontrollerdriver.exe`
+- Download the latest [WibbleWobble Release](https://github.com/PHARTGAMES/WibbleWobbleCore/releases) and extract it somewhere without spaces in the path like `C:\`
+- Under the `WibbleWobbleClient` folder, run `Register.bat` as an administrator and reply `Yes` if prompted
+- Under the `WWReshadeAddon\Reshade` folder, run the included ReShade Setup
+    - Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
+    - Select `vrserver.exe` and click Next
+    - Select `DirectX 11` and click Next
+    - Click `Uncheck All` and click Next, Next, Finish
+- Under the `WWReshadeAddon\Release\x64` folder, copy all files to your `Steam\steamapps\common\SteamVR\bin\win64` folder
+- Download the latest [CRU Release](https://customresolutionutility.net/) and save it to your WibbleWobble folder
+- Run `CRU.exe` and grant it admin
+    - Take note of your monitor's EDID (first 7 characters in the dropdown list)
+    - Exit CRU
+- Download the latest [NvTimingsEd Release](https://github.com/rajkosto/NvTimingsEd/releases) and save it to your WibbleWobble folder
+- Run `NvTimingsEd.exe` and grant it admin
+    - From the drop down list, select your monitor's EDID (AUS_27B1 for Asus PG278QR for example)
+    - Select the framerate you want to run 3D at. 100Hz is recommended for performance/stability
+    - Click `Edit` but don't change anything
+    - Copy the exact refresh rate for WibbleWobble's `Sync Rate HZ`
+    - Copy the `X` value for WibbleWobble's `Open Delay Microseconds`
+    - Copy the `Y` value for WibbleWobble's `Open Duration Microseconds`
+    - Copy the `W` value for WibbleWobble's `W`
+- Run SteamVR
+    - Press `Shift + END` to start WibbleWobble
+    - Press `Shift + END` again to bring up the WibbleWobble menu
+    - Press `Shift + /` to (un)focus WibbleWobble (necessary to see anything else on desktop)
+    - Select `Client Config`
+        - Set `Window Size X/Y` for your Fullscreen Resolution
+        - Set `Source Format` to `Side By Side Half`
+        - Set `Reprojection` to `Disabled`
+        - Click `Save` and `X` to close the window
+    - Select `Game Config`
+        - Set `Window Size X` to be 2x your VRto3D horizontal render resolution
+        - Set `Window Size Y` to be your VRto3D vertical render resolution
+        - Click `Save` and `X` to close the window
+    - Select `Emitter Config`
+        - Set `Sync Rate HZ` to match your exact refresh rate from NvTimingsEd
+        - Click `Nvidia Config`
+            - Select `Enabled`
+            - Set `Open Delay Microseconds` to the NvTimingsEd `X` value
+            - Set `Open Duration Microseconds` to the NvTimingsEd `Y` value
+            - Set `W` to the NvTimingsEd `W` value
+            - Click `Save` and `X` to close the window
+        - Click `Save` and `X` to close the window
+    - Press `Shift + END` to close the WibbleWobble menu
+    - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
+    - Close the `SteamVR Status` window to completely exit out of things
+### Playing a Game
+- Once configuration is complete, you can run everything in single display mode similar to the Base Installation
+- Start SteamVR
+- Press `Shift + END` to start WibbleWobble
+- Press `Shift + /` to unfocus WibbleWobble (Don't use `Ctrl + F8`!)
+- Launch VR Game/Mod
+- Press `Shift + /` to focus WibbleWobble (Don't use `Ctrl + F8`!)
+- `Alt + Tab` to the game window for controls to work
 
 
 ## Notes
