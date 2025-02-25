@@ -243,7 +243,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
     - Close the `SteamVR Status` window to completely exit out of things
 - Edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4` and `PerformanceMode=1`
-- If you experience ghosting, try turning on your monitor's `Ultra Low Motion Blur` or `ULMB` feature
+- If you experience ghosting, try turning on your monitor's `Ultra Low Motion Blur` or `ULMB` feature. You may have to enable 3DVision in Nvidia Control Panel for this setting to be available
 ### Playing a Game
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
 - Start SteamVR
@@ -251,7 +251,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Press `Shift + /` to unfocus WibbleWobble (Don't use `Ctrl + F8`!)
 - Launch VR Game/Mod
 - Press `Shift + /` to focus WibbleWobble (Don't use `Ctrl + F8`!)
-- `Alt + Tab` to the game window for controls to work
+- `Alt + Tab` to the game window for controls to work if the game window wasn't already active
 - Mouse controls can work on a single display as long as you are clicking somewhere on the game window that is covered by WibbleWobble
 
 
