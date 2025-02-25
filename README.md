@@ -16,7 +16,7 @@
 - AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, relatively inexpensive. If you don't have a USBC port with DP-Alt mode on your PC, they require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) - choose one with SBS and audio support. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
 - Lume Pad - works great, a bit more expensive, requires [Sunshine/Gamestream + Moonlight](https://support.leiainc.com/lume-pad-2/apps/moonlight3d)
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, currently expensive
-- 3D Vision hardware (only RTX 20x or older) - will have game compatibility issues, hardware is hard to find
+- 3D Vision hardware works great thanks to WibbleWobble
 - Virtual Desktop with a VR headset - apparently works, but will not be officially supported
  
 
