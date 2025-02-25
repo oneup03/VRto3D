@@ -242,6 +242,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
     - Close the `SteamVR Status` window to completely exit out of things
     - If ReShade settings don't save and it prompts you to do the tutorial every launch, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
+- If you experience ghosting, try turning on your monitor's `Ultra Low Motion Blur` or `ULMB` feature
 ### Playing a Game
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
 - Start SteamVR
