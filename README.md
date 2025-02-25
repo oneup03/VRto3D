@@ -188,8 +188,10 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 ### Initial Install
 - 3DVision installation detailed below. See WibbleWobble GitHub for other configurations
 - Complete the [Base Installation](#base-installation) section
-    - Set the Window and Render Resolutions to match your Fullscreen Resolution or something lower for performance
+    - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
+    - Set the `window_width` to 2x your `render_width`
     - Leave it in the default SBS display mode and leave `debug_enable` as true
+    - If you decide to use 100Hz, set `display_frequency` to `50.0`
 - Use [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) to install the 3D Vision Driver
     - If the emitter driver didn't install, browse to the place you installed the manager and run the `Drivers\3DVisionControllerDriver\3dvisioncontrollerdriver.exe`
 - Download the latest [WibbleWobble Release](https://github.com/PHARTGAMES/WibbleWobbleCore/releases) and extract it somewhere without spaces in the path like `C:\`
@@ -213,10 +215,8 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Copy the `X` value for WibbleWobble's `Open Delay Microseconds`
     - Copy the `Y` value for WibbleWobble's `Open Duration Microseconds`
     - Copy the `W` value for WibbleWobble's `W`
+- Open Nvidia Control Panel and under the `Change Resolution` tab, set `Refresh Rate` to `100Hz` or `120Hz` based on your preference
 - Run SteamVR
-    - Press `Home` to open ReShade and click `Skip Tutorial`
-    - Enable ReShade's `Performance Mode` checkbox
-    - Press `Home` to close ReShade
     - Press `Shift + END` to start WibbleWobble
     - Press `Shift + END` again to bring up the WibbleWobble menu
     - Press `Shift + /` to (un)focus WibbleWobble (necessary to see anything else on desktop)
@@ -226,9 +226,10 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
         - Set `Reprojection` to `Disabled`
         - Click `Save` and `X` to close the window
     - Select `Game Config`
-        - Set `Window Size X` to be 2x your VRto3D horizontal render resolution
+        - Set `Window Size X` to be your VRto3D horizontal render resolution
         - Set `Window Size Y` to be your VRto3D vertical render resolution
         - Click `Save` and `X` to close the window
+        - This may crash SteamVR, just close out and try again
     - Select `Emitter Config`
         - Set `Sync Rate HZ` to match your exact refresh rate from NvTimingsEd
         - Click `Nvidia Config`
@@ -241,7 +242,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Press `Shift + END` to close the WibbleWobble menu
     - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
     - Close the `SteamVR Status` window to completely exit out of things
-    - If ReShade settings don't save and it prompts you to do the tutorial every launch, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
+- Edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4` and `PerformanceMode=1`
 - If you experience ghosting, try turning on your monitor's `Ultra Low Motion Blur` or `ULMB` feature
 ### Playing a Game
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
@@ -251,6 +252,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Launch VR Game/Mod
 - Press `Shift + /` to focus WibbleWobble (Don't use `Ctrl + F8`!)
 - `Alt + Tab` to the game window for controls to work
+- Mouse controls can work on a single display as long as you are clicking somewhere on the game window that is covered by WibbleWobble
 
 
 ## Notes
