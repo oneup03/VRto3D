@@ -214,6 +214,9 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Copy the `Y` value for WibbleWobble's `Open Duration Microseconds`
     - Copy the `W` value for WibbleWobble's `W`
 - Run SteamVR
+    - Press `Home` to open ReShade and click `Skip Tutorial`
+    - Enable ReShade's `Performance Mode` checkbox
+    - Press `Home` to close ReShade
     - Press `Shift + END` to start WibbleWobble
     - Press `Shift + END` again to bring up the WibbleWobble menu
     - Press `Shift + /` to (un)focus WibbleWobble (necessary to see anything else on desktop)
@@ -238,6 +241,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Press `Shift + END` to close the WibbleWobble menu
     - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
     - Close the `SteamVR Status` window to completely exit out of things
+    - If ReShade settings don't save and it prompts you to do the tutorial every launch, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
 ### Playing a Game
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
 - Start SteamVR
