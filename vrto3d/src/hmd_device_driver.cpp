@@ -331,6 +331,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
         double Roll;
     };
     TOpenTrack open_track;
+    auto ot_port = stereo_display_component_->GetConfig().open_track_port;
 
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -340,7 +341,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
     else {
         struct sockaddr_in local = {};
         local.sin_family = AF_INET;
-        local.sin_port = htons(4242);
+        local.sin_port = htons(ot_port);
         local.sin_addr.s_addr = INADDR_ANY;
 
         socket_s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);

@@ -51,13 +51,14 @@ struct StereoDisplayDriverConfiguration
 
     float display_latency;
     float display_frequency;
-    int sleep_count_max;
+    int32_t sleep_count_max;
 
     bool pitch_enable;
     bool yaw_enable;
     bool pitch_set;
     bool yaw_set;
     bool use_open_track;
+    int32_t open_track_port;
     int32_t pose_reset_key;
     std::string pose_reset_str;
     bool reset_xinput;
@@ -122,6 +123,7 @@ private:
         {"pitch_enable", false},
         {"yaw_enable", false},
         {"use_open_track", false},
+        {"open_track_port", 4242},
         {"pose_reset_key", "VK_NUMPAD7"},
         {"ctrl_toggle_key", "XINPUT_GAMEPAD_RIGHT_THUMB"},
         {"ctrl_toggle_type", "toggle"},

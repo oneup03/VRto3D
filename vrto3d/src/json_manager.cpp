@@ -183,6 +183,7 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         config.depth_gauge = getValue<bool>(jsonConfig, "depth_gauge");
         config.dash_enable = getValue<bool>(jsonConfig, "dash_enable");
         config.use_open_track = getValue<bool>(jsonConfig, "use_open_track");
+        config.open_track_port = getValue<int>(jsonConfig, "open_track_port");
 
         config.display_latency = getValue<float>(jsonConfig, "display_latency");
         config.display_frequency = getValue<float>(jsonConfig, "display_frequency");
