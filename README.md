@@ -192,7 +192,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
     - Set the `window_width` to 2x your `render_width`
     - Leave it in the default SBS display mode and leave `debug_enable` as true
-    - If you decide to use 100Hz, set `display_frequency` to `50.0`
+    - If you decide to use 100Hz (recommended for performance/stability), set `display_frequency` to `50.0`
 - Use [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) to install the 3D Vision Driver
     - If the emitter driver didn't install, browse to the place you installed the manager and run the `Drivers\3DVisionControllerDriver\3dvisioncontrollerdriver.exe`
 - Download the latest [WibbleWobble Release](https://github.com/PHARTGAMES/WibbleWobbleCore/releases) and extract it somewhere without spaces in the path like `C:\`
@@ -210,13 +210,15 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Download the latest [NvTimingsEd Release](https://github.com/rajkosto/NvTimingsEd/releases) and save it to your WibbleWobble folder
 - Run `NvTimingsEd.exe` and grant it admin
     - From the drop down list, select your monitor's EDID (AUS_27B1 for Asus PG278QR for example)
-    - Select the framerate you want to run 3D at. 100Hz is recommended for performance/stability
+    - Select the framerate you want to run 3D at
     - Click `Edit` but don't change anything
     - Copy the exact refresh rate for WibbleWobble's `Sync Rate HZ`
     - Copy the `X` value for WibbleWobble's `Open Delay Microseconds`
     - Copy the `Y` value for WibbleWobble's `Open Duration Microseconds`
     - Copy the `W` value for WibbleWobble's `W`
-- Open Nvidia Control Panel and under the `Change Resolution` tab, set `Refresh Rate` to `100Hz` or `120Hz` based on your preference
+- Open Nvidia Control Panel 
+    - Under the `Change Resolution` tab, set `Refresh Rate` to `100Hz` or `120Hz` and click `Apply`
+    - Under `Set up G-Sync` tab, uncheck `Enable G-Sync` and click `Apply`
 - Run SteamVR
     - Press `Shift + END` to start WibbleWobble
     - Press `Shift + END` again to bring up the WibbleWobble menu
