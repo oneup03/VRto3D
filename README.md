@@ -251,6 +251,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
 - Start SteamVR
 - Press `Shift + END` to start WibbleWobble
+    - If SteamVR crashes, close everything, you may need to temporarily edit your VRto3D `window_width` to half, run SteamVR and activate WibbleWobble, close everything, then revert to full
 - Press `Shift + /` to unfocus WibbleWobble (Don't use `Ctrl + F8`!)
 - Launch VR Game/Mod
 - Press `Shift + /` to focus WibbleWobble (Don't use `Ctrl + F8`!)
