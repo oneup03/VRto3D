@@ -163,8 +163,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
     vrp->SetFloatProperty( container, vr::Prop_SecondsFromPhotonsToVblank_Float, 0.0);
     vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
-    vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, !stereo_display_component_->GetConfig().debug_enable);
-    vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, stereo_display_component_->GetConfig().debug_enable);
+    vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
     vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
     if (stereo_display_component_->GetConfig().depth_gauge || stereo_display_component_->GetConfig().dash_enable)
     {
@@ -860,8 +860,7 @@ StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfigu
 //-----------------------------------------------------------------------------
 bool StereoDisplayComponent::IsDisplayOnDesktop()
 {
-    std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    return !config_.debug_enable;
+    return false;
 }
 
 //-----------------------------------------------------------------------------

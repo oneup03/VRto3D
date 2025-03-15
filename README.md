@@ -98,7 +98,6 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
-    - Single Display Mode: make sure the `debug_enable` flag is set to `true` to make more games work
 - Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Documents\My Games\vrto3d\` folder
 - Run SteamVR to verify that you see the Headset window covering your entire display. This is usually not needed before running games.
     - The Headset window must be on your primary 3D display
@@ -184,7 +183,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Complete the [Base Installation](#base-installation) section
     - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
     - Set the `window_width` to 2x your `render_width`
-    - Leave it in the default SBS display mode and leave `debug_enable` as true
+    - Leave it in the default SBS display mode
     - If you decide to use 100Hz (recommended for performance/stability), set `display_frequency` to `50.0`
 - Use [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) to install the 3D Vision Driver
     - If the emitter driver didn't install, browse to the place you installed the manager and run the `Drivers\3DVisionControllerDriver\3dvisioncontrollerdriver.exe`

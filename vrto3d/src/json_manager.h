@@ -47,7 +47,6 @@ struct StereoDisplayDriverConfiguration
     bool reverse_enable;
     bool depth_gauge;
     bool dash_enable;
-    bool debug_enable;
 
     float display_latency;
     float display_frequency;
@@ -117,7 +116,6 @@ private:
         {"reverse_enable", false},
         {"depth_gauge", false},
         {"dash_enable", false},
-        {"debug_enable", true},
         {"display_latency", 0.011},
         {"display_frequency", 60.0},
         {"pitch_enable", false},
