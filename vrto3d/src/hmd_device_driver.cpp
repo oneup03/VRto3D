@@ -267,6 +267,13 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowSupersampleFiltering_Bool, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleManualOverride_Bool, true);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
+
+    //vrs->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_BackgroundDomeRadius_Float, 0.0);
+    //vrs->SetInt32(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_FramesToThrottle_Int32, 30);
+
+    //vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowDisplayLockedMode_Bool, true);
+    //vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_UsePrism_Bool, false);
+    
     
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
@@ -666,6 +673,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
     static int sleep_time = 1000;
     static HWND vr_window = NULL;
     static HWND top_window = NULL;
+    static LONG ex_style = 0;
 
     while (is_active_)
     {
@@ -674,13 +682,18 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             top_window = GetTopWindow(GetDesktopWindow());
             if (vr_window != NULL && vr_window != top_window) {
                 SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                SetWindowLong(vr_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
             }
             else if (vr_window == NULL) {
                 vr_window = FindWindow(NULL, L"Headset Window");
+                if (vr_window != NULL) {
+                    ex_style = GetWindowLong(vr_window, GWL_EXSTYLE);
+                }
             }
         }
         else if (vr_window != NULL) {
             SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            SetWindowLong(vr_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
             vr_window = NULL;
         }
 
