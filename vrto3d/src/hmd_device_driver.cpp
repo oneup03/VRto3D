@@ -14,9 +14,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
+
 #define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
 #include "key_mappings.h"
+#include "json_manager.h"
+#include "app_id_mgr.h"
 #include "driverlog.h"
 #include "vrmath.h"
 
@@ -29,7 +32,6 @@
 #pragma comment (lib, "WSock32.Lib")
 #include <windows.h>
 #include <xinput.h>
-#include <nlohmann/json.hpp>
 
 // Link the XInput library
 #pragma comment(lib, "XInput.lib")
@@ -267,14 +269,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowSupersampleFiltering_Bool, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleManualOverride_Bool, true);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
-
-    //vrs->SetFloat(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_BackgroundDomeRadius_Float, 0.0);
-    //vrs->SetInt32(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_FramesToThrottle_Int32, 30);
-
-    //vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowDisplayLockedMode_Bool, true);
-    //vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_UsePrism_Bool, false);
     
-    
+    // Thread setup
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
     focus_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
@@ -799,6 +795,15 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
     {
         app_name_ = app_name;
         auto config = stereo_display_component_->GetConfig();
+
+        // Attempt to get Steam App ID
+        AppIdMgr app_id_mgr;
+        auto app_id = app_id_mgr.GetRunningSteamGameAppID();
+        if (!app_id.empty())
+        {
+            std::string vr_str = "steam.app." + app_id;
+            vr::VRSettings()->SetBool(vr_str.c_str(), vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, true);
+        }
 
         // Attempt to read the JSON settings file
         JsonManager json_manager;
