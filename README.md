@@ -62,7 +62,6 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD gauge display.                                                | `false`        |
 | `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home.                                               | `false`        |
-| `debug_enable`      | `bool`  | Borderless Windowed. Should always be used.                                                 | `true`         |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
@@ -84,7 +83,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 
 ## Base Installation
 
-- A multi-display configuration setup in fullscreen mode will be the most compatible - see [notes](#displays) for working setups, but single displays can be used. Some mods or games may not work with a single display
+- A Single Display configuration is recommended, but you can also use a multi-display configuration if desired
 - Install SteamVR
 - If you want to use Steam Input
     - Open Steam->Settings->Controller
@@ -107,24 +106,18 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 - Try launching a VR game
 #### Multi-Display Setup:
 - Keyboard and Mouse are usable, but make sure the mouse is captured by the 2D game's window
+- Make sure you set your displays to ***EXTENDED MODE*** or this will not work
 - Move all windows besides the `Headset Window` over to your second display
     - Some games provide the option to change which display to use - this is preferred over the options below
     - Can use mouse to drag over
     - Can use Windows shortcut keys to move windowed programs around `Win + Left/Right`
     - Can use Windows shortcut keys to move fullscreen programs and the SteamVR Headset Window around `Shift + Win + Left/Right`
     - May need to make the game windowed either in-game settings or with `Alt + Enter`
-- If running SteamVR in fullscreen mode (not the default but can be set with debug_enable=false)
-    - Click on the headset window to make it fullscreen on your primary display
-    - If the Headset Window isn't fullscreen then you may get a black screen or some UI may not render in-game
-    - AVOID using `Alt + Tab` as this is more likely to exit fullscreen
-    - SteamVR Status will notify you if your headset window isn't fullscreen. Click on the `Enable Fullscreen Mode` notice or the headset window again to fix it
-- Click on the game's window on your second display for control input to work
 #### Single-Display Setup:
-- Mouse controls will not be usable in single display mode as you will click on the headset window in the foreground and input will not register in-game.
+- Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
 - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
-- Make the SteamVR Headset Window in focus on your display
 - Press `Ctrl + F8` to toggle locking the headset window to the foreground
-- Use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
+- If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
 - To quit, `Alt + Tab` to switch to the headset window and press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
 
 
@@ -319,17 +312,6 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 10. Open your new profile from `Documents\My Games\vrto3d` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
 11. Close out of SteamVR and the game and restart the game. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still repeat steps 4-10 if needed
 12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
-
-#### Displays
-- Make sure you set your displays to ***EXTENDED MODE*** or this will not work
-- Here are some example multi-display configurations that are confirmed to work:
-- A single display connected to your computer twice - switch between the inputs on the monitor as needed to move windows around
-- Multiple displays connected - easier to move things around and manage
-- A [dummy passthrough](https://a.co/d/gUkhWda) or [dummy plug](https://a.co/d/9T6ZBkB) works, but you may not be able to see what you're doing
-- A software virtual monitor will work for non-3DVision setups, but will prove tricky
-    - [This IDD one works](https://www.reddit.com/r/cloudygamer/comments/185agmk/guide_how_to_setup_hdr_with_moonlightsunshine/)
-    - [This one also works](https://www.amyuni.com/forum/viewtopic.php?t=3030)
-    - Sunshine/Moonlight is compatible
 
 #### Troubleshooting
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings`
