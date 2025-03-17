@@ -7,7 +7,10 @@
 - Windows-only solution currently, but there are other solutions on Linux like Monado XR.
 - Check out the video guide here (there are 2 parts):
 
-[![Video guide available here](https://img.youtube.com/vi/0caYbmcthkg/hqdefault.jpg)](https://www.youtube.com/watch?v=0caYbmcthkg)
+
+<a href="https://www.youtube.com/watch?v=0caYbmcthkg" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.youtube.com/vi/0caYbmcthkg/hqdefault.jpg" alt="Video guide available here">
+</a>
 
 
 ## Compatible 3D Displays
@@ -21,7 +24,7 @@
  
 
 ## Compatible VR Games & Mods
-Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compatibility-List) to see if a game has been tested
+Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatibility-List) to see if a game has been tested
 
 
 ## Hotkeys
@@ -114,6 +117,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
     - May need to make the game windowed either in-game settings or with `Alt + Enter`
 #### Single-Display Setup:
 - Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
+    - Can try using [AutoCursorLock](https://github.com/James-LG/AutoCursorLock) if the mouse keeps escaping
 - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
 - Press `Ctrl + F8` to toggle locking the headset window to the foreground
 - If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
@@ -313,6 +317,7 @@ Checkout the [Compatibility List](https://github.com/oneup03/VRto3D/wiki/Compati
 12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
 
 #### Troubleshooting
+- If a Non-Steam Game is running poorly, try [Disabling Async Reprojection](https://oneup03.github.io/VRto3D/wiki/Disable-Async-Reprojection)
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them
     - Run SteamVR
