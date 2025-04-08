@@ -182,7 +182,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 - Using WibbleWobble is at your own risk to your monitor/emitter/glasses. It works well but is unofficial
 - WibbleWobble works with 3DVision, Open3DOLED, and several DIY hardware solutions
-- If you don't need VRto3D features (User Presets, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://github.com/PHARTGAMES/WibbleWobbleCore#steamvr-setup-openvr-client" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
+- If you don't need VRto3D features (User Presets, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
 ### Initial Install
 - 3DVision installation detailed below. See WibbleWobble GitHub for other configurations
 - Complete the [Base Installation](#base-installation) section
