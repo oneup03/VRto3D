@@ -15,12 +15,13 @@
 
 ## Compatible 3D Displays
 - 3D TVs - work great if you can find one
-- 3D Projectors - work great, but need more space and may be expensive
+- 3D Projectors - work great, but need more space
+- Passive 3D displays - work great, but hard to find
 - AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, relatively inexpensive. If you don't have a USBC port with DP-Alt mode on your PC, they require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) - choose one with SBS and audio support. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
 - Lume Pad - works great, a bit more expensive, requires [Sunshine/Gamestream + Moonlight](https://support.leiainc.com/lume-pad-2/apps/moonlight3d)
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, currently expensive
-- 3D Vision hardware works great thanks to WibbleWobble
-- Virtual Desktop with a VR headset - apparently works, but will not be officially supported
+- 3D Vision hardware works thanks to WibbleWobble
+- Virtual Desktop with a VR headset - works with [additional setup](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop)
  
 
 ## Compatible VR Games & Mods
@@ -106,6 +107,13 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - The Headset window must be on your primary 3D display
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
 - Try launching a VR game
+#### Single-Display Setup:
+- Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
+    - Can try using [AutoCursorLock](https://github.com/James-LG/AutoCursorLock) if the mouse keeps escaping
+- Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
+- Press `Ctrl + F8` to toggle locking the headset window to the foreground
+- If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
+- To quit, `Alt + Tab` to switch to the headset window and press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
 #### Multi-Display Setup:
 - Keyboard and Mouse are usable, but make sure the mouse is captured by the 2D game's window
 - Make sure you set your displays to ***EXTENDED MODE*** or this will not work
@@ -115,13 +123,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Can use Windows shortcut keys to move windowed programs around `Win + Left/Right`
     - Can use Windows shortcut keys to move fullscreen programs and the SteamVR Headset Window around `Shift + Win + Left/Right`
     - May need to make the game windowed either in-game settings or with `Alt + Enter`
-#### Single-Display Setup:
-- Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
-    - Can try using [AutoCursorLock](https://github.com/James-LG/AutoCursorLock) if the mouse keeps escaping
-- Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
-- Press `Ctrl + F8` to toggle locking the headset window to the foreground
-- If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
-- To quit, `Alt + Tab` to switch to the headset window and press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
 
 
 ## Interlaced, Checkerboard, and Anaglyph Installation (only if you need this output format)
