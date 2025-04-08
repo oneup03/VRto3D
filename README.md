@@ -17,8 +17,8 @@
 - 3D TVs - work great if you can find one
 - 3D Projectors - work great, but need more space
 - Passive 3D displays - work great, but hard to find
-- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, relatively inexpensive. If you don't have a USBC port with DP-Alt mode on your PC, they require a [compatible adapter](https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing) - choose one with SBS and audio support. A [USBC extension](https://a.co/d/90y4CaY) is also recommended
-- Lume Pad - works great, a bit more expensive, requires [Sunshine/Gamestream + Moonlight](https://support.leiainc.com/lume-pad-2/apps/moonlight3d)
+- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, relatively inexpensive. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended
+- Lume Pad - works great, a bit more expensive, requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a>
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, currently expensive
 - 3D Vision hardware works thanks to WibbleWobble
 - Virtual Desktop with a VR headset - works with [additional setup](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop)
@@ -47,7 +47,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Modify the `Documents\My Games\vrto3d\default_config.json` for your setup
 - Some changes made to this configuration require a restart of SteamVR to take effect
 - Fields with a `"+"` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from `default_config.json` using `Ctrl + F10`
-- Reference [Virtual-Key Code](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) strings for user hotkeys
+- Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> strings for user hotkeys
 - Reference [Profile Creation Steps](#profile-creation-steps) for creating a game-specific profile
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
@@ -95,7 +95,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Click `Edit` on the `Desktop Layout` and then select `Disable Steam Input`
     - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
-- Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
+- Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
 - Close SteamVR
 - Edit the `Documents\My Games\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
@@ -109,7 +109,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Try launching a VR game
 #### Single-Display Setup:
 - Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
-    - Can try using [AutoCursorLock](https://github.com/James-LG/AutoCursorLock) if the mouse keeps escaping
+    - Can try using <a href="https://github.com/James-LG/AutoCursorLock" target="_blank" rel="noopener noreferrer">AutoCursorLock</a> if the mouse keeps escaping
 - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
 - Press `Ctrl + F8` to toggle locking the headset window to the foreground
 - If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
@@ -130,13 +130,13 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Complete the [Base Installation](#base-installation) section
 - Optionally set `tab_enable` to true in `Documents\My Games\vrto3d\default_config.json` if you prefer to lose half vertical resolution instead of half horizontal resolution
     - If using interlaced mode, you want SbS for Column Interlaced and TaB for Row/Line Interlaced
-- Download the latest [ReShade](https://reshade.me/#download) with full add-on support
+- Download the latest <a href="https://reshade.me/#download" target="_blank" rel="noopener noreferrer">ReShade</a> with full add-on support
 - Run the ReShade installer
     - Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
     - Select `vrserver.exe` and click Next
     - Select `DirectX 11` and click Next
     - Click `Uncheck All` and click Next, Next, Finish
-- Download [3DToElse.fx](https://github.com/BlueSkyDefender/Depth3D/blob/master/Other%20%20Shaders/3DToElse.fx) and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
+- Download <a href="https://github.com/BlueSkyDefender/Depth3D/blob/master/Other%20%20Shaders/3DToElse.fx" target="_blank" rel="noopener noreferrer">3DToElse.fx</a> and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
 - Run SteamVR
 - Press `Home` to open ReShade and click `Skip Tutorial`
 - Select `To_Else` in the menu to enable 3DToElse
@@ -153,12 +153,12 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 ## SR (Simulated Reality) Displays (only if you need this output format)
 
-- When [XRGameBridge](https://github.com/JoeyAnthony/XRGameBridge/releases) is more stable, that will be preferable to use instead of VRto3D for games/mods with OpenXR support
+- When <a href="https://github.com/JoeyAnthony/XRGameBridge/releases" target="_blank" rel="noopener noreferrer">XRGameBridge</a> is more stable, that will be preferable to use instead of VRto3D for games/mods with OpenXR support
 - SR displays work in either Multi or Single Display environments
     - For both, read the Base Installation configuration and usage instructions to ensure that you get a proper 3D image and can control the game
 - Complete the [Base Installation](#base-installation) section
-- Install the software package provided with your SR display, if yours did not come with one, install the `SR-VERSION-win64.exe` and `simulatedreality-VERSION-win64-Release.exe` from the [LeiaInc Github](https://github.com/LeiaInc/leiainc.github.io/tree/master/SRSDK)
-- Download the latest [ReShade](https://reshade.me/#download) with full add-on support
+- Install the software package provided with your SR display, if yours did not come with one, install the `SR-VERSION-win64.exe` and `simulatedreality-VERSION-win64-Release.exe` from the <a href="https://github.com/LeiaInc/leiainc.github.io/tree/master/SRSDK" target="_blank" rel="noopener noreferrer">LeiaInc Github</a>
+- Download the latest <a href="https://reshade.me/#download" target="_blank" rel="noopener noreferrer">ReShade</a> with full add-on support
 - Run the ReShade installer
     - Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
     - Select `vrserver.exe` and click Next
@@ -182,7 +182,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 - Using WibbleWobble is at your own risk to your monitor/emitter/glasses. It works well but is unofficial
 - WibbleWobble works with 3DVision, Open3DOLED, and several DIY hardware solutions
-- If you don't need VRto3D features (User Presets, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the [WibbleWobbleVR plugin directly](https://github.com/PHARTGAMES/WibbleWobbleCore#steamvr-setup-openvr-client)
+- If you don't need VRto3D features (User Presets, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://github.com/PHARTGAMES/WibbleWobbleCore#steamvr-setup-openvr-client" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
 ### Initial Install
 - 3DVision installation detailed below. See WibbleWobble GitHub for other configurations
 - Complete the [Base Installation](#base-installation) section
@@ -190,9 +190,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Set the `window_width` to 2x your `render_width`
     - Leave it in the default SBS display mode
     - If you decide to use 100Hz (recommended for performance/stability), set `display_frequency` to `50.0`
-- Use [3D Fix Manager](https://helixmod.blogspot.com/2017/05/3d-fix-manager.html) to install the 3D Vision Driver
+- Use <a href="https://helixmod.blogspot.com/2017/05/3d-fix-manager.html" target="_blank" rel="noopener noreferrer">3D Fix Manager</a> to install the 3D Vision Driver
     - If the emitter driver didn't install, browse to the place you installed the manager and run the `Drivers\3DVisionControllerDriver\3dvisioncontrollerdriver.exe`
-- Download the latest [WibbleWobble Release](https://github.com/PHARTGAMES/WibbleWobbleCore/releases) and extract it somewhere without spaces in the path like `C:\`
+- Download the latest <a href="https://github.com/PHARTGAMES/WibbleWobbleCore/releases" target="_blank" rel="noopener noreferrer">WibbleWobble Release</a> and extract it somewhere without spaces in the path like `C:\`
 - Under the `WibbleWobbleClient` folder, run `Register.bat` as an administrator and reply `Yes` if prompted
 - Under the `WWReshadeAddon\Reshade` folder, run the included ReShade Setup
     - Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
@@ -200,11 +200,11 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Select `DirectX 11` and click Next
     - Click `Uncheck All` and click Next, Next, Finish
 - Under the `WWReshadeAddon\Release\x64` folder, copy all files to your `Steam\steamapps\common\SteamVR\bin\win64` folder
-- Download the latest [CRU Release](https://customresolutionutility.net/) and save it to your WibbleWobble folder
+- Download the latest <a href="https://customresolutionutility.net/" target="_blank" rel="noopener noreferrer">CRU Release</a> and save it to your WibbleWobble folder
 - Run `CRU.exe` and grant it admin
     - Take note of your monitor's EDID (first 7 characters in the dropdown list)
     - Exit CRU
-- Download the latest [NvTimingsEd Release](https://github.com/rajkosto/NvTimingsEd/releases) and save it to your WibbleWobble folder
+- Download the latest <a href="https://github.com/rajkosto/NvTimingsEd/releases" target="_blank" rel="noopener noreferrer">NvTimingsEd Release</a> and save it to your WibbleWobble folder
 - Run `NvTimingsEd.exe` and grant it admin
     - From the drop down list, select your monitor's EDID (AUS_27B1 for Asus PG278QR for example)
     - Select the framerate you want to run 3D at
@@ -270,9 +270,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 #### Controls
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
-- Several VR controller only games can be made to work by using [Driver4VR](https://www.driver4vr.com/), a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
+- Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
-    - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for these hotkeys
+    - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> to find the strings to use for these hotkeys
     - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true). The `ctrl_toggle_type` can be set to either `"toggle"` them on/off or `"hold"` that disables them while the button is held
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Settings - Load Keys
@@ -298,7 +298,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - The Guide button can be used, but not in combinations
         - XInput Combinations can be set like this `"XINPUT_GAMEPAD_A+XINPUT_GAMEPAD_B"`
     - Store keys can only use single keyboard/mouse keys
-    - Reference [Virtual-Key Codes](https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h) to find the strings to use for these hotkeys
+    - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> to find the strings to use for these hotkeys
 - The Load key can be configured to `"switch"` to the user depth/separation & convergence setting, `"toggle"` between the preset and the previous setting every 1.5s, or `"hold"` the user setting until the key is released
 - The Store key will update your user Depth/Separation and Convergence setting to the current value (this only saves while the game is running - you need to create a game profile to store it permanently)
 - It is recommended to have a single user preset of `"switch"` type that matches the default depth/separation & convergence so you can easily get back to the default
@@ -327,11 +327,11 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Click `Manage Add-Ons`
     - Turn `Off` any virtual HMD drivers (ALVR, VRidge, OpenTrack, VCR, iVRy, etc)
     - You can also try forcing SteamVR to use the VRto3D driver by editing `Steam\config\steamvr.vrsettings` and under the `"steamvr" : {` section, add this line: `"forcedDriver" : "vrto3d",`
-    - if issues still arise, try a [Clean SteamVR Install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/) and delete your `Steam\steamapps\common\SteamVR` folder
+    - if issues still arise, try a <a href="https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/" target="_blank" rel="noopener noreferrer">Clean SteamVR Install</a> and delete your `Steam\steamapps\common\SteamVR` folder
 - If you have a VR headset and run into issues with this driver, here's some things to try:
     - Disconnect VR headset from computer
-    - [Clean SteamVR Install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/)
-    - [Set SteamVR as OpenXR Runtime](https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html)
+    - <a href="https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/" target="_blank" rel="noopener noreferrer">Clean SteamVR Install</a>
+    - <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>[]()
 
 
 ## Building
