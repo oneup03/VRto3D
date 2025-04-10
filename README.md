@@ -182,12 +182,12 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 - Using WibbleWobble is at your own risk to your monitor/emitter/glasses. It works well but is unofficial
 - WibbleWobble works with 3DVision, Open3DOLED, and several DIY hardware solutions
-- If you don't need VRto3D features (User Presets, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
+- If you don't need VRto3D features (User Hotkeys, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
 ### Initial Install
 - 3DVision installation detailed below. See WibbleWobble GitHub for other configurations
 - Complete the [Base Installation](#base-installation) section
     - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
-    - Set the `window_width` to 2x your `render_width`
+    - Set the `window_width` to 2x your `render_width` (i.e. 3840x1080 for 1920x1080 per-eye)
     - Leave it in the default SBS display mode
     - If you decide to use 100Hz (recommended for performance/stability), set `display_frequency` to `50.0`
 - Use <a href="https://helixmod.blogspot.com/2017/05/3d-fix-manager.html" target="_blank" rel="noopener noreferrer">3D Fix Manager</a> to install the 3D Vision Driver
@@ -219,6 +219,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Run SteamVR
     - Press `Shift + END` to start WibbleWobble
     - Press `Shift + END` again to bring up the WibbleWobble menu
+    - ***You have to press `Enter` key to apply any WibbleWobble setting***
     - Press `Shift + /` to (un)focus WibbleWobble (necessary to see anything else on desktop)
     - Select `Client Config`
         - Set `Window Size X/Y` for your Fullscreen Resolution
@@ -226,7 +227,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - Set `Reprojection` to `Disabled`
         - Click `Save` and `X` to close the window
     - Select `Game Config`
-        - Set `Window Size X` to be your VRto3D horizontal render resolution
+        - Set `Window Size X` to be your VRto3D horizontal render resolution (i.e. 1920 for 1920x1080 per-eye)
         - Set `Window Size Y` to be your VRto3D vertical render resolution
         - Click `Save` and `X` to close the window
         - This may crash SteamVR, just close out and try again
@@ -248,12 +249,19 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
 - Start SteamVR
 - Press `Shift + END` to start WibbleWobble
-    - If SteamVR crashes, close everything, you may need to temporarily edit your VRto3D `window_width` to half, run SteamVR and activate WibbleWobble, close everything, then revert to full
 - Press `Shift + /` to unfocus WibbleWobble (Don't use `Ctrl + F8`!)
 - Launch VR Game/Mod
 - Press `Shift + /` to focus WibbleWobble (Don't use `Ctrl + F8`!)
 - `Alt + Tab` to the game window for controls to work if the game window wasn't already active
 - Mouse controls can work on a single display as long as you are clicking somewhere on the game window that is covered by WibbleWobble
+### Troubleshooting
+- If SteamVR crashes, close everything, you may need to temporarily edit your VRto3D `window_width` to half, run SteamVR and activate WibbleWobble, close everything, then revert to full
+- If you get a black screen, open WibbleWobble config with `Shift + END` and under `Game Config` set `Window Size X` to either half or double your current setting, and then immedietely set it back to the original value. If SteamVR crashes, close everything and try again.
+- If you experience ghosting, try turning on your monitor's `Ultra Low Motion Blur` or `ULMB` or `Lightboost` feature. You may have to enable 3DVision in Nvidia Control Panel for this setting to be available
+- If your 3D Emitter doesn't trigger or you are getting too much wobbling, try this in the Nvidia Control Panel:
+    - Toggling GSync On/Off
+    - Toggling 3DVision On/Off
+    - Or try rebooting and make sure no other programs are running in the background
 
 
 ## Notes
