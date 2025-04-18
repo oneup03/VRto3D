@@ -207,16 +207,25 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Download the latest <a href="https://github.com/rajkosto/NvTimingsEd/releases" target="_blank" rel="noopener noreferrer">NvTimingsEd Release</a> and save it to your WibbleWobble folder
 - Run `NvTimingsEd.exe` and grant it admin
     - From the drop down list, select your monitor's EDID (AUS_27B1 for Asus PG278QR for example)
-    - Select the framerate you want to run 3D at
+    - Select the refresh rate / framerate you want to run 3D at
     - Click `Edit` but don't change anything
     - Copy the exact refresh rate for WibbleWobble's `Sync Rate HZ`
     - Copy the `X` value for WibbleWobble's `Open Delay Microseconds`
     - Copy the `Y` value for WibbleWobble's `Open Duration Microseconds`
     - Copy the `W` value for WibbleWobble's `W`
 - Open Nvidia Control Panel 
-    - Under the `Change Resolution` tab, set `Refresh Rate` to `100Hz` or `120Hz` and click `Apply`
     - Under `Set up G-Sync` tab, uncheck `Enable G-Sync` and click `Apply`
-- Run SteamVR
+    - Under `Set up stereoscopic 3D` tab, uncheck `Enable stereoscopic 3D` and click `Apply`
+    - Open the `Change Resolution` tab
+    - Select `Customize`
+    - Check `Enable resolutions not exposed by the display` and click `Create Custom Resolution`
+    - The Horizontal Pixels and Vertical Lines should be the same as your monitor's native resolution
+    - Set the `Refresh Rate (Hz)` to the same `Refresh Rate` as NvTimingsEd
+    - Change Timing `Standard` to `Manual`
+    - Increase the `Vertical Total Pixels` value by `+5` and click `Test`
+    - If the Test is successful (Your monitor should switch to LightBoost mode), click `Yes` and then `OK`
+    - Select your new `Custom` Resolution and corresponding `Refresh Rate` and click `Apply` and `Yes`
+- Launch SteamVR
     - Press `Shift + END` to start WibbleWobble
     - Press `Shift + END` again to bring up the WibbleWobble menu
     - ***You have to press `Enter` key to apply any WibbleWobble setting***
@@ -225,10 +234,13 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - Set `Window Size X/Y` for your Fullscreen Resolution
         - Set `Source Format` to `Side By Side Half`
         - Set `Reprojection` to `Disabled`
+        - Set `Elevate Process Priority` to `Enabled`
+        - DO NOT MODIFY Other Settings unless you are using something other than 3DVision
         - Click `Save` and `X` to close the window
     - Select `Game Config`
         - Set `Window Size X` to be your VRto3D horizontal render resolution (i.e. 1920 for 1920x1080 per-eye)
         - Set `Window Size Y` to be your VRto3D vertical render resolution
+	- DO NOT MODIFY Other Settings
         - Click `Save` and `X` to close the window
         - This may crash SteamVR, just close out and try again
     - Select `Emitter Config`
@@ -244,7 +256,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
     - Close the `SteamVR Status` window to completely exit out of things
 - Edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4` and `PerformanceMode=1`
-- If you experience ghosting, try turning on your monitor's `Ultra Low Motion Blur` or `ULMB` feature. You may have to enable 3DVision in Nvidia Control Panel for this setting to be available
 ### Playing a Game
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
 - Start SteamVR
@@ -261,7 +272,13 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - If your 3D Emitter doesn't trigger or you are getting too much wobbling, try this in the Nvidia Control Panel:
     - Toggling GSync On/Off
     - Toggling 3DVision On/Off
+    - Under `Manage 3D Settings`
+        - Set `Low Latency Mode` to `Ultra`
+        - Set `Max Frame Rate` to match the `Refresh Rate` from NvTimingsEd
+        - Set `Power Management Mode` to `Prefer Maximum Performance`
+        - Set `Texture Filtering - Quality` to `High Performance``
     - Or try rebooting and make sure no other programs are running in the background
+- If WibbleWobble settings are really messed up, delete your `%APPDATA%\..\LocalLow\PHARTGAMES\WibbleWobble` folder
 
 
 ## Notes
