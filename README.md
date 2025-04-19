@@ -188,6 +188,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Complete the [Base Installation](#base-installation) section
     - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
     - Set the `window_width` to 2x your `render_width` (i.e. 3840x1080 for 1920x1080 per-eye)
+        - This sometimes causes SteamVR to crash. If you want more stability and are ok with half-width, you can set `window_width` and `window_height` to your desktop resolution
     - Leave it in the default SBS display mode
     - If you decide to use 100Hz (recommended for performance/stability), set `display_frequency` to `50.0`
 - Use <a href="https://helixmod.blogspot.com/2017/05/3d-fix-manager.html" target="_blank" rel="noopener noreferrer">3D Fix Manager</a> to install the 3D Vision Driver
@@ -216,15 +217,19 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Open Nvidia Control Panel 
     - Under `Set up G-Sync` tab, uncheck `Enable G-Sync` and click `Apply`
     - Under `Set up stereoscopic 3D` tab, uncheck `Enable stereoscopic 3D` and click `Apply`
-    - Open the `Change Resolution` tab
-    - Select `Customize`
-    - Check `Enable resolutions not exposed by the display` and click `Create Custom Resolution`
-    - The Horizontal Pixels and Vertical Lines should be the same as your monitor's native resolution
-    - Set the `Refresh Rate (Hz)` to the same `Refresh Rate` as NvTimingsEd
-    - Change Timing `Standard` to `Manual`
-    - Increase the `Vertical Total Pixels` value by `+5` and click `Test`
-    - If the Test is successful (Your monitor should switch to LightBoost mode), click `Yes` and then `OK`
-    - Select your new `Custom` Resolution and corresponding `Refresh Rate` and click `Apply` and `Yes`
+    - If your display has an OSD LightBoost option:
+        - Activate LightBoost in the monitor OSD
+        - Under the `Change Resolution` tab, set Refresh Rate to 100Hz or 120Hz and click `Apply`
+    - Else if your display requires NVidia to activate LightBoost, follow these steps:
+        - Open the `Change Resolution` tab
+        - Select `Customize`
+        - Check `Enable resolutions not exposed by the display` and click `Create Custom Resolution`
+        - The Horizontal Pixels and Vertical Lines should be the same as your monitor's native resolution
+        - Set the `Refresh Rate (Hz)` to the same `Refresh Rate` as NvTimingsEd (nearest integer)
+        - Change Timing `Standard` to `Manual`
+        - Increase the `Vertical Total Pixels` value by `+5` and click `Test`
+        - If the Test is successful (Your monitor should switch to LightBoost mode), click `Yes` and then `OK`
+        - Select your new `Custom` Resolution and corresponding `Refresh Rate` and click `Apply` and `Yes`
 - Launch SteamVR
     - Press `Shift + END` to start WibbleWobble
     - Press `Shift + END` again to bring up the WibbleWobble menu
@@ -234,6 +239,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - Set `Window Size X/Y` for your Fullscreen Resolution
         - Set `Source Format` to `Side By Side Half`
         - Set `Reprojection` to `Disabled`
+        - Set `DWM` to `Enabled`
         - Set `Elevate Process Priority` to `Enabled`
         - DO NOT MODIFY Other Settings unless you are using something other than 3DVision
         - Click `Save` and `X` to close the window
@@ -245,6 +251,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - This may crash SteamVR, just close out and try again
     - Select `Emitter Config`
         - Set `Sync Rate HZ` to match your exact refresh rate from NvTimingsEd
+            - If you experience eye flips, try setting this to the nearest integer value instead
         - Click `Nvidia Config`
             - Select `Enabled`
             - Set `Open Delay Microseconds` to the NvTimingsEd `X` value
@@ -254,6 +261,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - Click `Save` and `X` to close the window
     - Press `Shift + END` to close the WibbleWobble menu
     - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
+    - Use `Shift + ,` to flip eye output
     - Close the `SteamVR Status` window to completely exit out of things
 - Edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4` and `PerformanceMode=1`
 ### Playing a Game
@@ -270,13 +278,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - If you get a black screen, open WibbleWobble config with `Shift + END` and under `Game Config` set `Window Size X` to either half or double your current setting, and then immedietely set it back to the original value. If SteamVR crashes, close everything and try again.
 - If you experience ghosting, try turning on your monitor's `Ultra Low Motion Blur` or `ULMB` or `Lightboost` feature. You may have to enable 3DVision in Nvidia Control Panel for this setting to be available
 - If your 3D Emitter doesn't trigger or you are getting too much wobbling, try this in the Nvidia Control Panel:
+    - Close all other applications
     - Toggling GSync On/Off
     - Toggling 3DVision On/Off
-    - Under `Manage 3D Settings`
-        - Set `Low Latency Mode` to `Ultra`
-        - Set `Max Frame Rate` to match the `Refresh Rate` from NvTimingsEd
-        - Set `Power Management Mode` to `Prefer Maximum Performance`
-        - Set `Texture Filtering - Quality` to `High Performance``
     - Or try rebooting and make sure no other programs are running in the background
 - If WibbleWobble settings are really messed up, delete your `%APPDATA%\..\LocalLow\PHARTGAMES\WibbleWobble` folder
 
