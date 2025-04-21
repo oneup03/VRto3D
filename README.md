@@ -318,8 +318,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
             "user_load_key": "VK_NUMPAD1",
             "user_store_key": "VK_NUMPAD4",
             "user_key_type": "switch",
-            "user_depth": 0.5,
-            "user_convergence": 0.1
+            "user_depth": 0.4,
+            "user_convergence": 4.0
         },
       ```
 - A Load key and a Store key can be configured to load and save Depth/Separation and Convergence settings for a preset
