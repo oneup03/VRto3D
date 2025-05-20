@@ -198,6 +198,7 @@
     <ClCompile Include="src\device_provider.cpp" />
     <ClCompile Include="src\hmd_driver_factory.cpp" />
     <ClCompile Include="src\json_manager.cpp" />
+    <ClCompile Include="src\overlay_mgr.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\app_id_mgr.h" />
@@ -205,6 +206,7 @@
     <ClInclude Include="src\device_provider.h" />
     <ClInclude Include="src\json_manager.h" />
     <ClInclude Include="src\key_mappings.h" />
+    <ClInclude Include="src\overlay_mgr.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\utils\driverlog\util_driverlog.vcxproj">
