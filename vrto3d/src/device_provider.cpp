@@ -134,27 +134,29 @@ void MyDeviceProvider::Cleanup()
 //-----------------------------------------------------------------------------
 std::string MyDeviceProvider::GetProcessName(uint32_t processID)
 {
-    TCHAR processName[MAX_PATH] = TEXT("<unknown>");
+    std::string result = "<unknown>";
 
-    // Get a handle to the process.
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
-
-    // Get the process name.
-    if (hProcess != NULL)
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, processID);
+    if (hProcess)
     {
-        HMODULE hMod;
-        DWORD cbNeeded;
+        TCHAR processName[MAX_PATH] = TEXT("<unknown>");
+        DWORD size = MAX_PATH;
 
-        if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
+        // Try QueryFullProcessImageName for better accuracy and access support
+        if (QueryFullProcessImageName(hProcess, 0, processName, &size))
         {
-            GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
+#ifdef UNICODE
+            std::wstring ws(processName);
+            result.assign(ws.begin(), ws.end());
+#else
+            result.assign(processName);
+#endif
+            std::filesystem::path fullPath = result;
+            result = fullPath.filename().string();
         }
-        // Release the handle to the process.
+
         CloseHandle(hProcess);
     }
 
-    // Convert TCHAR to std::string and return
-    std::wstring ws(processName);
-    std::string processNameStr(ws.begin(), ws.end());
-    return processNameStr;
+    return result;
 }
