@@ -1237,7 +1237,7 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
             config.user_depth[i] = GetDepth();
             config.user_convergence[i] = GetConvergence();
             BeepSuccess();
-            overlay_msg = "Hotkey " + std::to_string(i + 1) + " updated";
+            overlay_msg = "Hotkey " + config.user_load_str[i] + " updated";
         }
     }
 
