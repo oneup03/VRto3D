@@ -30,9 +30,11 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 ## Hotkeys
 - Adjust Depth (Separation) with `Ctrl + F3` and `Ctrl + F4`
-- Adjust Convergence with `Ctrl + F5` and `Ctrl + F6`
+    - Synchronize the convergence setting by also holding `Shift` - this often has issues in VR mods
+- Adjust Convergence with `Ctrl + F5` and `Ctrl + F6` - this often has issues in VR mods
 - Save all current settings (ones indicated with a `"+"` under [Configuration](#configuration)) as a profile for the currently running game with `Ctrl + F7` A beep will indicate success
-- Reload the profile settings (ones with a `"+"`) from `default_config.json` with `Ctrl + F10` A beep will indicate success
+- Reload the profile settings (ones with a `"+"`) from the current game's `game.exe_config.json` with `Ctrl + F10` A beep will indicate success
+- Reload the profile settings (ones with a `"+"`) from `default_config.json` with `Ctrl + Shift + F10` A beep will indicate success
 - Toggle locking the SteamVR Headset Window to the foreground with `Ctrl + F8`
 - Toggle HMD Height between 0.1m and configured `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed)
@@ -64,7 +66,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB/OU) 3D output (Side by Side is default)               | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
-| `depth_gauge`       | `bool`  | Enable or disable SteamVR IPD gauge display.                                                | `false`        |
 | `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home.                                               | `false`        |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |

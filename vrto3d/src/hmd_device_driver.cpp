@@ -147,6 +147,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     is_active_ = true;
     is_on_top_ = false;
     use_auto_depth_ = true;
+    app_updated_ = false;
 
     // A list of properties available is contained in vr::ETrackedDeviceProperty.
     auto* vrp = vr::VRProperties();
@@ -167,7 +168,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
     vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
     vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
-    if (stereo_display_component_->GetConfig().depth_gauge || stereo_display_component_->GetConfig().dash_enable)
+    if (stereo_display_component_->GetConfig().dash_enable)
     {
         vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
     }
@@ -559,187 +560,157 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 //-----------------------------------------------------------------------------
 // Purpose: Update HMD position, Depth, Convergence, and user binds
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::PollHotkeysThread()
-{
-    static int sleep_time = (int)(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
-    static int height_sleep = 0;
-    static int top_sleep = 0;
-    static int save_sleep = 0;
-    static int depth_sleep = 0;
+void MockControllerDeviceDriver::PollHotkeysThread() {
+    struct {
+        int height = 0;
+        int top = 0;
+        int save = 0;
+        int depth = 0;
+        int overlay = 0;
+    } sleep;
+
+    const int sleep_time = static_cast<int>(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
+    std::string overlay_msg;
+    HWND overlay_hwnd = nullptr;
 
     InitGDIPlus();
-    static HWND over_wind = NULL;
-    static int overlay_sleep = 0;
-    static std::string over_string = "";
 
-    while (is_active_)
-    {
-        if (!stereo_display_component_->GetConfig().disable_hotkeys) {
+    auto isDown = [](int vk) { return GetAsyncKeyState(vk) & 0x8000; };
+    auto isCtrlDown = [&]() { return isDown(VK_CONTROL); };
+    auto setOverlay = [&](const std::string& msg) {
+        overlay_msg = msg;
+        sleep.overlay = stereo_display_component_->GetConfig().sleep_count_max * 3;
+    };
+    auto fmt = [&](const std::string& label, float value, int precision = 3) {
+        std::ostringstream ss;
+        ss << label << std::fixed << std::setprecision(precision) << value;
+        return ss.str();
+    };
+    auto fmtDepthConv = [&]() {
+        std::ostringstream ss;
+        ss << "Depth: " << std::fixed << std::setprecision(3) << stereo_display_component_->GetDepth()
+            << " Conv: " << stereo_display_component_->GetConvergence();
+        return ss.str();
+    };
+
+    while (is_active_) {
+        auto cfg = stereo_display_component_->GetConfig();
+
+        if (!cfg.disable_hotkeys) {
             // Ctrl+F3 Decrease Depth
-            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F3) & 0x8000)) {
+            if (isCtrlDown() && isDown(VK_F3)) {
                 stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
-                if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
-                    stereo_display_component_->ResetProjection(device_index_);
-                }
-                std::ostringstream ss;
-                ss << "Depth: " << std::fixed << std::setprecision(3) << stereo_display_component_->GetDepth()
-                    << " Conv: " << stereo_display_component_->GetConvergence();
-                over_string = ss.str();
-                overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection(device_index_);
+                setOverlay(fmtDepthConv());
             }
             // Ctrl+F4 Increase Depth
-            else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F4) & 0x8000)) {
+            else if (isCtrlDown() && isDown(VK_F4)) {
                 stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
-                if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
-                    stereo_display_component_->ResetProjection(device_index_);
-                }
-                std::ostringstream ss;
-                ss << "Depth: " << std::fixed << std::setprecision(3) << stereo_display_component_->GetDepth()
-                    << " Conv: " << stereo_display_component_->GetConvergence();
-                over_string = ss.str();
-                overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection(device_index_);
+                setOverlay(fmtDepthConv());
             }
             // Ctrl+F5 Decrease Convergence
-            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F5) & 0x8000)) {
+            else if (isCtrlDown() && isDown(VK_F5)) {
                 stereo_display_component_->AdjustConvergence(0.005f, true, device_index_);
-                std::ostringstream ss;
-                ss << "Depth: " << std::fixed << std::setprecision(3) << stereo_display_component_->GetDepth()
-                    << " Conv: " << stereo_display_component_->GetConvergence();
-                over_string = ss.str();
-                overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                setOverlay(fmtDepthConv());
             }
             // Ctrl+F6 Increase Convergence
-            else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F6) & 0x8000)) {
+            else if (isCtrlDown() && isDown(VK_F6)) {
                 stereo_display_component_->AdjustConvergence(-0.005f, true, device_index_);
-                std::ostringstream ss;
-                ss << "Depth: " << std::fixed << std::setprecision(3) << stereo_display_component_->GetDepth()
-                   << " Conv: "<< stereo_display_component_->GetConvergence();
-                over_string = ss.str();
-                overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                setOverlay(fmtDepthConv());
             }
             // Ctrl+F7 Store settings into game profile
-            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F7) & 0x8000) && save_sleep == 0) {
+            if (isCtrlDown() && isDown(VK_F7) && sleep.save == 0) {
                 auto config = stereo_display_component_->GetConfig();
-                save_sleep = config.sleep_count_max;
                 config.depth = stereo_display_component_->GetDepth();
                 config.convergence = stereo_display_component_->GetConvergence();
-                JsonManager json_manager;
-                json_manager.SaveProfileToJson(app_name_ + "_config.json", config);
+                JsonManager().SaveProfileToJson(app_name_ + "_config.json", config);
                 BeepSuccess();
-                std::ostringstream ss;
-                ss << "Created " << app_name_ << "_config.json profile";
-                over_string = ss.str();
-                overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+                setOverlay("Saved " + app_name_ + "_config.json profile");
+                sleep.save = cfg.sleep_count_max;
             }
-            // Ctrl+F10 Reload settings from default.vrsettings
-            else if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F10) & 0x8000) && save_sleep == 0) {
+            // Ctrl+F10 Reload settings from Game Profile or (+Shift) Default Profile
+            else if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
                 auto config = stereo_display_component_->GetConfig();
-                save_sleep = config.sleep_count_max;
-                JsonManager json_manager;
-                if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
-                    if (json_manager.LoadProfileFromJson(DEF_CFG, config))
-                    {
-                        stereo_display_component_->LoadSettings(config, device_index_);
-                        DriverLog("Loaded %s profile\n", DEF_CFG.c_str());
-                        BeepSuccess();
-
-                        std::ostringstream ss;
-                        ss << "Loaded " << DEF_CFG << " profile";
-                        over_string = ss.str();
-                        overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                    }
+                const std::string path = isDown(VK_SHIFT) ? DEF_CFG : app_name_ + "_config.json";
+                if (JsonManager().LoadProfileFromJson(path, config)) {
+                    stereo_display_component_->LoadSettings(config, device_index_);
+                    DriverLog("Loaded %s profile\n", path.c_str());
+                    BeepSuccess();
+                    setOverlay("Loaded " + path + " profile");
                 }
-                else {
-                    if (json_manager.LoadProfileFromJson(app_name_ + "_config.json", config))
-                    {
-                        stereo_display_component_->LoadSettings(config, device_index_);
-                        DriverLog("Loaded %s profile\n", app_name_.c_str());
-                        BeepSuccess();
-                        std::ostringstream ss;
-                        ss << "Loaded " << app_name_ << " profile";
-                        over_string = ss.str();
-                        overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
-                    }
-                }
-                
+                sleep.save = cfg.sleep_count_max;
             }
-            else if (save_sleep > 0) {
-                save_sleep--;
+            else if (sleep.save > 0) {
+                --sleep.save;
             }
             // Ctrl+F11 Toggle Auto Depth
-            if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F11) & 0x8000) && depth_sleep == 0) {
-                depth_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            if (isCtrlDown() && isDown(VK_F11) && sleep.depth == 0) {
                 use_auto_depth_ = !use_auto_depth_;
+                sleep.depth = cfg.sleep_count_max;
             }
-            else if (depth_sleep > 0) {
-                depth_sleep--;
+            else if (sleep.depth > 0) {
+                --sleep.depth;
             }
         }
         // Ctrl+F8 Toggle Always On Top
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F8) & 0x8000) && top_sleep == 0) {
-            top_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+        if (isCtrlDown() && isDown(VK_F8) && sleep.top == 0) {
             is_on_top_ = !is_on_top_;
+            sleep.top = cfg.sleep_count_max;
         }
-        else if (top_sleep > 0) {
-            top_sleep--;
+        else if (sleep.top > 0) {
+            --sleep.top;
         }
         // Ctrl+F9 Toggle HMD height
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_F9) & 0x8000) && height_sleep == 0) {
-            height_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+        if (isCtrlDown() && isDown(VK_F9) && sleep.height == 0) {
             stereo_display_component_->SetHeight();
-            std::ostringstream ss;
-            ss << "HMD Height: " << std::fixed << std::setprecision(2) << stereo_display_component_->GetConfig().hmd_height;
-            over_string = ss.str();
-            overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            setOverlay(fmt("HMD Height: ", stereo_display_component_->GetConfig().hmd_height, 2));
+            sleep.height = cfg.sleep_count_max;
         }
-        else if (height_sleep > 0) {
-            height_sleep--;
+        else if (sleep.height > 0) {
+            --sleep.height;
         }
         // Ctrl+- Decrease Sensitivity
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_MINUS) & 0x8000)) {
+        if (isCtrlDown() && isDown(VK_OEM_MINUS)) {
             stereo_display_component_->AdjustSensitivity(-0.01f);
-            std::ostringstream ss;
-            ss << "Ctrl Sensitivity: " << std::fixed << std::setprecision(2) << stereo_display_component_->GetConfig().ctrl_sensitivity;
-            over_string = ss.str();
-            overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            setOverlay(fmt("Ctrl Sensitivity: ", stereo_display_component_->GetConfig().ctrl_sensitivity, 2));
         }
         // Ctrl++ Increase Sensitivity
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_PLUS) & 0x8000)) {
+        else if (isCtrlDown() && isDown(VK_OEM_PLUS)) {
             stereo_display_component_->AdjustSensitivity(0.01f);
-            std::ostringstream ss;
-            ss << "Ctrl Sensitivity: " << std::fixed << std::setprecision(2) << stereo_display_component_->GetConfig().ctrl_sensitivity;
-            over_string = ss.str();
-            overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            setOverlay(fmt("Ctrl Sensitivity: ", stereo_display_component_->GetConfig().ctrl_sensitivity, 2));
         }
         // Ctrl+[ Decrease Pitch Radius
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_4) & 0x8000)) {
+        if (isCtrlDown() && isDown(VK_OEM_4)) {
             stereo_display_component_->AdjustRadius(-0.01f);
-            std::ostringstream ss;
-            ss << "Pitch Radius: " << std::fixed << std::setprecision(2) << stereo_display_component_->GetConfig().pitch_radius;
-            over_string = ss.str();
-            overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            setOverlay(fmt("Pitch Radius: ", stereo_display_component_->GetConfig().pitch_radius, 2));
         }
         // Ctrl+] Increase Pitch Radius
-        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_OEM_6) & 0x8000)) {
+        else if (isCtrlDown() && isDown(VK_OEM_6)) {
             stereo_display_component_->AdjustRadius(0.01f);
-            std::ostringstream ss;
-            ss << "Pitch Radius: " << std::fixed << std::setprecision(2) << stereo_display_component_->GetConfig().pitch_radius;
-            over_string = ss.str();
-            overlay_sleep = stereo_display_component_->GetConfig().sleep_count_max;
+            setOverlay(fmt("Pitch Radius: ", stereo_display_component_->GetConfig().pitch_radius, 2));
         }
 
         // Check User binds
-        stereo_display_component_->CheckUserSettings(device_index_);
+        auto hotkey_str = stereo_display_component_->CheckUserSettings(device_index_);
+        if (!hotkey_str.empty()) {
+            setOverlay(hotkey_str);
+        }
+
+        // Check for new profile load
+        if (app_updated_)
+        {
+            setOverlay("Loaded " + app_name_ + "_config.json profile");
+            app_updated_ = false;
+        }
 
         // Draw Overlay if applicable
-        if (over_wind == NULL)
-        {
-            over_wind = FindWindow(NULL, L"Headset Window");
+        if (!overlay_hwnd) {
+            overlay_hwnd = FindWindow(NULL, L"Headset Window");
         }
-        else if (overlay_sleep > 0)
-        {
-            DrawOverlayText(over_wind, over_string, 50, 50);
-            overlay_sleep--;
+        else if (sleep.overlay > 0) {
+            DrawOverlayText(overlay_hwnd, overlay_msg, cfg.window_height);
+            --sleep.overlay;
         }
 
         // Sleep for ~ 1 frame
@@ -899,6 +870,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
             stereo_display_component_->LoadSettings(config, device_index_);
             DriverLog("Loaded %s profile\n", app_name.c_str());
             BeepSuccess();
+            app_updated_ = true;
         }
     }
 }
@@ -1139,10 +1111,11 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 // Purpose: Check User Settings and act on them
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
+std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 {
     static int sleep_ctrl = 0;
     static int sleep_rest = 0;
+    std::string overlay_msg = "";
     
     // Get the state of the first controller (index 0)
     XINPUT_STATE state;
@@ -1264,12 +1237,15 @@ void StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
             config.user_depth[i] = GetDepth();
             config.user_convergence[i] = GetConvergence();
             BeepSuccess();
+            overlay_msg = "Hotkey " + std::to_string(i + 1) + " updated";
         }
     }
 
     // Update the config
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_ = config;
+
+    return overlay_msg;
 }
 
 

@@ -180,7 +180,6 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         config.disable_hotkeys = getValue<bool>(jsonConfig, "disable_hotkeys");
         config.tab_enable = getValue<bool>(jsonConfig, "tab_enable");
         config.reverse_enable = getValue<bool>(jsonConfig, "reverse_enable");
-        config.depth_gauge = getValue<bool>(jsonConfig, "depth_gauge");
         config.dash_enable = getValue<bool>(jsonConfig, "dash_enable");
         config.use_open_track = getValue<bool>(jsonConfig, "use_open_track");
         config.open_track_port = getValue<int>(jsonConfig, "open_track_port");

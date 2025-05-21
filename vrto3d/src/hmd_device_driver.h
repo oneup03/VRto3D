@@ -47,7 +47,7 @@ public:
     void AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index);
     float GetDepth();
     float GetConvergence();
-    void CheckUserSettings(uint32_t device_index);
+    std::string CheckUserSettings(uint32_t device_index);
     void AdjustSensitivity(float delta);
     void AdjustRadius(float delta);
     void SetHeight();
@@ -92,6 +92,7 @@ private:
     std::string stereo_serial_number_;
 
     std::string app_name_;
+    std::atomic< bool > app_updated_;
 
     std::atomic< bool > is_active_;
     std::atomic< uint32_t > device_index_;

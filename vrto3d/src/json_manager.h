@@ -45,7 +45,6 @@ struct StereoDisplayDriverConfiguration
 
     bool tab_enable;
     bool reverse_enable;
-    bool depth_gauge;
     bool dash_enable;
 
     float display_latency;
@@ -114,7 +113,6 @@ private:
         {"disable_hotkeys", false},
         {"tab_enable", false},
         {"reverse_enable", false},
-        {"depth_gauge", false},
         {"dash_enable", false},
         {"display_latency", 0.011},
         {"display_frequency", 60.0},
