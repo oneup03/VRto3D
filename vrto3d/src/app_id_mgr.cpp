@@ -53,34 +53,35 @@ void AppIdMgr::SetSteamInstallPath() {
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Parse Game's App ID from Steam Overlay Log
+// Purpose: Parse Game's App ID from VRServer Log
 //-----------------------------------------------------------------------------
-std::string AppIdMgr::GetRunningSteamGameAppID() {
+std::vector<std::string> AppIdMgr::GetSteamAppIDs() {
     if (steam_path_.empty()) {
         DriverLog("Steam install path is empty. Cannot read logs.");
-        return "";
+        return {};
     }
 
-    std::string logFilePath = steam_path_ + "\\GameOverlayUI.exe.log";
+    std::string logFilePath = steam_path_ + "\\logs\\vrserver.txt";
     std::ifstream logFile(logFilePath);
     if (!logFile) {
         DriverLog("Failed to open log file: %s", logFilePath.c_str());
-        return "";
+        return {};
     }
 
-    std::string line;
-    std::regex appIdRegex(R"(Got gameid on commandline: (\d+))");
+    std::regex appkeyRegex(R"(SetApplicationPid.*appkey=([^\s]+))");
     std::smatch match;
+    std::string line;
+    std::vector<std::string> appKeys;
 
     while (std::getline(logFile, line)) {
-        if (std::regex_search(line, match, appIdRegex) && match.size() > 1) {
-            logFile.close();
-            DriverLog("Found Steam App ID: %s", match[1].str().c_str());
-            return match[1].str();  // Extract the App ID as a string
+        if (std::regex_search(line, match, appkeyRegex) && match.size() > 1) {
+            std::string key = match[1].str();
+            if (excluded_app_keys_.find(key) == excluded_app_keys_.end()) {
+                appKeys.push_back(key);
+            }
         }
     }
 
     logFile.close();
-    DriverLog("Failed to find App ID in log file.");
-    return "";
+    return appKeys;
 }

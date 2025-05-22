@@ -41,6 +41,7 @@ struct StereoDisplayDriverConfiguration
     float fov;
     float depth;
     float convergence;
+    bool async_enable;
     bool disable_hotkeys;
 
     bool tab_enable;
@@ -110,6 +111,7 @@ private:
         {"fov", 90.0},
         {"depth", 0.4},
         {"convergence", 4.0},
+        {"async_enable", false},
         {"disable_hotkeys", false},
         {"tab_enable", false},
         {"reverse_enable", false},

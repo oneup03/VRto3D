@@ -63,6 +63,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `fov` +             | `float` | The horizontal field of view (FoV) for the VR rendering.                                    | `90.0`         |
 | `depth` +           | `float` | The max separation. Overrides VR's IPD field.                                               | `0.4`          |
 | `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `4.0`          |
+| `async_enable`      | `bool`  | Whether or not to use Asynchronous Reprojection. May improve or worsen smoothness.          | `false`        |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB/OU) 3D output (Side by Side is default)               | `false`        |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |

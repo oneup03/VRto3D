@@ -267,7 +267,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisplayDebug_Bool, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MotionSmoothing_Bool, false);
-    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, true);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, !stereo_display_component_->GetConfig().async_enable);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowSupersampleFiltering_Bool, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleManualOverride_Bool, true);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
@@ -856,11 +856,12 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
 
         // Attempt to get Steam App ID
         AppIdMgr app_id_mgr;
-        auto app_id = app_id_mgr.GetRunningSteamGameAppID();
-        if (!app_id.empty())
-        {
-            std::string vr_str = "steam.app." + app_id;
-            vr::VRSettings()->SetBool(vr_str.c_str(), vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, true);
+        auto app_ids = app_id_mgr.GetSteamAppIDs();
+        for (const std::string& app_id : app_ids) {
+            vr::VRSettings()->SetBool(app_id.c_str(), vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, !config.async_enable);
+            DriverLog("%s Async Reprojection for appkey: %s",
+                config.async_enable ? "Enabled" : "Disabled",
+                app_id.c_str());
         }
 
         // Attempt to read the JSON settings file

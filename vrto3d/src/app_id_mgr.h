@@ -17,14 +17,26 @@
 #pragma once
 
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 class AppIdMgr {
 public:
     AppIdMgr();
-    std::string GetRunningSteamGameAppID();
+    std::vector<std::string> GetSteamAppIDs();
 
 private:
     void SetSteamInstallPath();
+
+    std::unordered_set<std::string> excluded_app_keys_ = {
+        "system.systemui",
+        "steam.overlay.250820",
+        "system.generated.steamwebhelper.exe",
+        "steam.client",
+        "openvr.component.vrcompositor",
+        "system.keyboard",
+        "system.vrwebhelper.controllerbinding"
+    };
 
     std::string steam_path_;
 };
