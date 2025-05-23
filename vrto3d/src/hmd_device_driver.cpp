@@ -847,14 +847,14 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 //-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
+void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, vr::EVREventType status)
 {
-    if (app_name != app_name_)
+    if (app_name != app_name_ && status == vr::VREvent_ProcessConnected)
     {
         app_name_ = app_name;
         auto config = stereo_display_component_->GetConfig();
 
-        // Attempt to get Steam App ID
+        // Attempt to get Game ID and set Async Reprojection
         AppIdMgr app_id_mgr;
         auto app_ids = app_id_mgr.GetSteamAppIDs();
         for (const std::string& app_id : app_ids) {
@@ -865,14 +865,20 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name)
         }
 
         // Attempt to read the JSON settings file
-        JsonManager json_manager;
-        if (json_manager.LoadProfileFromJson(app_name + "_config.json", config))
+        if (JsonManager().LoadProfileFromJson(app_name + "_config.json", config))
         {
             stereo_display_component_->LoadSettings(config, device_index_);
             DriverLog("Loaded %s profile\n", app_name.c_str());
             BeepSuccess();
             app_updated_ = true;
+            if (config.auto_focus) {
+                is_on_top_ = true;
+            }
         }
+    }
+    else if (status == vr::VREvent_ProcessDisconnected)
+    {
+        is_on_top_ = false;
     }
 }
 

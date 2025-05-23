@@ -83,7 +83,7 @@ public:
     void FocusUpdateThread();
     void AutoDepthThread();
 
-    void LoadSettings(const std::string& app_name);
+    void LoadSettings(const std::string& app_name, vr::EVREventType status);
 
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;

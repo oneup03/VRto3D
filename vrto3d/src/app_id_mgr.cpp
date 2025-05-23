@@ -68,7 +68,7 @@ std::vector<std::string> AppIdMgr::GetSteamAppIDs() {
         return {};
     }
 
-    std::regex appkeyRegex(R"(SetApplicationPid.*appkey=([^\s]+))");
+    std::regex appkeyRegex(R"(SetApplicationPid.*appkey=(.*?)\s+pid=)");
     std::smatch match;
     std::string line;
     std::vector<std::string> appKeys;

@@ -47,6 +47,7 @@ struct StereoDisplayDriverConfiguration
     bool tab_enable;
     bool reverse_enable;
     bool dash_enable;
+    bool auto_focus;
 
     float display_latency;
     float display_frequency;
@@ -116,6 +117,7 @@ private:
         {"tab_enable", false},
         {"reverse_enable", false},
         {"dash_enable", false},
+        {"auto_focus", false},
         {"display_latency", 0.011},
         {"display_frequency", 60.0},
         {"pitch_enable", false},

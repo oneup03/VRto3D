@@ -44,6 +44,10 @@ private:
 
     void* global_mtx_;
 
+    std::string app_name_;
+    uint32_t app_pid_ = 0;
+    uint32_t wait_count_ = 0;
+
     std::unordered_set<std::string> skip_processes_ = {
         "vrcompositor.exe",
         "vrserver.exe",
