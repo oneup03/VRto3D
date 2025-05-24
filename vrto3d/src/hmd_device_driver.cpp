@@ -97,6 +97,16 @@ static void BeepSuccess()
 }
 
 
+//-----------------------------------------------------------------------------
+// Purpose: Signify Operation Failure
+//-----------------------------------------------------------------------------
+static void BeepFailure()
+{
+    // Brnk, dunk sound for failure.
+    Beep(300, 200); Beep(200, 150);
+}
+
+
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
 
@@ -106,6 +116,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     is_active_ = false;
     vr::DriverPose_t curr_pose_ = { 0 };
     app_name_ = "";
+    prev_name_ = "";
 
     auto* vrs = vr::VRSettings();
     JsonManager json_manager;
@@ -148,6 +159,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     is_on_top_ = false;
     use_auto_depth_ = true;
     app_updated_ = false;
+    no_profile_ = false;
 
     // A list of properties available is contained in vr::ETrackedDeviceProperty.
     auto* vrp = vr::VRProperties();
@@ -621,23 +633,42 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             }
             // Ctrl+F7 Store settings into game profile
             if (isCtrlDown() && isDown(VK_F7) && sleep.save == 0) {
-                auto config = stereo_display_component_->GetConfig();
-                config.depth = stereo_display_component_->GetDepth();
-                config.convergence = stereo_display_component_->GetConvergence();
-                JsonManager().SaveProfileToJson(app_name_ + "_config.json", config);
-                BeepSuccess();
-                setOverlay("Saved " + app_name_ + "_config.json profile");
+                if (!prev_name_.empty()) {
+                    auto config = stereo_display_component_->GetConfig();
+                    config.depth = stereo_display_component_->GetDepth();
+                    config.convergence = stereo_display_component_->GetConvergence();
+                    JsonManager().SaveProfileToJson(prev_name_ + "_config.json", config);
+                    BeepSuccess();
+                    setOverlay("Saved " + prev_name_ + "_config.json profile");
+                }
+                else {
+                    BeepFailure();
+                    setOverlay("Failed to save profile");
+                }
+                
                 sleep.save = cfg.sleep_count_max;
             }
             // Ctrl+F10 Reload settings from Game Profile or (+Shift) Default Profile
             else if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
                 auto config = stereo_display_component_->GetConfig();
-                const std::string path = isDown(VK_SHIFT) ? DEF_CFG : app_name_ + "_config.json";
+                std::string path = "";
+                if (isDown(VK_SHIFT)) {
+                    path = DEF_CFG;
+                    app_name_ = "";
+                }
+                else if (!prev_name_.empty()) {
+                    path = prev_name_ + "_config.json";
+                    app_name_ = prev_name_;
+                }
                 if (JsonManager().LoadProfileFromJson(path, config)) {
                     stereo_display_component_->LoadSettings(config, device_index_);
                     DriverLog("Loaded %s profile\n", path.c_str());
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
+                }
+                else {
+                    BeepFailure();
+                    setOverlay("Failed to load profile");
                 }
                 sleep.save = cfg.sleep_count_max;
             }
@@ -702,6 +733,12 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         {
             setOverlay("Loaded " + app_name_ + "_config.json profile");
             app_updated_ = false;
+        }
+        // Check for no profile
+        else if (no_profile_)
+        {
+            setOverlay("No profile found for " + app_name_);
+            no_profile_ = false;
         }
 
         // Draw Overlay if applicable
@@ -852,6 +889,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, vr::E
     if (app_name != app_name_ && status == vr::VREvent_ProcessConnected)
     {
         app_name_ = app_name;
+        prev_name_ = app_name;
         auto config = stereo_display_component_->GetConfig();
 
         // Attempt to get Game ID and set Async Reprojection
@@ -874,6 +912,10 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, vr::E
             if (config.auto_focus) {
                 is_on_top_ = true;
             }
+        }
+        else {
+            BeepFailure();
+            no_profile_ = true;
         }
     }
     else if (status == vr::VREvent_ProcessDisconnected)

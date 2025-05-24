@@ -92,7 +92,9 @@ private:
     std::string stereo_serial_number_;
 
     std::string app_name_;
+    std::string prev_name_;
     std::atomic< bool > app_updated_;
+    std::atomic< bool > no_profile_;
 
     std::atomic< bool > is_active_;
     std::atomic< uint32_t > device_index_;
