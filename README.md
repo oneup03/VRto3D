@@ -40,7 +40,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed)
 - Check the [User Presets](#user-presets) section for instructions on setting up your own Depth/Separation and Convergence presets and also reference the Configuration table below
 - When Pitch/Yaw emulation is enabled, you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
-- Toggle Auto Depth listener off/on with `Ctrl + F11`
+- Toggle Auto Depth listener off/on with `Ctrl + F11` (only works with VR mods that support it)
 
 
 ## Configuration
@@ -48,7 +48,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - VRto3D has to be installed and SteamVR launched once for this config file to show up
 - Modify the `Documents\My Games\vrto3d\default_config.json` for your setup
 - Some changes made to this configuration require a restart of SteamVR to take effect
-- Fields with a `"+"` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from `default_config.json` using `Ctrl + F10`
+- Fields with a `"+"` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from either the game's profile using `Ctrl + F10` or the `default_config.json` using `Ctrl + Shift + F10`
 - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> strings for user hotkeys
 - Reference [Profile Creation Steps](#profile-creation-steps) for creating a game-specific profile
 
@@ -91,14 +91,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 ## Base Installation
 
 - A Single Display configuration is recommended, but you can also use a multi-display configuration if desired
-- Install SteamVR
-- If you want to use Steam Input
-    - Open Steam->Settings->Controller
-    - Toggle on `Enable Steam Input for Xbox Controllers`
-    - Click `Edit` on the `Desktop Layout` and then select `Disable Steam Input`
-    - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
-    - Generally you need to start SteamVR first and separately from the game for Steam Input to work
-- Download the [latest release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
+- Install <a href="https://store.steampowered.com/app/250820/SteamVR/" target="_blank" rel="noopener noreferrer">SteamVR</a>
+- Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
 - Close SteamVR
 - Edit the `Documents\My Games\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
@@ -114,9 +108,10 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
     - Can try using <a href="https://github.com/James-LG/AutoCursorLock" target="_blank" rel="noopener noreferrer">AutoCursorLock</a> if the mouse keeps escaping
 - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
-- Press `Ctrl + F8` to toggle locking the headset window to the foreground
-- If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input to work)
-- To quit, `Alt + Tab` to switch to the headset window and press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
+- Press `Ctrl + F8` to toggle locking the headset window to the foreground (this can be automated with the `auto_focus` setting when a VRto3D profile exists for the game)
+- If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input and sound to work)
+- To quit, exit the game and try to `Alt + Tab` out
+    - If the headset window remains in the foreground, press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
 #### Multi-Display Setup:
 - Keyboard and Mouse are usable, but make sure the mouse is captured by the 2D game's window
 - Make sure you set your displays to ***EXTENDED MODE*** or this will not work
@@ -186,9 +181,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Using WibbleWobble is at your own risk to your monitor/emitter/glasses. It works well but is unofficial
 - WibbleWobble works with 3DVision, Open3DOLED, and several DIY hardware solutions
 - WibbleWobble Hotkeys may not work on non-english keyboard layouts
-- If you don't need VRto3D features (User Hotkeys, Auto-Depth, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
+- If you don't need VRto3D features (User Hotkeys, Per-Game Profiles, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
 ### Initial Install
-- 3DVision installation detailed below. See WibbleWobble GitHub for other configurations
+- 3DVision installation detailed below. Other configurations can still follow the WibbleWobble Reshade Add-On instructions but will need to check the <a href="https://github.com/PHARTGAMES/WibbleWobbleCore" target="_blank" rel="noopener noreferrer">WibbleWobble GitHub</a> for other WibbleWobble Settings
 - Complete the [Base Installation](#base-installation) section
     - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
     - Set the `window_width` to 2x your `render_width` (i.e. 3840x1080 for 1920x1080 per-eye)
@@ -284,6 +279,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Press `Shift + /` to unfocus WibbleWobble (Don't use `Ctrl + F8`!)
 - Launch VR Game/Mod
 - Press `Shift + /` to focus WibbleWobble (Don't use `Ctrl + F8`!)
+- If needed, use `Shift + ,` to flip eye output
 - `Alt + Tab` to the game window for controls to work if the game window wasn't already active
 - Mouse controls can work on a single display as long as you are clicking somewhere on the game window that is covered by WibbleWobble
 ### Troubleshooting
@@ -309,22 +305,27 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - SteamVR may still complain about Direct Display mode, but this can be safely dismissed
 - Exiting SteamVR will "restart" Steam - this is normal
 - Overlays generally won't work on this virtual HMD
-- XInput controller is recommended (required for Single-Display mode)
+- XInput controller is recommended
 - SteamVR doesn't support HDR currently
     - AutoHDR may work, but some games will be too dark or too bright
-- Some mods/games may override your VR settings
-- DLSS, TAA, and other temporal based settings often create a halo around objects. UEVR has a halo fix that lets you use TAA, but others may not
+- DLSS, TAA, and other temporal based settings can create a halo around objects. Most VR mods have fixes for this, but some may not
 
 #### Controls
+- If you want to use Steam Input
+    - Open Steam->Settings->Controller
+    - Toggle on `Enable Steam Input for Xbox Controllers`
+    - Click `Edit` on the `Desktop Layout` and then select `Disable Steam Input`
+    - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
+    - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
 - Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
     - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> to find the strings to use for these hotkeys
     - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true). The `ctrl_toggle_type` can be set to either `"toggle"` them on/off or `"hold"` that disables them while the button is held
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
-    - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Settings - Load Keys
-    - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place
-- OpenTrack 3DoF support is available over UDP loopback at the default 4242 port when `use_open_track` is true. It can be used in combination with Pitch/Yaw emulation
+    - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Presets - Load Keys below
+    - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place. Use the [Hotkeys](#hotkeys) to adjust this in-game
+- OpenTrack 3DoF support is available over UDP loopback at the configured `open_track_port` when `use_open_track` is true. It can be used in combination with Pitch/Yaw emulation
 
 #### User Presets
 - If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen or you may not see a change immediately. If you reload/restart/reinitialize the VR mod, you should see the change
@@ -347,25 +348,24 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Store keys can only use single keyboard/mouse keys
     - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> to find the strings to use for these hotkeys
 - The Load key can be configured to `"switch"` to the user depth/separation & convergence setting, `"toggle"` between the preset and the previous setting every 1.5s, or `"hold"` the user setting until the key is released
-- The Store key will update your user Depth/Separation and Convergence setting to the current value (this only saves while the game is running - you need to create a game profile to store it permanently)
+- The Store key will update your user Depth/Separation and Convergence setting to the current value (this only saves while the game is running - you need to create a game profile as detailed below to store it permanently)
 - It is recommended to have a single user preset of `"switch"` type that matches the default depth/separation & convergence so you can easily get back to the default
 
 #### Profile Creation Steps:
-1. Modify or copy and create user preset(s) in `default_config.json` for the game you want to play
-2. If applicable, modify `hmd_height, pitch_enable, yaw_enable, pose_reset_key, ctrl_toggle_key, ctrl_toggle_type, pitch_radius, ctrl_deadzone, ctrl_sensitivity` for the game profile
-3. If the game is already running, use `Ctrl + F10` to reload the `default_config.json` with your new settings and presets
-4. Adjust depth/separation (`Ctrl + F3` and `Ctrl + F4`) & convergence (`Ctrl + F5` and `Ctrl + F6`) for a preset
+1. Modify or copy and create user preset(s) in `default_config.json` (or preferably in the `Game.exe_config.json` if one already exists) for the game you want to play
+2. If applicable, modify `hmd_height, fov, pitch_enable, yaw_enable, pose_reset_key, ctrl_toggle_key, ctrl_toggle_type, pitch_radius, ctrl_deadzone, ctrl_sensitivity` for the game profile
+3. If the game is already running, use `Ctrl + Shift + F10` to reload the `default_config.json` (or `Ctrl + F10` to reload the `Game.exe_config.json`) with your new settings and presets
+4. Adjust depth/separation (`Ctrl + F3` and `Ctrl + F4` with `+ shift` if possible) & convergence (`Ctrl + F5` and `Ctrl + F6`) for a preset
 5. Use the configured `user_store_key` to temporarily save the current depth/separation & convergence values to the preset
 6. Repeat 4 & 5 for each preset you need
 7. Adjust depth/separation & convergence back to what you want the default to be (if you have a default `"switch"` preset, you can use its configured `user_load_key`)
 8. If applicable, adjust the `ctrl_sensitivity` with `Ctrl -` and `Ctrl +` and the `pitch_radius` with `Ctrl [` and `Ctrl ]`
 9. Save the profile with `Ctrl + F7`
 10. Open your new profile from `Documents\My Games\vrto3d` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
-11. Close out of SteamVR and the game and restart the game. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still repeat steps 4-10 if needed
+11. Close out of SteamVR and the game and restart the game. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still make any adjustments per above instructions
 12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
 
 #### Troubleshooting
-- If a Non-Steam Game is running poorly, try [Disabling Async Reprojection](https://oneup03.github.io/VRto3D/wiki/Disable-Async-Reprojection)
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them
     - Run SteamVR
