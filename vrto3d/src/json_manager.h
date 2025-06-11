@@ -45,6 +45,7 @@ struct StereoDisplayDriverConfiguration
     bool disable_hotkeys;
 
     bool tab_enable;
+    int32_t framepack_offset;
     bool reverse_enable;
     bool dash_enable;
     bool auto_focus;
@@ -115,6 +116,7 @@ private:
         {"async_enable", false},
         {"disable_hotkeys", false},
         {"tab_enable", false},
+        {"framepack_offset", 0},
         {"reverse_enable", false},
         {"dash_enable", false},
         {"auto_focus", false},

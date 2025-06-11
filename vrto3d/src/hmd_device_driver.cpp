@@ -1015,7 +1015,7 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
         else
         {
             // Right eye viewport on the bottom half of the window
-            *pnY = config_.window_height / 2;
+            *pnY = config_.window_height / 2 + config_.framepack_offset;
         }
     }
 
