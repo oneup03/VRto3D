@@ -66,6 +66,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `async_enable`      | `bool`  | Whether or not to use Asynchronous Reprojection. May improve or worsen smoothness.          | `false`        |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB/OU) 3D output (Side by Side is default)               | `false`        |
+| `framepack_offset`  | `int`   | Pixel gap between left and right views in TaB mode. Use for framepacking/HDMI 3D.           | `0`            |
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home.                                               | `false`        |
 | `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground.                         | `false`        |
@@ -147,6 +148,26 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Enable ReShade's `Performance Mode` checkbox
 - Once configuration is complete, you can run everything the same way as the Base Installation
 - If settings don't save, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
+
+
+## FramePacking, HDMI 3D (only if you need this output format)
+
+- Complete the [Base Installation](#base-installation) section
+- In `Documents\My Games\vrto3d\default_config.json` set these settings:
+    - `tab_enable` to true
+    - `framepack_offset` to `45` for 1920x2205 or `30` for 1280x1470 (this may vary by display)
+- More instructions and discussion are in <a href="https://www.mtbs3d.com/phpbb/viewtopic.php?t=26494" target="_blank" rel="noopener noreferrer">this forum</a>
+- Create one of these Custom Resolutions in Nvidia Control Panel or CRU:
+- frame_packed_720p : resolution 1280x1470, 60Hz
+    - horizontal: 1280 active; 110 front, 40 sync, 220 back (1650 total)
+    - vertical: 1470 active; 5 front, 5 sync, 20 back (1500 total)
+- frame_packed_1080p : resolution 1920x2205, 24Hz/60Hz
+    - horizontal: 1920 active; 638 front, 44 sync, 148 back (2750 total)
+    - vertical: 2205 active; 4 front, 5 sync, 36 back (2250 total)
+- May need to use CVT reduced blank specs for success with 1080 60Hz, but 60Hz is not standard and may not work at all
+    - horizontal: 1920 active; 48 front, 32 sync, 80 back (2080 total)
+    - vertical: 2205 active; 4 front, 5 sync, 36 back (2250 total)
+- It may be necessary to remove other resolutions with CRU to avoid games changing the resolution. Hopefully running them in windowed mode (required for VRto3D) will prevent issues though
 
 
 ## SR (Simulated Reality) Displays (only if you need this output format)
