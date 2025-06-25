@@ -67,6 +67,7 @@ private:
         "steamwebhelper.exe",
         "steamerrorreporter.exe",
         "steamservice.exe",
-        "ReviveOverlay.exe"
+        "ReviveOverlay.exe",
+        "ReviveInjector.exe"
     };
 };
