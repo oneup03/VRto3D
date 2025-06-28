@@ -173,7 +173,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     // Display settings
     vrp->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
     vrp->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
-    vrp->SetFloatProperty( container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency * 1.5f );
+    vrp->SetFloatProperty(container, vr::Prop_DisplayFrequency_Float, stereo_display_component_->GetConfig().display_frequency);
     vrp->SetFloatProperty( container, vr::Prop_SecondsFromVsyncToPhotons_Float, stereo_display_component_->GetConfig().display_latency);
     vrp->SetFloatProperty( container, vr::Prop_SecondsFromPhotonsToVblank_Float, 0.0);
     vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
@@ -250,6 +250,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
     vrs->SetInt32(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_Style_Int32, vr::COLLISION_BOUNDS_STYLE_NONE);
     vrs->SetBool(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_GroundPerimeterOn_Bool, false);
+    vrp->SetStringProperty(container, vr::Prop_TrackingSystemName_String, "lighthouse");
 
     // Miscellaneous settings
     vrp->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
