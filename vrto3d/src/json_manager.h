@@ -47,6 +47,7 @@ struct StereoDisplayDriverConfiguration
     bool tab_enable;
     int32_t framepack_offset;
     bool reverse_enable;
+    bool vd_fsbs_hack;
     bool dash_enable;
     bool auto_focus;
 
@@ -118,6 +119,7 @@ private:
         {"tab_enable", false},
         {"framepack_offset", 0},
         {"reverse_enable", false},
+        {"vd_fsbs_hack", false},
         {"dash_enable", false},
         {"auto_focus", false},
         {"display_latency", 0.011},

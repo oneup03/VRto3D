@@ -179,6 +179,7 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         config.async_enable = getValue<bool>(jsonConfig, "async_enable");
         config.disable_hotkeys = getValue<bool>(jsonConfig, "disable_hotkeys");
         config.tab_enable = getValue<bool>(jsonConfig, "tab_enable");
+        config.vd_fsbs_hack = getValue<bool>(jsonConfig, "vd_fsbs_hack");
         config.framepack_offset = getValue<int>(jsonConfig, "framepack_offset");
         config.reverse_enable = getValue<bool>(jsonConfig, "reverse_enable");
         config.dash_enable = getValue<bool>(jsonConfig, "dash_enable");

@@ -1023,11 +1023,20 @@ void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pn
     // Use Side by Side Rendering
     else
     {
-        *pnY = 0;
+        // Each eye will have half height for virtual desktop
+        if (config_.vd_fsbs_hack)
+        {
+            *pnY = config_.window_height / 4;
+            *pnHeight = config_.window_height / 2;
+        }
+        // Each eye will have full height
+        else
+        {
+            *pnY = 0;
+            *pnHeight = config_.window_height;
+        }
         // Each eye will have half width
         *pnWidth = config_.window_width / 2;
-        // Each eye will have full height
-        *pnHeight = config_.window_height;
         if (eEye == vr::Eye_Left)
         {
             // Left eye viewport on the left half of the window
