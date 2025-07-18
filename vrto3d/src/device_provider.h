@@ -68,6 +68,10 @@ private:
         "steamerrorreporter.exe",
         "steamservice.exe",
         "ReviveOverlay.exe",
-        "ReviveInjector.exe"
+        "ReviveInjector.exe",
+        "Rundll32.exe",
+        "Rundll64.exe",
+        "fpsVR.exe",
+        "Driver4VR.exe"
     };
 };
