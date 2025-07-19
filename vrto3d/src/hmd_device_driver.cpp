@@ -86,6 +86,57 @@ static void SwitchToXinpuGetStateEx()
 }
 
 
+//-----------------------------------------------------------------------------
+// Purpose: Force focus to a specific window
+//-----------------------------------------------------------------------------
+void ForceFocus(HWND hTarget, DWORD currentThread, DWORD targetThread) {
+    // Send dummy input to enable focus control
+    INPUT input = {};
+    input.type = INPUT_KEYBOARD;
+    input.ki.wVk = VK_MENU;
+    SendInput(1, &input, sizeof(INPUT));
+    input.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &input, sizeof(INPUT));
+
+    Sleep(50);  // let input register
+
+    // Attach input threads so you can manipulate the foreground window
+    AttachThreadInput(currentThread, targetThread, TRUE);
+    ShowWindow(hTarget, SW_RESTORE);
+    SetForegroundWindow(hTarget);
+    SetFocus(hTarget);
+    SetActiveWindow(hTarget);
+    BringWindowToTop(hTarget);
+    AttachThreadInput(currentThread, targetThread, FALSE);
+
+    Sleep(50);
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Return window handle from process ID
+//-----------------------------------------------------------------------------
+HWND GetHWNDFromPID(DWORD targetPID) {
+    struct FindWindowData {
+        DWORD targetPID;
+        HWND result;
+    } data = { targetPID, nullptr };
+
+    EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
+        auto* pData = reinterpret_cast<FindWindowData*>(lParam);
+        DWORD pid = 0;
+        GetWindowThreadProcessId(hwnd, &pid);
+
+        if (pid == pData->targetPID) {
+            pData->result = hwnd;
+            return FALSE;
+        }
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&data));
+
+    return data.result;
+}
+
 
 //-----------------------------------------------------------------------------
 // Purpose: Signify Operation Success
@@ -114,9 +165,10 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 {
     // Keep track of whether Activate() has been called
     is_active_ = false;
-    vr::DriverPose_t curr_pose_ = { 0 };
+    curr_pose_ = { 0 };
     app_name_ = "";
     prev_name_ = "";
+    app_pid_ = 0;
 
     auto* vrs = vr::VRSettings();
     JsonManager json_manager;
@@ -149,6 +201,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     DriverLog("Default Config Loaded\n");
 }
 
+
 //-----------------------------------------------------------------------------
 // Purpose: Initialize all settings and notify SteamVR
 //-----------------------------------------------------------------------------
@@ -157,6 +210,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     device_index_ = unObjectId;
     is_active_ = true;
     is_on_top_ = false;
+    take_screenshot_ = false;
     use_auto_depth_ = true;
     app_updated_ = false;
     no_profile_ = false;
@@ -250,7 +304,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetUint64Property(container, vr::Prop_CurrentUniverseId_Uint64, 64);
     vrs->SetInt32(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_Style_Int32, vr::COLLISION_BOUNDS_STYLE_NONE);
     vrs->SetBool(vr::k_pch_CollisionBounds_Section, vr::k_pch_CollisionBounds_GroundPerimeterOn_Bool, false);
-    vrp->SetStringProperty(container, vr::Prop_TrackingSystemName_String, "lighthouse");
 
     // Miscellaneous settings
     vrp->SetBoolProperty( container, vr::Prop_WillDriftInYaw_Bool, false);
@@ -284,6 +337,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_AllowSupersampleFiltering_Bool, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_SupersampleManualOverride_Bool, true);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ActivateMultipleDrivers_Bool, true);
     
     // Thread setup
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
@@ -693,10 +747,9 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         else if (sleep.top > 0) {
             --sleep.top;
         }
-        // Ctrl+F9 Toggle HMD height
-        if (isCtrlDown() && isDown(VK_F9) && sleep.height == 0) {
-            stereo_display_component_->SetHeight();
-            setOverlay(fmt("HMD Height: ", stereo_display_component_->GetConfig().hmd_height, 2));
+        // Ctrl+F12 Take Screenshot
+        if (isCtrlDown() && isDown(VK_F12) && sleep.height == 0) {
+            take_screenshot_ = true;
             sleep.height = cfg.sleep_count_max;
         }
         else if (sleep.height > 0) {
@@ -764,29 +817,64 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 {
     static int sleep_time = 1000;
     static HWND vr_window = NULL;
+    static HWND ww_window = NULL;
+    static HWND main_window = NULL;
     static HWND top_window = NULL;
+    static HWND game_window = NULL;
     static LONG ex_style = 0;
+    static DWORD vr_pid = GetCurrentThreadId();;
+    static bool was_on_top = false;
 
     while (is_active_)
     {
-        // Keep VR display always on top for 3D rendering
-        if (is_on_top_) {
-            top_window = GetTopWindow(GetDesktopWindow());
-            if (vr_window != NULL && vr_window != top_window) {
-                SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                SetWindowLong(vr_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
-            }
-            else if (vr_window == NULL) {
-                vr_window = FindWindow(NULL, L"Headset Window");
-                if (vr_window != NULL) {
-                    ex_style = GetWindowLong(vr_window, GWL_EXSTYLE);
-                }
+        // Get handle for the VR window
+        if (vr_window == NULL) {
+            vr_window = FindWindow(NULL, L"Headset Window");
+            if (vr_window != NULL) {
+                ex_style = GetWindowLong(vr_window, GWL_EXSTYLE);
             }
         }
-        else if (vr_window != NULL) {
-            SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-            SetWindowLong(vr_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
-            vr_window = NULL;
+
+        // Focus the Game Window
+        if (is_on_top_ && !was_on_top)
+        {
+            game_window = GetHWNDFromPID(app_pid_);
+            ForceFocus(game_window, vr_pid, app_pid_);
+        }
+
+        // Keep VR display always on top for 3D rendering
+        if (is_on_top_) {
+            if (ww_window == NULL) {
+                ww_window = FindWindow(NULL, L"WibbleWobble");
+                if (ww_window != NULL) {
+                    ex_style = GetWindowLong(ww_window, GWL_EXSTYLE);
+                }
+            }
+            top_window = GetTopWindow(GetDesktopWindow());
+            main_window = ww_window != NULL ? ww_window : vr_window;
+            if (main_window != NULL && main_window != top_window) {
+                SetWindowPos(main_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                SetWindowLong(main_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
+            }
+            was_on_top = true;
+        }
+        else if (main_window != NULL && was_on_top) {
+            SetWindowPos(main_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
+            was_on_top = false;
+        }
+
+        // Take Screenshot
+        if (vr_window != NULL && take_screenshot_) {
+            ForceFocus(vr_window, vr_pid, vr_pid);
+            Sleep(50);
+            PostMessage(vr_window, WM_KEYDOWN, 'S', 0);
+            Sleep(50);
+            PostMessage(vr_window, WM_KEYUP, 'S', 0);
+            Sleep(50);
+            ForceFocus(game_window, vr_pid, app_pid_);
+            take_screenshot_ = false;
+            BeepSuccess();
         }
 
         // Sleep for 1s
@@ -885,12 +973,13 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 //-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, vr::EVREventType status)
+void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status)
 {
     if (app_name != app_name_ && status == vr::VREvent_ProcessConnected)
     {
         app_name_ = app_name;
         prev_name_ = app_name;
+        app_pid_ = app_pid;
         auto config = stereo_display_component_->GetConfig();
 
         // Attempt to get Game ID and set Async Reprojection

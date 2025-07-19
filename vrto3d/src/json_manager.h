@@ -121,7 +121,7 @@ private:
         {"reverse_enable", false},
         {"vd_fsbs_hack", false},
         {"dash_enable", false},
-        {"auto_focus", false},
+        {"auto_focus", true},
         {"display_latency", 0.011},
         {"display_frequency", 60.0},
         {"pitch_enable", false},

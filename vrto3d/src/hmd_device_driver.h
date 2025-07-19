@@ -83,7 +83,7 @@ public:
     void FocusUpdateThread();
     void AutoDepthThread();
 
-    void LoadSettings(const std::string& app_name, vr::EVREventType status);
+    void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
 
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;
@@ -93,12 +93,14 @@ private:
 
     std::string app_name_;
     std::string prev_name_;
+    std::atomic< uint32_t > app_pid_;
     std::atomic< bool > app_updated_;
     std::atomic< bool > no_profile_;
 
     std::atomic< bool > is_active_;
     std::atomic< uint32_t > device_index_;
     std::atomic< bool > is_on_top_;
+    std::atomic< bool > take_screenshot_;
     std::atomic< bool > use_auto_depth_;
 
     std::mutex pose_mutex_;

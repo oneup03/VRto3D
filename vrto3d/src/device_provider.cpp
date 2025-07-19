@@ -99,7 +99,7 @@ void MyDeviceProvider::RunFrame()
                 app_name_ = appName;
                 app_pid_ = vrEvent.data.process.pid;
                 DriverLog("AppName = %s\n", app_name_.c_str());
-                my_hmd_device_->LoadSettings(app_name_, vr::VREvent_ProcessConnected);
+                my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessConnected);
                 wait_count_ = 500;
             }
         }
@@ -109,7 +109,7 @@ void MyDeviceProvider::RunFrame()
                  !app_name_.empty() && vrEvent.data.process.pid == app_pid_ && wait_count_ == 0)
         {
             DriverLog("Unload = %s\n", app_name_.c_str());
-            my_hmd_device_->LoadSettings(app_name_, vr::VREvent_ProcessDisconnected);
+            my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessDisconnected);
             app_name_ = "";
             app_pid_ = 0;
             wait_count_ = 500;
