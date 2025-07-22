@@ -174,6 +174,10 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         config.window_height = getValue<int>(jsonConfig, "window_height");
         config.render_width = getValue<int>(jsonConfig, "render_width");
         config.render_height = getValue<int>(jsonConfig, "render_height");
+        
+        config.hmd_x = getValue<float>(jsonConfig, "hmd_x");
+        config.hmd_y = getValue<float>(jsonConfig, "hmd_y");
+        config.hmd_yaw = getValue<float>(jsonConfig, "hmd_yaw");
 
         config.aspect_ratio = getValue<float>(jsonConfig, "aspect_ratio");
         config.async_enable = getValue<bool>(jsonConfig, "async_enable");

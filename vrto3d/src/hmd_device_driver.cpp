@@ -482,6 +482,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
     static vr::HmdQuaternion_t currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f }; // Initial yaw quaternion
     static float lastPitch = 0.0f;
     static float lastYaw = 0.0f;
+    static float lastHmdYaw = 0.0f;
     static vr::DriverPose_t lastPose = { 0 };
 
     auto lastTime = std::chrono::high_resolution_clock::now();
@@ -528,6 +529,13 @@ void MockControllerDeviceDriver::PoseUpdateThread()
             if (currentPitch < -90.0f) currentPitch = -90.0f;
         }
 
+        // Apply yaw offset if applicable
+        if (config.hmd_yaw != lastHmdYaw)
+        {
+            currentYawQuat = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(config.hmd_yaw));
+            lastHmdYaw = config.hmd_yaw;
+        }
+
         // Adjust yaw based on controller input
         if (config.yaw_enable && got_xinput)
         {
@@ -560,7 +568,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         if (config.pose_reset)
         {
             currentPitch = 0.0f;
-            currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f };
+            currentYawQuat = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(config.hmd_yaw));
             stereo_display_component_->SetReset();
         }
 
@@ -582,12 +590,12 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         }
 
         // Calculate the new position relative to the current pitch & yaw
-        pose.vecPosition[0] = config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
+        pose.vecPosition[0] = config.hmd_x + config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
         pose.vecPosition[1] = config.hmd_height - config.pitch_radius * sin(pitchRadians);
-        pose.vecPosition[2] = config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
-        if (pose.vecPosition[1] < 0.0)
+        pose.vecPosition[2] = config.hmd_y + config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
+        if (pose.vecPosition[1] < config.hmd_height - 1.0)
         {
-            pose.vecPosition[1] = 0.0;
+            pose.vecPosition[1] = config.hmd_height - 1.0;
         }
 
         // Calculate velocity using known update interval
@@ -797,8 +805,15 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
 
         // Check User binds
         auto hotkey_str = stereo_display_component_->CheckUserSettings(device_index_);
+
+        // Check for Position Adjustment
+        auto pos_str = stereo_display_component_->CheckPositionInput();
+
         if (!hotkey_str.empty()) {
             setOverlay(hotkey_str);
+        }
+        else if (!pos_str.empty()) {
+            setOverlay(pos_str);
         }
 
         // Check for new profile load
@@ -1426,6 +1441,62 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 
 
 //-----------------------------------------------------------------------------
+// Purpose: Move HMD origin position with keyboard input
+//-----------------------------------------------------------------------------
+std::string StereoDisplayComponent::CheckPositionInput() {
+    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) == 0)
+        return "";
+
+    const float step = 0.01f;
+    auto config = GetConfig();
+
+    if (GetAsyncKeyState(VK_HOME) & 0x8000) {
+            config.hmd_y -= step;       // Forward
+    }
+    else if (GetAsyncKeyState(VK_END) & 0x8000) {
+            config.hmd_y += step;       // Backward
+    }
+    else if (GetAsyncKeyState(VK_DELETE) & 0x8000) {
+        config.hmd_x -= step;       // Left
+    }
+    else if (GetAsyncKeyState(VK_NEXT) & 0x8000) {
+        if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
+            config.hmd_height -= step;  // Down
+        }
+        else {
+            config.hmd_x += step;       // Right
+        }
+    }
+    else if (GetAsyncKeyState(VK_PRIOR) & 0x8000) {
+        if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
+            config.hmd_height += step;  // Up
+        }
+        else {
+            config.hmd_yaw -= step * 10;     // Yaw CW
+        }
+    }
+    else if (GetAsyncKeyState(VK_INSERT) & 0x8000) {
+        config.hmd_yaw += step * 10;     // Yaw CCW
+    }
+    else {
+        return "";
+    }
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    oss << "Pos X:" << config.hmd_x
+        << " Y:" << config.hmd_y
+        << " Z:" << config.hmd_height
+        << " Yaw:" << config.hmd_yaw;
+
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    config_ = config;
+
+    return oss.str();
+}
+
+
+//-----------------------------------------------------------------------------
 // Purpose: Adjust XInput Right Stick sensitivity
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::AdjustSensitivity(float delta)
@@ -1452,21 +1523,6 @@ void StereoDisplayComponent::AdjustRadius(float delta)
         if (config_.pitch_radius < 0.0f)
             config_.pitch_radius = 0.0f;
     }
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Toggle HMD Height for games that have incorrect HMD position
-//-----------------------------------------------------------------------------
-void StereoDisplayComponent::SetHeight()
-{
-    static float user_height = config_.hmd_height;
-
-    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
-    if (config_.hmd_height == user_height)
-        config_.hmd_height = 0.1f;
-    else
-        config_.hmd_height = user_height;
 }
 
 

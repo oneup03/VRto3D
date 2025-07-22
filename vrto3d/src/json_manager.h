@@ -36,6 +36,9 @@ struct StereoDisplayDriverConfiguration
     int32_t render_height;
 
     float hmd_height;
+    float hmd_x;
+    float hmd_y;
+    float hmd_yaw;
 
     float aspect_ratio;
     float fov;
@@ -110,6 +113,9 @@ private:
         {"render_width", 1920},
         {"render_height", 1080},
         {"hmd_height", 1.0},
+        {"hmd_x", 0.0},
+        {"hmd_y", 0.0},
+        {"hmd_yaw", 0.0},
         {"aspect_ratio", 1.77778},
         {"fov", 90.0},
         {"depth", 0.4},

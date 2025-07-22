@@ -48,9 +48,9 @@ public:
     float GetDepth();
     float GetConvergence();
     std::string CheckUserSettings(uint32_t device_index);
+    std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
     void AdjustRadius(float delta);
-    void SetHeight();
     void SetReset();
     void LoadSettings(StereoDisplayDriverConfiguration& config, uint32_t device_index);
     void ResetProjection(uint32_t device_index);
