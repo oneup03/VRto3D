@@ -98,7 +98,7 @@ void ForceFocus(HWND hTarget, DWORD currentThread, DWORD targetThread) {
     input.ki.dwFlags = KEYEVENTF_KEYUP;
     SendInput(1, &input, sizeof(INPUT));
 
-    Sleep(50);  // let input register
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));  // let input register
 
     // Attach input threads so you can manipulate the foreground window
     AttachThreadInput(currentThread, targetThread, TRUE);
@@ -109,7 +109,7 @@ void ForceFocus(HWND hTarget, DWORD currentThread, DWORD targetThread) {
     BringWindowToTop(hTarget);
     AttachThreadInput(currentThread, targetThread, FALSE);
 
-    Sleep(50);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 }
 
 
@@ -135,6 +135,25 @@ HWND GetHWNDFromPID(DWORD targetPID) {
     }, reinterpret_cast<LPARAM>(&data));
 
     return data.result;
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Check if a game is still running
+//-----------------------------------------------------------------------------
+bool IsProcessRunning(DWORD pid) {
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProcess) return false;
+
+    DWORD exitCode = 0;
+    bool isRunning = false;
+
+    if (GetExitCodeProcess(hProcess, &exitCode)) {
+        isRunning = (exitCode == STILL_ACTIVE);
+    }
+
+    CloseHandle(hProcess);
+    return isRunning;
 }
 
 
@@ -447,7 +466,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
             open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(open_track.Yaw));
             lock.unlock();
         }
-        else Sleep(1);
+        else std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     closesocket(socket_s);
     WSACleanup();
@@ -847,6 +866,10 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             if (ww_window == NULL) {
                 ww_window = FindWindow(NULL, L"WibbleWobble");
                 if (ww_window != NULL) {
+                    if (vr_window != NULL) {
+                        SetWindowPos(main_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                        SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
+                    }
                     ex_style = GetWindowLong(ww_window, GWL_EXSTYLE);
                 }
             }
@@ -861,17 +884,22 @@ void MockControllerDeviceDriver::FocusUpdateThread()
         else if (main_window != NULL && was_on_top) {
             SetWindowPos(main_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
             SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
-            was_on_top = false;
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            if (IsProcessRunning(app_pid_))
+            {
+                is_on_top_ = true; // Re-enable on top if the process is still running
+            }
+            was_on_top = is_on_top_;
         }
 
         // Take Screenshot
         if (vr_window != NULL && take_screenshot_) {
             ForceFocus(vr_window, vr_pid, vr_pid);
-            Sleep(50);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
             PostMessage(vr_window, WM_KEYDOWN, 'S', 0);
-            Sleep(50);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
             PostMessage(vr_window, WM_KEYUP, 'S', 0);
-            Sleep(50);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
             ForceFocus(game_window, vr_pid, app_pid_);
             take_screenshot_ = false;
             BeepSuccess();
