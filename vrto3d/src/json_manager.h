@@ -103,6 +103,7 @@ public:
     void LoadParamsFromJson(StereoDisplayDriverConfiguration& config);
     bool LoadProfileFromJson(const std::string& filename, StereoDisplayDriverConfiguration& config);
     void SaveProfileToJson(const std::string& filename, StereoDisplayDriverConfiguration& config);
+    void SaveHmdOffsets(StereoDisplayDriverConfiguration& config);
 
 private:
     

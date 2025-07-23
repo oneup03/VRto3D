@@ -393,3 +393,18 @@ void JsonManager::SaveProfileToJson(const std::string& filename, StereoDisplayDr
 
     writeJsonToFile(filename, jsonConfig);
 }
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Save HMD Offsets to default_config.json
+//-----------------------------------------------------------------------------
+void JsonManager::SaveHmdOffsets(StereoDisplayDriverConfiguration& config)
+{
+    nlohmann::json existing_json = readJsonFromFile(DEF_CFG);
+    existing_json["hmd_height"] = config.hmd_height;
+    existing_json["hmd_x"] = config.hmd_x;
+    existing_json["hmd_y"] = config.hmd_y;
+    existing_json["hmd_yaw"] = config.hmd_yaw;
+    nlohmann::ordered_json merged_json = reorderFillJson(existing_json);
+    writeJsonToFile(DEF_CFG, merged_json);
+}

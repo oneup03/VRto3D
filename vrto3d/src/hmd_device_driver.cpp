@@ -657,7 +657,8 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::PollHotkeysThread() {
     struct {
-        int height = 0;
+        int shot = 0;
+        int hmd = 0;
         int top = 0;
         int save = 0;
         int depth = 0;
@@ -717,10 +718,9 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             // Ctrl+F7 Store settings into game profile
             if (isCtrlDown() && isDown(VK_F7) && sleep.save == 0) {
                 if (!prev_name_.empty()) {
-                    auto config = stereo_display_component_->GetConfig();
-                    config.depth = stereo_display_component_->GetDepth();
-                    config.convergence = stereo_display_component_->GetConvergence();
-                    JsonManager().SaveProfileToJson(prev_name_ + "_config.json", config);
+                    cfg.depth = stereo_display_component_->GetDepth();
+                    cfg.convergence = stereo_display_component_->GetConvergence();
+                    JsonManager().SaveProfileToJson(prev_name_ + "_config.json", cfg);
                     BeepSuccess();
                     setOverlay("Saved " + prev_name_ + "_config.json profile");
                 }
@@ -728,12 +728,10 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                     BeepFailure();
                     setOverlay("Failed to save profile");
                 }
-                
                 sleep.save = cfg.sleep_count_max;
             }
             // Ctrl+F10 Reload settings from Game Profile or (+Shift) Default Profile
             else if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
-                auto config = stereo_display_component_->GetConfig();
                 std::string path = "";
                 if (isDown(VK_SHIFT)) {
                     path = DEF_CFG;
@@ -743,8 +741,8 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                     path = prev_name_ + "_config.json";
                     app_name_ = prev_name_;
                 }
-                if (JsonManager().LoadProfileFromJson(path, config)) {
-                    stereo_display_component_->LoadSettings(config, device_index_);
+                if (JsonManager().LoadProfileFromJson(path, cfg)) {
+                    stereo_display_component_->LoadSettings(cfg, device_index_);
                     DriverLog("Loaded %s profile\n", path.c_str());
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
@@ -775,33 +773,43 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         else if (sleep.top > 0) {
             --sleep.top;
         }
-        // Ctrl+F12 Take Screenshot
-        if (isCtrlDown() && isDown(VK_F12) && sleep.height == 0) {
-            take_screenshot_ = true;
-            sleep.height = cfg.sleep_count_max;
+        // Ctrl+F9 Save HMD Position & Yaw
+        if (isCtrlDown() && isDown(VK_F9) && sleep.hmd == 0) {
+            JsonManager().SaveHmdOffsets(cfg);
+            BeepSuccess();
+            setOverlay("Saved HMD Offsets");
+            sleep.hmd = cfg.sleep_count_max;
         }
-        else if (sleep.height > 0) {
-            --sleep.height;
+        else if (sleep.hmd > 0) {
+            --sleep.hmd;
+        }
+        // Ctrl+F12 Take Screenshot
+        if (isCtrlDown() && isDown(VK_F12) && sleep.shot == 0) {
+            take_screenshot_ = true;
+            sleep.shot = cfg.sleep_count_max;
+        }
+        else if (sleep.shot > 0) {
+            --sleep.shot;
         }
         // Ctrl+- Decrease Sensitivity
         if (isCtrlDown() && isDown(VK_OEM_MINUS)) {
             stereo_display_component_->AdjustSensitivity(-0.01f);
-            setOverlay(fmt("Ctrl Sensitivity: ", stereo_display_component_->GetConfig().ctrl_sensitivity, 2));
+            setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
         }
         // Ctrl++ Increase Sensitivity
         else if (isCtrlDown() && isDown(VK_OEM_PLUS)) {
             stereo_display_component_->AdjustSensitivity(0.01f);
-            setOverlay(fmt("Ctrl Sensitivity: ", stereo_display_component_->GetConfig().ctrl_sensitivity, 2));
+            setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
         }
         // Ctrl+[ Decrease Pitch Radius
         if (isCtrlDown() && isDown(VK_OEM_4)) {
             stereo_display_component_->AdjustRadius(-0.01f);
-            setOverlay(fmt("Pitch Radius: ", stereo_display_component_->GetConfig().pitch_radius, 2));
+            setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
         }
         // Ctrl+] Increase Pitch Radius
         else if (isCtrlDown() && isDown(VK_OEM_6)) {
             stereo_display_component_->AdjustRadius(0.01f);
-            setOverlay(fmt("Pitch Radius: ", stereo_display_component_->GetConfig().pitch_radius, 2));
+            setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
         }
 
         // Check User binds
