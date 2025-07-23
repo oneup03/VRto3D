@@ -169,6 +169,7 @@ private:
     std::string getDocumentsFolderPath();
     void writeJsonToFile(const std::string& fileName, const nlohmann::ordered_json& jsonData);
     nlohmann::json readJsonFromFile(const std::string& fileName);
+    nlohmann::ordered_json reorderFillJson(const nlohmann::json& target_json);
     void createFolderIfNotExist(const std::string& path);
     std::vector<std::string> split(const std::string& str, char delimiter);
 

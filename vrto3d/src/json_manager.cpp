@@ -106,6 +106,27 @@ nlohmann::json JsonManager::readJsonFromFile(const std::string& fileName) {
 
 
 //-----------------------------------------------------------------------------
+// Purpose: Ensure default_config has all valid settings present
+//-----------------------------------------------------------------------------
+nlohmann::ordered_json JsonManager::reorderFillJson(const nlohmann::json& target_json)
+{
+    nlohmann::ordered_json result;
+    for (const auto& [key, source_value] : default_config_.items()) {
+        if (key == "user_settings" && target_json.contains(key)) {
+            result[key] = target_json.at(key);
+        }
+        else if (target_json.contains(key)) {
+            result[key] = target_json.at(key);
+        }
+        else {
+            result[key] = source_value;
+        }
+    }
+    return result;
+}
+
+
+//-----------------------------------------------------------------------------
 // Purpose: Split a string by a delimiter
 //-----------------------------------------------------------------------------
 std::vector<std::string> JsonManager::split(const std::string& str, char delimiter) {
@@ -143,7 +164,12 @@ void JsonManager::EnsureDefaultConfigExists()
         }
     }
     else {
-        DriverLog("Default config already exists\n");
+        DriverLog("Default config already exists. Checking for missing/default keys...\n");
+
+        nlohmann::json existing_json = readJsonFromFile(DEF_CFG);
+        nlohmann::ordered_json merged_json = reorderFillJson(existing_json);
+        writeJsonToFile(DEF_CFG, merged_json);
+        DriverLog("Updated config written with defaults filled in");
     }
 }
 
