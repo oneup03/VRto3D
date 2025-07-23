@@ -3,6 +3,8 @@
 - OpenVR Driver that can render in SbS or TaB 3D with other formats converted to through ReShade
 - Compatible games play great with a XInput controller. No motion controls required!
 - VRto3D itself does not "fix" games for 3D, but it allows you to run VR modded (fixed) games on a 3D Display
+- Supports User Profiles for individual games
+- Provides HMD Pitch and Yaw emulation for games that require it
 - Currently targeting OpenVR 2.5.1.
 - Windows-only solution currently, but there are other solutions on Linux like Monado XR.
 - Check out the video guide here (there are 2 parts):
@@ -34,8 +36,11 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Save all current settings (ones indicated with a `"+"` under [Configuration](#configuration)) as a profile for the currently running game with `Ctrl + F7` A beep will indicate success
 - Reload the profile settings (ones with a `"+"`) from the current game's `game.exe_config.json` with `Ctrl + F10` A beep will indicate success
 - Reload the profile settings (ones with a `"+"`) from `default_config.json` with `Ctrl + Shift + F10` A beep will indicate success
-- Toggle locking the SteamVR Headset Window to the foreground with `Ctrl + F8`
-- Toggle HMD Height between 0.1m and configured `hmd_height` using `Ctrl + F9`. This is useful for games that force a calibration on the "floor"
+- Toggle locking the SteamVR Headset Window to the foreground and focusing the game window with `Ctrl + F8`
+    - This also works with WibbleWobbleReshade active
+- Adjust HMD position and yaw origin with `Ctrl + Home/End` for Y, `Ctrl + Delete/PageDown` for X, `Ctrl + Insert/PageUp` for Yaw, and `Ctrl + Shift + PageUp/PageDown` for Height
+    - Save `hmd_height, hmd_x, hmd_y, hmd_yaw` using `Ctrl + F9`
+    - This is useful if you want to align the HMD to a lighthouse tracked position
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed)
 - Check the [User Presets](#user-presets) section for instructions on setting up your own Depth/Separation and Convergence presets and also reference the Configuration table below
 - When Pitch/Yaw emulation is enabled, you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
@@ -57,7 +62,10 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `window_height`     | `int`   | The height of the application window.                                                       | `1080`         |
 | `render_width`      | `int`   | The width to render per eye (can be higher or lower than the application window)            | `1920`         |
 | `render_height`     | `int`   | The height to render per eye (can be higher or lower than the application window)           | `1080`         |
-| `hmd_height` +      | `float` | The height of the simulated HMD.                                                            | `1.0`          |
+| `hmd_height` +      | `float` | The height/Z position origin of the simulated HMD.                                          | `1.0`          |
+| `hmd_x`             | `float` | The X position origin of the simulated HMD.                                                 | `0.0`          |
+| `hmd_y`             | `float` | The y position origin of the simulated HMD.                                                 | `0.0`          |
+| `hmd_yaw`           | `float` | The yaw attitude of the simulated HMD.                                                      | `0.0`          |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
 | `fov` +             | `float` | The horizontal field of view (FoV) for the VR rendering.                                    | `90.0`         |
 | `depth` +           | `float` | The max separation. Overrides VR's IPD field.                                               | `0.4`          |
@@ -69,7 +77,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
 | `vd_fsbs_hack`      | `bool`  | Enable or disable half height Full-SbS for Virtual Desktop.                                 | `false`        |
 | `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home.                                               | `false`        |
-| `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground.                         | `false`        |
+| `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground.                         | `true`         |
 | `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
@@ -109,10 +117,11 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
     - Can try using <a href="https://github.com/James-LG/AutoCursorLock" target="_blank" rel="noopener noreferrer">AutoCursorLock</a> if the mouse keeps escaping
 - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
-- Press `Ctrl + F8` to toggle locking the headset window to the foreground (this can be automated with the `auto_focus` setting when a VRto3D profile exists for the game)
-- If needed, use `Alt + Tab` to switch to the game window (has to be in focus for control input and sound to work)
+- If needed, press `Ctrl + F8` to lock the 3D window to the foreground and focus the game window
+    - This can be automated with the `auto_focus` setting when a VRto3D profile exists for the game
+- If game controls & audio aren't working, use `Alt + Tab` to switch to the game window
 - To quit, exit the game and try to `Alt + Tab` out
-    - If the headset window remains in the foreground, press `Ctrl + F8` to toggle the headset foregrounding off, and then `Alt + Tab` out
+    - If the 3D window remains in the foreground, press `Ctrl + F8` to toggle the foregrounding off, and then `Alt + Tab` out
 #### Multi-Display Setup:
 - Keyboard and Mouse are usable, but make sure the mouse is captured by the 2D game's window
 - Make sure you set your displays to ***EXTENDED MODE*** or this will not work
@@ -154,6 +163,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 - Complete the [Base Installation](#base-installation) section
 - In `Documents\My Games\vrto3d\default_config.json` set these settings:
+    - `window_width` to `1920` or `1280` depending on your desktop resolution
+    - `window_height` to `2205` or `1470` depending on your desktop resolution
     - `tab_enable` to true
     - `framepack_offset` to `45` for 1920x2205 or `30` for 1280x1470 (this may vary by display)
 - More instructions and discussion are in <a href="https://www.mtbs3d.com/phpbb/viewtopic.php?t=26494" target="_blank" rel="noopener noreferrer">this forum</a>
@@ -172,7 +183,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 ## SR (Simulated Reality) Displays (only if you need this output format)
 
-- When <a href="https://github.com/JoeyAnthony/XRGameBridge/releases" target="_blank" rel="noopener noreferrer">XRGameBridge</a> is more stable, that will be preferable to use instead of VRto3D for games/mods with OpenXR support
+- If you don't need VRto3D features (User Hotkeys, Per-Game Profiles, Pitch/Yaw Emulation, etc) and <a href="https://github.com/JoeyAnthony/XRGameBridge/releases" target="_blank" rel="noopener noreferrer">XRGameBridge</a> is more stable, that may be preferable to use instead of VRto3D for games/mods with OpenXR support
 - SR displays work in either Multi or Single Display environments
     - For both, read the Base Installation configuration and usage instructions to ensure that you get a proper 3D image and can control the game
 - Complete the [Base Installation](#base-installation) section
@@ -205,7 +216,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - If you don't need VRto3D features (User Hotkeys, Per-Game Profiles, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
 ### Initial Install
 - 3DVision installation detailed below. Other configurations can still follow the WibbleWobble Reshade Add-On instructions but will need to check the <a href="https://github.com/PHARTGAMES/WibbleWobbleCore" target="_blank" rel="noopener noreferrer">WibbleWobble GitHub</a> for other WibbleWobble Settings
-- Complete the [Base Installation](#base-installation) section
+- Complete the [Base Installation](#base-installation) section and modify these VRto3D settings in `Documents\My Games\vrto3d\default_config.json`:
     - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
     - Set the `window_width` to 2x your `render_width` (i.e. 3840x1080 for 1920x1080 per-eye)
         - This sometimes causes SteamVR to crash. If you want more stability and are ok with half-width, you can set `window_width` and `window_height` to your desktop resolution
@@ -227,7 +238,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Exit CRU
 - Download the latest <a href="https://github.com/rajkosto/NvTimingsEd/releases" target="_blank" rel="noopener noreferrer">NvTimingsEd Release</a> and save it to your WibbleWobble folder
 - Run `NvTimingsEd.exe` and grant it admin
-    - From the drop down list, select your monitor's EDID (AUS_27B1 for Asus PG278QR for example)
+    - From the drop down list, select your monitor's EDID you got from CRU (AUS_27B1 for Asus PG278QR for example)
     - Choose your target refresh rate / framerate you want to run 3D at
     - Click `Edit` but don't change anything
     - Copy the nearest integer refresh rate for WibbleWobble's `Sync Rate HZ`
@@ -290,6 +301,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - Click `Save` and `X` to close the window
     - Press `Shift + END` to close the WibbleWobble menu
     - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
+        - VRto3D `Ctrl + F8` hotkey will also work and should be easier to use
     - Use `Shift + ,` to flip eye output
     - Close the `SteamVR Status` window to completely exit out of things
 - Edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4` and `PerformanceMode=1`
@@ -297,9 +309,10 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Once configuration is complete, you can run everything in single display mode similar to the Base Installation
 - Start SteamVR
 - Press `Shift + END` to start WibbleWobble
-- Press `Shift + /` to unfocus WibbleWobble (Don't use `Ctrl + F8`!)
+- Press `Shift + /` or `Ctrl + F8` to unfocus WibbleWobble
 - Launch VR Game/Mod
-- Press `Shift + /` to focus WibbleWobble (Don't use `Ctrl + F8`!)
+- If using VRto3D `auto_focus` the WibbleWobble window should be brought to the foreground and the game window focused
+    - If needed, press `Ctrl + F8` to foreground WibbleWobble and focus the game window
 - If needed, use `Shift + ,` to flip eye output
 - `Alt + Tab` to the game window for controls to work if the game window wasn't already active
 - Mouse controls can work on a single display as long as you are clicking somewhere on the game window that is covered by WibbleWobble
