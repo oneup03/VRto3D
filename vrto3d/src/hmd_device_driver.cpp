@@ -909,7 +909,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
             if (man_on_top_)
             {
-                std::this_thread::sleep_for(std::chrono::seconds(10));
+                std::this_thread::sleep_for(std::chrono::seconds(15));
                 is_on_top_ = IsProcessRunning(app_pid_);
             }
             was_on_top = is_on_top_;
