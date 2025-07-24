@@ -100,6 +100,7 @@ private:
     std::atomic< bool > is_active_;
     std::atomic< uint32_t > device_index_;
     std::atomic< bool > is_on_top_;
+    std::atomic< bool > man_on_top_;
     std::atomic< bool > take_screenshot_;
     std::atomic< bool > use_auto_depth_;
 

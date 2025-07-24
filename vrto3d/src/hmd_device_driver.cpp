@@ -127,7 +127,7 @@ HWND GetHWNDFromPID(DWORD targetPID) {
         DWORD pid = 0;
         GetWindowThreadProcessId(hwnd, &pid);
 
-        if (pid == pData->targetPID) {
+        if (pid == pData->targetPID && IsWindowVisible(hwnd)) {
             pData->result = hwnd;
             return FALSE;
         }
@@ -229,6 +229,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     device_index_ = unObjectId;
     is_active_ = true;
     is_on_top_ = false;
+    man_on_top_ = false;
     take_screenshot_ = false;
     use_auto_depth_ = true;
     app_updated_ = false;
@@ -768,6 +769,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         // Ctrl+F8 Toggle Always On Top
         if (isCtrlDown() && isDown(VK_F8) && sleep.top == 0) {
             is_on_top_ = !is_on_top_;
+            man_on_top_ = is_on_top_.load();
             sleep.top = cfg.sleep_count_max;
         }
         else if (sleep.top > 0) {
@@ -867,6 +869,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
     static LONG ex_style = 0;
     static DWORD vr_pid = GetCurrentThreadId();;
     static bool was_on_top = false;
+    static bool was_focused = false;
 
     while (is_active_)
     {
@@ -878,21 +881,15 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             }
         }
 
-        // Focus the Game Window
-        if (is_on_top_ && !was_on_top)
-        {
-            game_window = GetHWNDFromPID(app_pid_);
-            ForceFocus(game_window, vr_pid, app_pid_);
-        }
-
         // Keep VR display always on top for 3D rendering
-        if (is_on_top_) {
+        if (is_on_top_ && IsProcessRunning(app_pid_)) {
             if (ww_window == NULL) {
                 ww_window = FindWindow(NULL, L"WibbleWobble");
                 if (ww_window != NULL) {
                     if (vr_window != NULL) {
                         SetWindowPos(main_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
                         SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
                     }
                     ex_style = GetWindowLong(ww_window, GWL_EXSTYLE);
                 }
@@ -902,18 +899,29 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             if (main_window != NULL && main_window != top_window) {
                 SetWindowPos(main_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
                 SetWindowLong(main_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
             was_on_top = true;
         }
+        // Unfocus and check to see if the game is still running to re-enable focus
         else if (main_window != NULL && was_on_top) {
             SetWindowPos(main_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
             SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
-            std::this_thread::sleep_for(std::chrono::seconds(10));
-            if (IsProcessRunning(app_pid_))
+            if (man_on_top_)
             {
-                is_on_top_ = true; // Re-enable on top if the process is still running
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+                is_on_top_ = IsProcessRunning(app_pid_);
             }
             was_on_top = is_on_top_;
+            was_focused = false;
+        }
+
+        // Focus the Game Window
+        if (is_on_top_ && !was_focused)
+        {
+            game_window = GetHWNDFromPID(app_pid_);
+            ForceFocus(game_window, vr_pid, app_pid_);
+            was_focused = true;
         }
 
         // Take Screenshot
@@ -1052,7 +1060,9 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
             BeepSuccess();
             app_updated_ = true;
             if (config.auto_focus) {
+                std::this_thread::sleep_for(std::chrono::seconds(8));
                 is_on_top_ = true;
+                man_on_top_ = true;
             }
         }
         else {
