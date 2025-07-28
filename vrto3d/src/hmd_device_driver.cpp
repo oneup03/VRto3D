@@ -1035,7 +1035,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status)
 {
-    if (app_name != app_name_ && status == vr::VREvent_ProcessConnected)
+    if ((app_name != app_name_ || app_pid != app_pid_) && status == vr::VREvent_ProcessConnected)
     {
         app_name_ = app_name;
         prev_name_ = app_name;
