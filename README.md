@@ -58,28 +58,28 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
-| `window_width`      | `int`   | The width of the application window.                                                        | `1920`         |
-| `window_height`     | `int`   | The height of the application window.                                                       | `1080`         |
+| `window_width`      | `int`   | The width of the application window                                                         | `1920`         |
+| `window_height`     | `int`   | The height of the application window                                                        | `1080`         |
 | `render_width`      | `int`   | The width to render per eye (can be higher or lower than the application window)            | `1920`         |
 | `render_height`     | `int`   | The height to render per eye (can be higher or lower than the application window)           | `1080`         |
-| `hmd_height` +      | `float` | The height/Z position origin of the simulated HMD.                                          | `1.0`          |
-| `hmd_x`             | `float` | The X position origin of the simulated HMD.                                                 | `0.0`          |
-| `hmd_y`             | `float` | The y position origin of the simulated HMD.                                                 | `0.0`          |
-| `hmd_yaw`           | `float` | The yaw attitude of the simulated HMD.                                                      | `0.0`          |
+| `hmd_height` +      | `float` | The height/Z position origin of the simulated HMD                                           | `1.0`          |
+| `hmd_x`             | `float` | The X position origin of the simulated HMD                                                  | `0.0`          |
+| `hmd_y`             | `float` | The y position origin of the simulated HMD                                                  | `0.0`          |
+| `hmd_yaw`           | `float` | The yaw attitude of the simulated HMD                                                       | `0.0`          |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
-| `fov` +             | `float` | The horizontal field of view (FoV) for the VR rendering.                                    | `90.0`         |
-| `depth` +           | `float` | The max separation. Overrides VR's IPD field.                                               | `0.4`          |
-| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum.                                  | `4.0`          |
-| `async_enable`      | `bool`  | Whether or not to use Asynchronous Reprojection. May improve or worsen smoothness.          | `false`        |
+| `fov` +             | `float` | The horizontal field of view (FoV) for the VR rendering                                     | `90.0`         |
+| `depth` +           | `float` | The max separation. Overrides VR's IPD field                                                | `0.4`          |
+| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum                                   | `4.0`          |
+| `async_enable`      | `bool`  | Whether or not to use Asynchronous Reprojection. May improve or worsen smoothness           | `false`        |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB/OU) 3D output (Side by Side is default)               | `false`        |
-| `framepack_offset`  | `int`   | Pixel gap between left and right views in TaB mode. Use for framepacking/HDMI 3D.           | `0`            |
-| `reverse_enable`    | `bool`  | Enable or disable reversed 3D output.                                                       | `false`        |
-| `vd_fsbs_hack`      | `bool`  | Enable or disable half height Full-SbS for Virtual Desktop.                                 | `false`        |
-| `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home.                                               | `false`        |
-| `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground.                         | `true`         |
-| `display_latency`   | `float` | The display latency in seconds.                                                             | `0.011`        |
-| `display_frequency` | `float` | The display refresh rate, in Hz.                                                            | `60.0`         |
+| `framepack_offset`  | `int`   | Pixel gap between left and right views in TaB mode. Use for framepacking/HDMI 3D            | `0`            |
+| `reverse_enable`    | `bool`  | Enable or disable reversed 3D output                                                        | `false`        |
+| `vd_fsbs_hack`      | `bool`  | Enable or disable half height Full-SbS for Virtual Desktop                                  | `false`        |
+| `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home                                                | `false`        |
+| `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D or WibbleWobble to foreground          | `true`         |
+| `display_latency`   | `float` | The display latency in seconds                                                              | `0.011`        |
+| `display_frequency` | `float` | The display refresh rate, in Hz                                                             | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
 | `use_open_track`    | `bool`  | Enables or disables OpenTrack 3DoF HMD Control                                              | `false`        |
@@ -118,7 +118,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Can try using <a href="https://github.com/James-LG/AutoCursorLock" target="_blank" rel="noopener noreferrer">AutoCursorLock</a> if the mouse keeps escaping
 - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
 - If needed, press `Ctrl + F8` to lock the 3D window to the foreground and focus the game window
-    - This can be automated with the `auto_focus` setting when a VRto3D profile exists for the game
+    - This is automated by default with the `auto_focus` setting when a VRto3D profile exists for the game
 - If game controls & audio aren't working, use `Alt + Tab` to switch to the game window
 - To quit, exit the game and try to `Alt + Tab` out
     - If the 3D window remains in the foreground, press `Ctrl + F8` to toggle the foregrounding off, and then `Alt + Tab` out
@@ -314,7 +314,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - If using VRto3D `auto_focus` the WibbleWobble window should be brought to the foreground and the game window focused
     - If needed, press `Ctrl + F8` to foreground WibbleWobble and focus the game window
 - If needed, use `Shift + ,` to flip eye output
-- `Alt + Tab` to the game window for controls to work if the game window wasn't already active
+- If controls or audio aren't working, `Alt + Tab` to the game window
 - Mouse controls can work on a single display as long as you are clicking somewhere on the game window that is covered by WibbleWobble
 ### Troubleshooting
 - If SteamVR crashes, close everything, you may need to temporarily edit your VRto3D `window_width` to half, run SteamVR and activate WibbleWobble, close everything, then revert to full
@@ -337,7 +337,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - The primary display will be where the "Headset" window is located and should be 3D capable
 - The game's main window has to be in focus for control input from your mouse/keyboard/controller to work
 - SteamVR may still complain about Direct Display mode, but this can be safely dismissed
-- Exiting SteamVR will "restart" Steam - this is normal
+- Exiting SteamVR may "restart" Steam - this is normal
 - Overlays generally won't work on this virtual HMD
 - XInput controller is recommended
 - SteamVR doesn't support HDR currently
@@ -355,7 +355,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
     - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> to find the strings to use for these hotkeys
-    - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true). The `ctrl_toggle_type` can be set to either `"toggle"` them on/off or `"hold"` that disables them while the button is held
+    - The `ctrl_toggle_key` can be set and used to toggle these settings on/off in-game (only functions if `pitch_enable` and/or `yaw_enable` is set to true)
+    - The `ctrl_toggle_type` can be set to either `"toggle"` pitch/yaw on/off or `"hold"` that disables them while the button is held
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Presets - Load Keys below
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place. Use the [Hotkeys](#hotkeys) to adjust this in-game
