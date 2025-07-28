@@ -45,6 +45,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Check the [User Presets](#user-presets) section for instructions on setting up your own Depth/Separation and Convergence presets and also reference the Configuration table below
 - When Pitch/Yaw emulation is enabled, you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
 - Toggle Auto Depth listener off/on with `Ctrl + F11` (only works with VR mods that support it)
+- Attempt to take a SbS Screenshot with `Ctrl + F12` (doesn't always work)
 
 
 ## Configuration
