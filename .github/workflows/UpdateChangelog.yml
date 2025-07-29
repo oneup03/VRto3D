@@ -56,7 +56,12 @@ jobs:
           date=$(echo "$release" | jq -r '.published_at')
           body=$(echo "$release" | jq -r '.body')
 
-          echo -e "\n## $name ($tag) - $date\n\n$body\n" >> changelog.md
+          {
+            echo ""
+            echo "## $name ($tag) - $date"
+            echo ""
+            printf "%s\n\n" "$body"
+          } >> changelog.md
         done
 
     - name: Commit changelog.md if changed
