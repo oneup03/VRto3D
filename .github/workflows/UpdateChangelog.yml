@@ -38,12 +38,12 @@ jobs:
       run: |
         echo "# Changelog" > changelog.md
 
-        gh release list --limit 1000 --json tagName,name,publishedAt,body | \
-        jq -c '.[]' | while read -r release; do
-          tag=$(echo "$release" | jq -r '.tagName')
-          name=$(echo "$release" | jq -r '.name')
-          date=$(echo "$release" | jq -r '.publishedAt')
-          body=$(echo "$release" | jq -r '.body')
+        for tag in $(gh release list --limit 1000 --json tagName --jq '.[].tagName'); do
+          info=$(gh release view "$tag" --json name,publishedAt,body)
+
+          name=$(echo "$info" | jq -r '.name')
+          date=$(echo "$info" | jq -r '.publishedAt')
+          body=$(echo "$info" | jq -r '.body')
 
           echo -e "\n## $name ($tag) - $date\n\n$body\n" >> changelog.md
         done
