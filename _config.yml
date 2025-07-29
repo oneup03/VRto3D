@@ -5,6 +5,7 @@ exclude:
   - external
 include:
   - wiki
+  - changelog.md
 collections:
   wiki:
     output: true

@@ -218,6 +218,7 @@
     <None Include="..\.github\workflows\UpdateChangelog.yml" />
     <None Include="..\.github\workflows\UpdateWiki.yml" />
     <None Include="..\README.md" />
+    <None Include="..\_config.yml" />
     <None Include="vrto3d\resources\settings\default.vrsettings" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

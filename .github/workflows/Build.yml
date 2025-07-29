@@ -55,7 +55,7 @@ jobs:
     - name: Compress main artifacts
       uses: vimtor/action-zip@v1.1
       with:
-        files: output/drivers/ README.md LICENSE
+        files: output/drivers/ README.md changelog.md LICENSE
         dest: "output/${{github.event.repository.name}}.zip"
 
     - name: Zip vrto3d_profiles folder
