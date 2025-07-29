@@ -3,7 +3,7 @@ name: Update Changelog
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+    - cron: '0 5 * * *'  # Runs daily at 5am UTC
 
 jobs:
   generate-changelog:
