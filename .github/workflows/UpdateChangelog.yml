@@ -1,0 +1,51 @@
+name: Update Changelog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+
+jobs:
+  generate-changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up GitHub CLI
+      uses: cli/cli-action@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Generate changelog.md from releases
+      run: |
+        echo "# Changelog" > changelog.md
+
+        gh release list --limit 1000 --json tagName,name,publishedAt,body | \
+        jq -c '.[]' | while read -r release; do
+          tag=$(echo "$release" | jq -r '.tagName')
+          name=$(echo "$release" | jq -r '.name')
+          date=$(echo "$release" | jq -r '.publishedAt')
+          body=$(echo "$release" | jq -r '.body')
+
+          echo -e "\n## $name ($tag) - $date\n\n$body\n" >> changelog.md
+        done
+
+    - name: Commit changelog.md if changed
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        if ! git diff --quiet -- changelog.md; then
+          git add changelog.md
+          git commit -m "Auto-update changelog.md from GitHub releases"
+          git push
+        else
+          echo "No changes in changelog.md. Skipping commit."
+        fi

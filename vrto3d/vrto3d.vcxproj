@@ -215,6 +215,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\.github\workflows\Build.yml" />
+    <None Include="..\.github\workflows\UpdateChangelog.yml" />
+    <None Include="..\.github\workflows\UpdateWiki.yml" />
     <None Include="..\README.md" />
     <None Include="vrto3d\resources\settings\default.vrsettings" />
   </ItemGroup>
