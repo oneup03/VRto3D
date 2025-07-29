@@ -52,7 +52,26 @@
 ## V2.0.0 (V2.0.0) - 2024-10-05T20:44:54Z
 
 ### This release is not backwards compatible with previous releases!
-Delete your `Steam\steamapps
+Delete your `Steam\steamapps\common\SteamVR\drivers\vrto3d` folder and `Steam\config\steamvr.vrsettings` before installing this one!
+
+- Main configuration moved to `Documents\My Games\vrto3d\default_config.json`
+- `default_config.json` is generated on first startup of SteamVR after VRto3D is installed
+- Settings with a `+` are stored/loaded to/from profiles and can be reloaded from `default_config.json` using `Ctrl + F10`
+- Rewrote Profiles so that they are more easily modified and shareable
+    - depth & convergence, user hotkeys, and pitch/yaw emulation settings are stored
+    - Make changes in `default_config.json` as needed for a game ( and then reload with `Ctrl + F10` if SteamVR is running)
+    - Start the game
+    - Make additional adjustments in-game using hotkeys
+    - Press `Ctrl+F7` to save the profile
+    - Profile will automatically load each time you launch the game
+    - Profiles are stored in `Documents\My Games\vrto3d\`
+- Official RealVR support as of RealVR V14.1.0. [See Instructions](https://github.com/oneup03/VRto3D/wiki/Luke-Ross-RealVR-Mods)
+- Added `ctrl_toggle_type` so that pitch/yaw control can be either `"toggle"` or `"hold"` off
+- `num_user_settings` and numbering your user presets are deprecated and no longer needed
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V1.7.0...V2.0.0
+
+
 ## V1.7.0 (V1.7.0) - 2024-09-23T17:42:31Z
 
 - Rewrote pitch/yaw emulation handling. Significantly improved judder
@@ -73,7 +92,15 @@ Delete your `Steam\steamapps
     - Make additional adjustments in-game using hotkeys
     - Press `Ctrl+F7` to save the profile
     - Profile will automatically load each time you launch the game
-    - Profiles are stored in `Steam
+    - Profiles are stored in `Steam\config\steamvr.vrsettings`
+- Added a new hotkey to reload the startup settings using `Ctrl + F10`
+    - Can load these defaults then press `Ctrl+F7` to save over a game's profile if needed
+- Slightly Improve judder of pitch/yaw emulation
+- Cleanup and add some keyboard/mouse hotkeys
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V1.5.0...V1.6.0
+
+
 ## V1.5.0 (V1.5.0) - 2024-09-14T16:52:17Z
 
 - Make Borderless Windowed the default again as OpenVR compatibility seems to have improved
@@ -115,7 +142,17 @@ Delete your `Steam\steamapps
     - Stability of 3D activation greatly improved
     - Compatibility with VR mods improved - you should now be able to run any game+mod that doesn't require newer drivers
     - The need to use SpecialK is now gone (remove SteamVR launch parameters if you have any)
-    - If you run into issues, do a [clean install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/) and also delete your `Steam\steamapps
+    - If you run into issues, do a [clean install](https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/) and also delete your `Steam\steamapps\common\SteamVR` folder
+- Added `render_width` and `render_height` to set the resolution per-eye
+    - `half_enable` is now deprecated and shouldn't be used
+- Fixed compatibility with OpenVR mods - should now be able to run UEVR and REFramework in OpenVR mode
+- Fixed framerate/refresh rate mismatch
+- Added configurable `pose_reset_key` that is useful when using pitch/yaw emulation
+- Added `pitch_radius` setting that can make the camera move up and over/down and under while it is pitching up/down. This is useful for 3rd person games and particularly Luke Ross mods
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V1.2.0...V1.3.0
+
+
 ## V1.2.0 (V1.2.0) - 2024-07-13T04:35:12Z
 
 - Added Instructions for 3DVision, Interlaced, Checkerboard, Anaglyph rendering
