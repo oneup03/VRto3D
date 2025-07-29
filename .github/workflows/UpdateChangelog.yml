@@ -36,6 +36,9 @@ jobs:
 
     - name: Generate changelog.md from releases
       run: |
+        REPO="${GITHUB_REPOSITORY#*/}"
+        OWNER="${GITHUB_REPOSITORY%/*}"
+      
         releases=$(gh api repos/$OWNER/$REPO/releases)
 
         echo "# Changelog" > changelog.md
