@@ -1,5 +1,32 @@
 # Changelog
 
+## V3.3.0 (V3.3.0) - 2025-07-29T23:03:37Z
+
+- Frame Packed 3D Support: use `framepack_offset` and the correct `window_width` and `window_height` for 720p or 1080p as documented in the Readme (1080p60Hz works on some displays)
+- Virtual Desktop Full-SbS Support: set `window_width` and `window_height` to 2x your render resolution and set `vd_fsbs_hack` to true
+- Updated foregrounding/focusing feature:
+    - `Ctrl + F8` and `auto_focus` now work with WibbleWobbleReshade - start WibbleWobble before starting a VR game/mod
+    - Focusing now puts the 3D window on top AND focuses the game window for controls/audio - no need to Alt+Tab anymore! (works most of the time)
+    - The `auto_focus` global setting is now true by default and triggers 8 seconds after a game with a VRto3D profile connects to SteamVR
+    - Focusing now better handles events where the VR signal drops/reconnects/disconnects. VRto3D attempts to refocus 15 seconds after losing connection. Focus is immediately disabled when a VR game exits
+    - `Ctrl + F8` can still be used to enable/disable focus while a game is running
+- Hotkey updates:
+    - Take a Screenshot with `Ctrl + F12` (unfortunately this doesn't always work correctly)
+    - Removed HMD height toggle that was on `Ctrl + F9`
+    - HMD position and yaw adjustments (useful to align with lighthouse tracked devices):
+        - `Ctrl + Home/End` for Y
+        - `Ctrl + Delete/PageDown` for X
+        - `Ctrl + Insert/PageUp` for Yaw
+        - `Ctrl + Shift + PageUp/PageDown` for Height
+        - Save `hmd_height, hmd_x, hmd_y, hmd_yaw` using `Ctrl + F9`
+- Added On Screen Display for: HMD position and yaw adjustments
+- Updated profile blacklist - if you run into a profile getting loaded for an app that shouldn't, please report it
+- The valid named configuration options for `Documents\My Games\vrto3d\default_config.json` are now enforced
+- Updated game profiles for: Resident Evil 7, Stellar Blade (demo, but full may work), Oblivion Remastered, Immortals of Aveum, Ghosts 'n Goblins Resurrection, Dragon's Dogma 2, Palworld, Robocop, Ninja Gaiden 2 Black, Hogwarts Legacy, Death Stranding, Horizon Zero Dawn, Elden Ring, Cyberpunk 2077, Spider-Man
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V3.2.0...V3.3.0
+
+
 ## V3.2.0 (V3.2.0) - 2025-05-26T19:48:42Z
 
 - Added On Screen Display for: Profile load/save notifications, Depth & Convergence, HMD height, Controller Sensitivity & Pitch Radius, User Save binding updates
