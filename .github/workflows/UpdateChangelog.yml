@@ -69,10 +69,10 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-        # if ! git diff --quiet -- changelog.md; then
+        if ! git diff --quiet -- changelog.md; then
           git add changelog.md
           git commit -m "Auto-update changelog.md from GitHub releases"
           git push
-        # else
-          # echo "No changes in changelog.md. Skipping commit."
-        # fi
+        else
+          echo "No changes in changelog.md. Skipping commit."
+        fi
