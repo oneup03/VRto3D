@@ -1,11 +1,5 @@
 # Changelog
 
-## [2025-07-29] VRto3D r334@9bc86b4 (latest) - 2025-07-29T17:49:06Z
-
-## Commits
-- 9bc86b4: Update README (OneUp)
-
-
 ## V3.2.0 (V3.2.0) - 2025-05-26T19:48:42Z
 
 - Added On Screen Display for: Profile load/save notifications, Depth & Convergence, HMD height, Controller Sensitivity & Pitch Radius, User Save binding updates
