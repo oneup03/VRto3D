@@ -44,24 +44,35 @@ jobs:
     - name: Install Ghostscript
       run: choco install ghostscript --yes
 
-    - name: Convert README.md to PDF
-      run: md-to-pdf README.md
-
-    - name: Convert PDF to JPG and trim whitespace (Windows)
+    - name: Convert README.md and changelog.md to JPG and trim whitespace (Windows)
       run: |
-        magick -density 300 README.pdf README-%d.jpg
+        # Convert markdown to PDF
+        md-to-pdf README.md
+        md-to-pdf changelog.md
 
+        # Convert README.pdf to JPGs
+        magick -density 300 README.pdf README-%d.jpg
         Get-ChildItem README-*.jpg |
           Sort-Object { [int]($_.BaseName -replace 'README-','') } |
           ForEach-Object {
             magick $_.Name -trim +repage $_.Name
           }
-
-        $files = Get-ChildItem README-*.jpg |
+        $readmeFiles = Get-ChildItem README-*.jpg |
           Sort-Object { [int]($_.BaseName -replace 'README-','') } |
           Select-Object -ExpandProperty Name
+        magick $readmeFiles -append -quality 90 README_combined.jpg
 
-        magick $files -append -quality 90 README_combined.jpg
+        # Convert changelog.pdf to JPGs
+        magick -density 300 changelog.pdf changelog-%d.jpg
+        Get-ChildItem changelog-*.jpg |
+          Sort-Object { [int]($_.BaseName -replace 'changelog-','') } |
+          ForEach-Object {
+            magick $_.Name -trim +repage $_.Name
+          }
+        $changelogFiles = Get-ChildItem changelog-*.jpg |
+          Sort-Object { [int]($_.BaseName -replace 'changelog-','') } |
+          Select-Object -ExpandProperty Name
+        magick $changelogFiles -append -quality 90 changelog_combined.jpg
       shell: pwsh
 
     - name: Compress main artifacts
@@ -90,4 +101,5 @@ jobs:
           output/${{github.event.repository.name}}.zip
           vrto3d_profiles.zip
           README_combined.jpg
+          changelog_combined.jpg
           
