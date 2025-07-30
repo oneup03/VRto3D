@@ -222,7 +222,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Set the `window_width` to 2x your `render_width` (i.e. 3840x1080 for 1920x1080 per-eye)
         - This sometimes causes SteamVR to crash. If you want more stability and are ok with half-width, you can set `window_width` and `window_height` to your desktop resolution
     - Leave it in the default SBS display mode
+    - May need to test and see if `async_enable` provides better performance
     - If you decide to target 100Hz refresh rate (recommended for performance/stability), set `display_frequency` to `50.0`
+        - If using `async_enable`, you may want to set this value to x1.5 your target refresh rate (i.e. `75.0` for `50.0`)
 - Use <a href="https://helixmod.blogspot.com/2017/05/3d-fix-manager.html" target="_blank" rel="noopener noreferrer">3D Fix Manager</a> to install the 3D Vision Driver
     - If the emitter driver didn't install, browse to the place you installed the manager and run the `Drivers\3DVisionControllerDriver\3dvisioncontrollerdriver.exe`
 - Download the latest <a href="https://github.com/PHARTGAMES/WibbleWobbleCore/releases" target="_blank" rel="noopener noreferrer">WibbleWobble Release</a> and extract it somewhere without spaces in the path like `C:\`
