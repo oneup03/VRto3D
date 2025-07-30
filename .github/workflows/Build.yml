@@ -47,10 +47,22 @@ jobs:
     - name: Convert README.md to PDF
       run: md-to-pdf README.md
 
-    - name: Convert PDF to JPG
+    - name: Convert PDF to JPG and trim whitespace (Windows)
       run: |
         magick -density 300 README.pdf README-%d.jpg
-        magick README-*.jpg -append -quality 90 README_combined.jpg
+
+        Get-ChildItem README-*.jpg |
+          Sort-Object { [int]($_.BaseName -replace 'README-','') } |
+          ForEach-Object {
+            magick $_.Name -trim +repage $_.Name
+          }
+
+        $files = Get-ChildItem README-*.jpg |
+          Sort-Object { [int]($_.BaseName -replace 'README-','') } |
+          Select-Object -ExpandProperty Name
+
+        magick $files -append -quality 90 README_combined.jpg
+      shell: pwsh
 
     - name: Compress main artifacts
       uses: vimtor/action-zip@v1.1
