@@ -20,6 +20,7 @@
         - `Ctrl + Shift + PageUp/PageDown` for Height
         - Save `hmd_height, hmd_x, hmd_y, hmd_yaw` using `Ctrl + F9`
 - Added On Screen Display for: HMD position and yaw adjustments
+- Removed refresh rate hack that was an old attempt to fix Async Reprojection. This may improve frame timing
 - Updated profile blacklist - if you run into a profile getting loaded for an app that shouldn't, please report it
 - The valid named configuration options for `Documents\My Games\vrto3d\default_config.json` are now enforced
 - Updated game profiles for: Resident Evil 7, Stellar Blade (demo, but full may work), Oblivion Remastered, Immortals of Aveum, Ghosts 'n Goblins Resurrection, Dragon's Dogma 2, Palworld, Robocop, Ninja Gaiden 2 Black, Hogwarts Legacy, Death Stranding, Horizon Zero Dawn, Elden Ring, Cyberpunk 2077, Spider-Man
