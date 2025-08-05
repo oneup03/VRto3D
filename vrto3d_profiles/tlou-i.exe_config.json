@@ -2,7 +2,7 @@
     "hmd_height": 1.0,
     "fov": 75.0,
     "depth": 0.06499995291233063,
-    "convergence": 0.49999988079071045,
+    "convergence": 0.8499995470046997,
     "pitch_enable": false,
     "yaw_enable": false,
     "pose_reset_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
@@ -16,15 +16,22 @@
             "user_load_key": "VK_NUMPAD1",
             "user_store_key": "VK_NUMPAD4",
             "user_key_type": "switch",
-            "user_depth": 0.4000000059604645,
-            "user_convergence": 4.0
+            "user_depth": 0.06499995291233063,
+            "user_convergence": 0.8499995470046997
         },
         {
             "user_load_key": "VK_NUMPAD2",
             "user_store_key": "VK_NUMPAD5",
             "user_key_type": "toggle",
-            "user_depth": 0.10000000149011612,
-            "user_convergence": 4.0
+            "user_depth": 0.032,
+            "user_convergence": 0.8499995470046997
+        },
+        {
+            "user_load_key": "XINPUT_GAMEPAD_GUIDE",
+            "user_store_key": "VK_NUMPAD5",
+            "user_key_type": "toggle",
+            "user_depth": 0.032,
+            "user_convergence": 0.8499995470046997
         }
     ]
 }
