@@ -407,7 +407,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 #### Troubleshooting
 - If you set the Window Resolution to anything above your desktop resolution, SteamVR won't start
 - If SteamVR crashes and disables add-ons, you will need to re-enable VRto3D in the SteamVR Status window
-- The first thing to try is deleting your `Steam\config\steamvr.vrsettings`
+- The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Documents\My Games\vrto3d\default_config.json`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them
     - Run SteamVR
     - On the SteamVR Status window, go to `Menu -> Settings`
