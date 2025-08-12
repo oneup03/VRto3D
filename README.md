@@ -207,6 +207,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Enable ReShade's `Performance Mode` checkbox
 - Once configuration is complete, you can run everything the same way as the Base Installation
 - If settings don't save, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
+- If you experience a super dark screen, try enabling a random ReShade shader
 
 
 ## Frame Sequential (WibbleWobble) Installation (only if you need this output format)
@@ -413,7 +414,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Change to the `Startup / Shutdown` tab
     - Click `Manage Add-Ons`
     - Turn `Off` any virtual HMD drivers (ALVR, VRidge, OpenTrack, VCR, iVRy, etc)
-    - You can also try forcing SteamVR to use the VRto3D driver by editing `Steam\config\steamvr.vrsettings` and under the `"steamvr" : {` section, add this line: `"forcedDriver" : "vrto3d",`
     - if issues still arise, try a <a href="https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/" target="_blank" rel="noopener noreferrer">Clean SteamVR Install</a> and delete your `Steam\steamapps\common\SteamVR` folder
 - If you have a VR headset and run into issues with this driver, here's some things to try:
     - Disconnect VR headset from computer

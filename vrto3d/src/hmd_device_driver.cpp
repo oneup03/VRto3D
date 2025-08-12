@@ -883,7 +883,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 
         // Keep VR display always on top for 3D rendering
         if (is_on_top_ && IsProcessRunning(app_pid_)) {
-            if (ww_window == NULL) {
+            if (ww_window == NULL && !was_focused) {
                 ww_window = FindWindow(NULL, L"WibbleWobble");
                 if (ww_window != NULL) {
                     if (vr_window != NULL) {
