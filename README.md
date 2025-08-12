@@ -71,7 +71,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `fov` +             | `float` | The horizontal field of view (FoV) for the VR rendering                                     | `90.0`         |
 | `depth` +           | `float` | The max separation. Overrides VR's IPD field                                                | `0.4`          |
 | `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum                                   | `4.0`          |
-| `async_enable`      | `bool`  | Whether or not to use Asynchronous Reprojection. May improve or worsen smoothness           | `false`        |
+| `async_enable` +    | `bool`  | Whether or not to use Asynchronous Reprojection. May improve or worsen smoothness           | `false`        |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB/OU) 3D output (Side by Side is default)               | `false`        |
 | `framepack_offset`  | `int`   | Pixel gap between left and right views in TaB mode. Use for framepacking/HDMI 3D            | `0`            |
@@ -80,7 +80,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home                                                | `false`        |
 | `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D or WibbleWobble to foreground          | `true`         |
 | `display_latency`   | `float` | The display latency in seconds                                                              | `0.011`        |
-| `display_frequency` | `float` | The display refresh rate, in Hz                                                             | `60.0`         |
+| `display_frequency` | `float` | The display refresh rate per-eye, in Hz                                                     | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
 | `use_open_track`    | `bool`  | Enables or disables OpenTrack 3DoF HMD Control                                              | `false`        |

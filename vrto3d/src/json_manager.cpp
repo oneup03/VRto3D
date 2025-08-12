@@ -246,6 +246,9 @@ bool JsonManager::LoadProfileFromJson(const std::string& filename, StereoDisplay
         config.fov = getValue<float>(jsonConfig, "fov");
         config.depth = getValue<float>(jsonConfig, "depth");
         config.convergence = getValue<float>(jsonConfig, "convergence");
+        if (jsonConfig.contains("async_enable")) {
+            config.async_enable = getValue<bool>(jsonConfig, "async_enable");
+        }
 
         // Controller settings
         config.pitch_enable = getValue<bool>(jsonConfig, "pitch_enable");
@@ -369,6 +372,7 @@ void JsonManager::SaveProfileToJson(const std::string& filename, StereoDisplayDr
     jsonConfig["fov"] = config.fov;
     jsonConfig["depth"] = config.depth;
     jsonConfig["convergence"] = config.convergence;
+    jsonConfig["async_enable"] = config.async_enable;
     jsonConfig["pitch_enable"] = config.pitch_enable;
     jsonConfig["yaw_enable"] = config.yaw_enable;
     jsonConfig["pose_reset_key"] = config.pose_reset_str;

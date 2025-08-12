@@ -84,6 +84,7 @@ public:
     void AutoDepthThread();
 
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
+    void SetAsync(bool enable);
 
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;

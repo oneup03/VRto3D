@@ -744,6 +744,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 }
                 if (JsonManager().LoadProfileFromJson(path, cfg)) {
                     stereo_display_component_->LoadSettings(cfg, device_index_);
+                    SetAsync(cfg.async_enable);
                     DriverLog("Loaded %s profile\n", path.c_str());
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
@@ -1042,16 +1043,6 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         app_pid_ = app_pid;
         auto config = stereo_display_component_->GetConfig();
 
-        // Attempt to get Game ID and set Async Reprojection
-        AppIdMgr app_id_mgr;
-        auto app_ids = app_id_mgr.GetSteamAppIDs();
-        for (const std::string& app_id : app_ids) {
-            vr::VRSettings()->SetBool(app_id.c_str(), vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, !config.async_enable);
-            DriverLog("%s Async Reprojection for appkey: %s",
-                config.async_enable ? "Enabled" : "Disabled",
-                app_id.c_str());
-        }
-
         // Attempt to read the JSON settings file
         if (JsonManager().LoadProfileFromJson(app_name + "_config.json", config))
         {
@@ -1069,10 +1060,27 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
             BeepFailure();
             no_profile_ = true;
         }
+
+        SetAsync(config.async_enable);
     }
     else if (status == vr::VREvent_ProcessDisconnected)
     {
         is_on_top_ = false;
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Scan for App IDs and set Async Reprojection On/Off
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::SetAsync(bool enable)
+{
+    auto app_ids = AppIdMgr().GetSteamAppIDs();
+    for (const std::string& app_id : app_ids) {
+        vr::VRSettings()->SetBool(app_id.c_str(), vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, !enable);
+        DriverLog("%s Async Reprojection for appkey: %s",
+            enable ? "Enabled" : "Disabled",
+            app_id.c_str());
     }
 }
 
