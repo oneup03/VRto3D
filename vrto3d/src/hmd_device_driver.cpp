@@ -348,7 +348,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrs->SetBool(vr::k_pch_Dashboard_Section, "showDesktop", false);
     vrs->SetBool(vr::k_pch_Dashboard_Section, "showPowerOptions", false);
     vrs->SetBool(vr::k_pch_Dashboard_Section, "inputCaptureEnabled", false);
-    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, stereo_display_component_->GetConfig().dash_enable);
+    vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableHomeApp, false);// stereo_display_component_->GetConfig().dash_enable);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_MirrorViewVisibility_Bool, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_EnableSafeMode, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_DisplayDebug_Bool, false);
