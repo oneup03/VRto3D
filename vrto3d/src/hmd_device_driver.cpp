@@ -1299,7 +1299,7 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, ui
     float cur_conv = GetConvergence();
     if (is_delta) {
         new_conv += cur_conv;
-        new_conv = (new_conv < 0.1) ? 0.1 : new_conv;
+        new_conv = (new_conv < 0.001) ? 0.001 : new_conv;
     }
     if (cur_conv == new_conv)
         return;
