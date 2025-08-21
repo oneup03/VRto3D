@@ -236,6 +236,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Select `DirectX 11` and click Next
     - Click `Uncheck All` and click Next, Next, Finish
 - Under the `WWReshadeAddon\Release\x64` folder, copy all files to your `Steam\steamapps\common\SteamVR\bin\win64` folder
+- Check if there is a WibbleWobble.zip folder you can download from [here](https://github.com/oneup03/VRto3D/tree/main/wibblewobble_profiles) and extract to `%APPDATA%\..\LocalLow\PHARTGAMES\`
+    - If one is available for your monitor, you can skip CRU, NVTimingsEd, and WibbleWobble Config steps below
 - Download the latest <a href="https://customresolutionutility.net/" target="_blank" rel="noopener noreferrer">CRU Release</a> and save it to your WibbleWobble folder
 - Run `CRU.exe` and grant it admin
     - Take note of your monitor's EDID (first 7 characters in the dropdown list)
@@ -262,6 +264,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
             - Under the `Change Resolution` tab, set your target `Refresh Rate` and click `Apply`
             - Activate LightBoost in the monitor OSD
         - NVidia Custom Resolution:
+            - If your monitor has a WibbleWobble profile, you can match the settings from the images [here](https://github.com/oneup03/VRto3D/tree/main/wibblewobble_profiles)
             - Open the `Change Resolution` tab
             - Select `Customize`
             - Check `Enable resolutions not exposed by the display` and click `Create Custom Resolution`
@@ -274,7 +277,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
         - ToastyX Strobelight:
             - May cause monitor `Out of Range` errors: can try to fix using its hotkeys, but may need a second monitor or perhaps safe mode to fix
             - Try following the instructions on the <a href="https://www.monitortests.com/forum/Thread-Strobelight-LightBoost-Utility-for-AMD-ATI-and-NVIDIA" target="_blank" rel="noopener noreferrer">release page</a>
-- Launch SteamVR
+- WibbleWobble Config
+    - Launch SteamVR
     - Press `Shift + END` to start WibbleWobble
     - Press `Shift + END` again to bring up the WibbleWobble menu
     - ***You have to press `Enter` key to apply any WibbleWobble setting***
