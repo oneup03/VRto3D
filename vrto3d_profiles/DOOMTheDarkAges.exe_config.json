@@ -1,0 +1,24 @@
+{
+    "hmd_height": 1.0,
+    "fov": 90.0,
+    "depth": 0.03999998793005943,
+    "convergence": 1.0999999046325684,
+    "async_enable": false,
+    "pitch_enable": false,
+    "yaw_enable": false,
+    "pose_reset_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
+    "ctrl_toggle_key": "XINPUT_GAMEPAD_GUIDE",
+    "ctrl_toggle_type": "toggle",
+    "pitch_radius": 0.0,
+    "ctrl_deadzone": 0.05000000074505806,
+    "ctrl_sensitivity": 1.0,
+    "user_settings": [
+        {
+            "user_load_key": "VK_NUMPAD1",
+            "user_store_key": "VK_NUMPAD4",
+            "user_key_type": "switch",
+            "user_depth": 0.03999998793005943,
+            "user_convergence": 1.0999999046325684
+        }
+    ]
+}
