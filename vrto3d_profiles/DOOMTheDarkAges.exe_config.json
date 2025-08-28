@@ -2,7 +2,7 @@
     "hmd_height": 1.0,
     "fov": 90.0,
     "depth": 0.03999998793005943,
-    "convergence": 1.0999999046325684,
+    "convergence": 0.3509998321533203,
     "async_enable": false,
     "pitch_enable": false,
     "yaw_enable": false,
@@ -18,7 +18,7 @@
             "user_store_key": "VK_NUMPAD4",
             "user_key_type": "switch",
             "user_depth": 0.03999998793005943,
-            "user_convergence": 1.0999999046325684
+            "user_convergence": 0.3509998321533203
         }
     ]
 }
