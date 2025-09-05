@@ -205,7 +205,6 @@ void JsonManager::LoadParamsFromJson(StereoDisplayDriverConfiguration& config)
         config.hmd_y = getValue<float>(jsonConfig, "hmd_y");
         config.hmd_yaw = getValue<float>(jsonConfig, "hmd_yaw");
 
-        config.aspect_ratio = getValue<float>(jsonConfig, "aspect_ratio");
         config.async_enable = getValue<bool>(jsonConfig, "async_enable");
         config.disable_hotkeys = getValue<bool>(jsonConfig, "disable_hotkeys");
         config.tab_enable = getValue<bool>(jsonConfig, "tab_enable");
@@ -243,6 +242,7 @@ bool JsonManager::LoadProfileFromJson(const std::string& filename, StereoDisplay
 
         // Profile settings
         config.hmd_height = getValue<float>(jsonConfig, "hmd_height");
+        config.aspect_ratio = getValue<float>(jsonConfig, "aspect_ratio");
         config.fov = getValue<float>(jsonConfig, "fov");
         config.depth = getValue<float>(jsonConfig, "depth");
         config.convergence = getValue<float>(jsonConfig, "convergence");
