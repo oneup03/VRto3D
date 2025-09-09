@@ -360,6 +360,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
+- You can setup a Lighthouse + Vive Tracker + tracked controllers with VRto3D for a seated play area. See <a href="https://oneup03.github.io/VRto3D/wiki/Motion-Controls-&-Tracking" target="_blank" rel="noopener noreferrer">this guide</a> for details
 - Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
     - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> to find the strings to use for these hotkeys
