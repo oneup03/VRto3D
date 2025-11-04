@@ -901,6 +901,11 @@ void MockControllerDeviceDriver::FocusUpdateThread()
                 SetWindowPos(main_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
                 SetWindowLong(main_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                
+                PostMessage(vr_window, WM_KEYDOWN, 'Z', 0);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                PostMessage(vr_window, WM_KEYUP, 'Z', 0);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
             was_on_top = true;
         }
