@@ -107,6 +107,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Close SteamVR
 - Edit the `Documents\My Games\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
     - Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
+        - Your 3D display MUST BE YOUR PRIMARY DISPLAY, and the window resolution MUST MATCH your full desktop resolution to avoid issues 
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
 - Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Documents\My Games\vrto3d\` folder
@@ -420,6 +421,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Click `Manage Add-Ons`
     - Turn `Off` any virtual HMD drivers (ALVR, VRidge, OpenTrack, VCR, iVRy, etc)
     - if issues still arise, try a <a href="https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/" target="_blank" rel="noopener noreferrer">Clean SteamVR Install</a> and delete your `Steam\steamapps\common\SteamVR` folder
+- Conversely, to uninstall or disable VRto3D, you can disable it under the same `Manage Add-Ons` menu or delete the `vrto3d` folder from your `Steam\steamapps\common\SteamVR\drivers` folder
 - If you have a VR headset and run into issues with this driver, here's some things to try:
     - Disconnect VR headset from computer
     - <a href="https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/" target="_blank" rel="noopener noreferrer">Clean SteamVR Install</a>

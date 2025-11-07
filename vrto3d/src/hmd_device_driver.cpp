@@ -731,6 +731,16 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 }
                 sleep.save = cfg.sleep_count_max;
             }
+            // Ctrl+F9 Save HMD Position & Yaw
+            if (isCtrlDown() && isDown(VK_F9) && sleep.hmd == 0) {
+                JsonManager().SaveHmdOffsets(cfg);
+                BeepSuccess();
+                setOverlay("Saved HMD Offsets");
+                sleep.hmd = cfg.sleep_count_max;
+            }
+            else if (sleep.hmd > 0) {
+                --sleep.hmd;
+            }
             // Ctrl+F10 Reload settings from Game Profile or (+Shift) Default Profile
             else if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
                 std::string path = "";
@@ -775,16 +785,6 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         }
         else if (sleep.top > 0) {
             --sleep.top;
-        }
-        // Ctrl+F9 Save HMD Position & Yaw
-        if (isCtrlDown() && isDown(VK_F9) && sleep.hmd == 0) {
-            JsonManager().SaveHmdOffsets(cfg);
-            BeepSuccess();
-            setOverlay("Saved HMD Offsets");
-            sleep.hmd = cfg.sleep_count_max;
-        }
-        else if (sleep.hmd > 0) {
-            --sleep.hmd;
         }
         // Ctrl+F12 Take Screenshot
         if (isCtrlDown() && isDown(VK_F12) && sleep.shot == 0) {
