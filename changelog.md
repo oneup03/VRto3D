@@ -1,5 +1,20 @@
 # Changelog
 
+## V3.4.0 (V3.4.0) - 2025-11-07T23:13:39Z
+
+- Auto-Recenter on VRto3D focus (fixes NoMoreFlat mods, but WibbleWobble users may still need to manually recenter from SteamVR Status window)
+- Settings changes:
+    - `async_enable` is now a per-game setting (default will remain disabled, but you can manually override it now)
+    - `aspect_ratio` is now an optional per-game setting (mainly for VR users)
+- Potential stutter fixes
+- Maybe made screenshot trigger more consistent
+- Added wiki instructions for Vive Tracker, Lighthouse, and motion controller usage
+- Updated WibbleWobble instructions and added some pre-configured settings to download
+- Updated game profiles for: Star Wars Outlaws, Cyberpunk 2077, Ghost of Tsushima, Elden Ring, Uncharted, Last of Us 1, Spider-Man, Dead Island 2, Tekken 8, Indiana Jones, Assetto Corsa Competizone, Automobilista 2, Aircar, Arca's Path, Final Fantasy 7 Rebirth, Doom Dark Ages, Sonic Racing CrossWorlds, Chronos, Edge of Nowhere, Assassin's Creed Odyssey
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V3.3.0...V3.4.0
+
+
 ## V3.3.0 (V3.3.0) - 2025-07-29T23:03:37Z
 
 - Frame Packed 3D Support: use `framepack_offset` and the correct `window_width` and `window_height` for 720p or 1080p as documented in the Readme (1080p60Hz works on some displays)
