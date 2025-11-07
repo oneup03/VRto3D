@@ -902,8 +902,9 @@ void MockControllerDeviceDriver::FocusUpdateThread()
                 SetWindowLong(main_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 
+                // Recenter VR
                 PostMessage(vr_window, WM_KEYDOWN, 'Z', 0);
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 PostMessage(vr_window, WM_KEYUP, 'Z', 0);
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
@@ -935,7 +936,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             ForceFocus(vr_window, vr_pid, vr_pid);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             PostMessage(vr_window, WM_KEYDOWN, 'S', 0);
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             PostMessage(vr_window, WM_KEYUP, 'S', 0);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             ForceFocus(game_window, vr_pid, app_pid_);
