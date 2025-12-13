@@ -468,7 +468,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
             open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(open_track.Yaw));
             lock.unlock();
         }
-        else std::this_thread::sleep_for(std::chrono::seconds(1));
+        else std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     closesocket(socket_s);
     WSACleanup();
