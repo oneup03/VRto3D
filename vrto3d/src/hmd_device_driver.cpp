@@ -868,7 +868,8 @@ void MockControllerDeviceDriver::FocusUpdateThread()
     static HWND top_window = NULL;
     static HWND game_window = NULL;
     static LONG ex_style = 0;
-    static DWORD vr_pid = GetCurrentThreadId();;
+    static DWORD vr_pid = GetCurrentThreadId();
+    static DWORD last_pid = 0;
     static bool was_on_top = false;
     static bool was_focused = false;
 
@@ -901,12 +902,15 @@ void MockControllerDeviceDriver::FocusUpdateThread()
                 SetWindowPos(main_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
                 SetWindowLong(main_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                
+
                 // Recenter VR
-                PostMessage(vr_window, WM_KEYDOWN, 'Z', 0);
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                PostMessage(vr_window, WM_KEYUP, 'Z', 0);
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                if (last_pid != app_pid_) {
+                    PostMessage(vr_window, WM_KEYDOWN, 'Z', 0);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    PostMessage(vr_window, WM_KEYUP, 'Z', 0);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    last_pid = app_pid_;
+                }
             }
             was_on_top = true;
         }
