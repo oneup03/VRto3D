@@ -18,7 +18,7 @@
 ## Compatible 3D Displays
 - 3D TVs & Projectors - work great, use [Base Installation](#base-installation) in SbS/TaB mode or potentially [Frame Packing](#framepacking-hdmi-3d-only-if-you-need-this-output-format) instructions
 - Passive/Interlaced 3D displays - work great, use [Interlaced](#interlaced-checkerboard-and-anaglyph-installation-only-if-you-need-this-output-format) instructions
-- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, use [Base Installation](#base-installation) instructions. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended
+- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, use [Base Installation](#base-installation) instructions. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended. VertoXR can be used for 3DoF
 - Lume Pad - works great, use [Base Installation](#base-installation) instructions, requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a>
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, use [SR Displays](#sr-simulated-reality-displays-only-if-you-need-this-output-format) instructions
 - 3D Vision/Frame Sequential - works well, use [Frame Sequential](#frame-sequential-wibblewobble-installation-only-if-you-need-this-output-format) instructions
@@ -361,6 +361,13 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
+- <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> can be paired with VRto3D to provide 3DoF Head Tracking for popular AR glasses
+    - Connect AR glasses, switch to Full-SbS mode, set them as your primary display
+    - Open VertoXR, connect to the AR glasses
+    - Select `Game Mode`, place glasses on a flat surface looking straight ahead, and click `Start Calibrate`. Calibration may need to be redone if misalignment occurs
+    - Edit `OpenTrack Configuration` and disable `Enable Roll` if needed
+    - `Start` the OpenTrack VertoXR plugin
+    - Set `use_open_track` to true and ensure `open_track_port` matches the VertoXR OpenTrack port in `default_config.json`
 - You can setup a Lighthouse + Vive Tracker + tracked controllers with VRto3D for a seated play area. See <a href="https://oneup03.github.io/VRto3D/wiki/Motion-Controls-&-Tracking" target="_blank" rel="noopener noreferrer">this guide</a> for details
 - Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
