@@ -1,5 +1,13 @@
 # Changelog
 
+## V3.4.1 (V3.4.1) - 2026-01-02T09:19:39Z
+
+- fix Open Track lag
+- only recenter once per focus
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V3.4.0...V3.4.1
+
+
 ## V3.4.0 (V3.4.0) - 2025-11-07T23:13:39Z
 
 - Auto-Recenter on VRto3D focus (fixes NoMoreFlat mods, but WibbleWobble users may still need to manually recenter from SteamVR Status window)
