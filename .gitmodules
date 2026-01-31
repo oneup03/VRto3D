@@ -7,3 +7,6 @@
 [submodule "wiki"]
 	path = wiki
 	url = https://github.com/oneup03/VRto3D.wiki.git
+[submodule "external/VRto3DLib"]
+	path = external/VRto3DLib
+	url = https://github.com/oneup03/VRto3DLib.git

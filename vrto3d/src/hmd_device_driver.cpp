@@ -17,10 +17,10 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
-#include "key_mappings.h"
-#include "json_manager.h"
-#include "app_id_mgr.h"
-#include "overlay_mgr.h"
+#include "vrto3dlib/key_mappings.h"
+#include "vrto3dlib/json_manager.h"
+#include "vrto3dlib/app_id_mgr.h"
+#include "vrto3dlib/overlay_mgr.h"
 #include "driverlog.h"
 #include "vrmath.h"
 

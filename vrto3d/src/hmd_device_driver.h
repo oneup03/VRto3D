@@ -21,7 +21,7 @@
 #include <shared_mutex>
 #include <string>
 
-#include "json_manager.h"
+#include "vrto3dlib/json_manager.h"
 
  // Forward declare XINPUT_STATE
 struct _XINPUT_STATE;

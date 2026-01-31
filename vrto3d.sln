@@ -4,10 +4,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.6.33829.357
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vrto3d", "vrto3d\vrto3d.vcxproj", "{1A008D17-0760-4179-8D42-995C5FF1C8D6}"
+	ProjectSection(ProjectDependencies) = postProject
+		{404CB76A-B1A8-456E-B805-BB3F9696947A} = {404CB76A-B1A8-456E-B805-BB3F9696947A}
+		{AC31972F-E424-4C19-86EB-7BCF1E9F8460} = {AC31972F-E424-4C19-86EB-7BCF1E9F8460}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "util_driverlog", "utils\driverlog\util_driverlog.vcxproj", "{89689A91-FB38-4893-BA67-3D6F45EB2712}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "util_vrmath", "utils\vrmath\util_vrmath.vcxproj", "{AC31972F-E424-4C19-86EB-7BCF1E9F8460}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VRto3DLib", "external\VRto3DLib\VRto3DLib.vcxproj", "{404CB76A-B1A8-456E-B805-BB3F9696947A}"
+	ProjectSection(ProjectDependencies) = postProject
+		{89689A91-FB38-4893-BA67-3D6F45EB2712} = {89689A91-FB38-4893-BA67-3D6F45EB2712}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -41,6 +50,14 @@ Global
 		{AC31972F-E424-4C19-86EB-7BCF1E9F8460}.Release|x64.Build.0 = Release|x64
 		{AC31972F-E424-4C19-86EB-7BCF1E9F8460}.Release|x86.ActiveCfg = Release|Win32
 		{AC31972F-E424-4C19-86EB-7BCF1E9F8460}.Release|x86.Build.0 = Release|Win32
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Debug|x64.ActiveCfg = Debug|x64
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Debug|x64.Build.0 = Debug|x64
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Debug|x86.ActiveCfg = Debug|Win32
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Debug|x86.Build.0 = Debug|Win32
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Release|x64.ActiveCfg = Release|x64
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Release|x64.Build.0 = Release|x64
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Release|x86.ActiveCfg = Release|Win32
+		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
