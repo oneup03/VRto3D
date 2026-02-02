@@ -94,6 +94,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     app_updated_ = false;
     no_profile_ = false;
 
+    stereo_display_component_->Init(device_index_);
+
     // A list of properties available is contained in vr::ETrackedDeviceProperty.
     auto* vrp = vr::VRProperties();
     auto* vrs = vr::VRSettings();
@@ -553,24 +555,24 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         if (!cfg.disable_hotkeys) {
             // Ctrl+F3 Decrease Depth
             if (isCtrlDown() && isDown(VK_F3)) {
-                stereo_display_component_->AdjustDepth(-0.001f, true, device_index_);
-                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection(device_index_);
+                stereo_display_component_->AdjustDepth(-0.001f, true);
+                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F4 Increase Depth
             else if (isCtrlDown() && isDown(VK_F4)) {
-                stereo_display_component_->AdjustDepth(0.001f, true, device_index_);
-                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection(device_index_);
+                stereo_display_component_->AdjustDepth(0.001f, true);
+                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F5 Decrease Convergence
             else if (isCtrlDown() && isDown(VK_F5)) {
-                stereo_display_component_->AdjustConvergence(0.005f, true, device_index_);
+                stereo_display_component_->AdjustConvergence(0.005f, true);
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F6 Increase Convergence
             else if (isCtrlDown() && isDown(VK_F6)) {
-                stereo_display_component_->AdjustConvergence(-0.005f, true, device_index_);
+                stereo_display_component_->AdjustConvergence(-0.005f, true);
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F7 Store settings into game profile
@@ -610,7 +612,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                     app_name_ = prev_name_;
                 }
                 if (JsonManager().LoadProfileFromJson(path, cfg)) {
-                    stereo_display_component_->LoadSettings(cfg, device_index_);
+                    stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
                     DriverLog("Loaded %s profile\n", path.c_str());
                     BeepSuccess();
@@ -673,7 +675,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         }
 
         // Check User binds
-        auto hotkey_str = stereo_display_component_->CheckUserSettings(device_index_);
+        auto hotkey_str = stereo_display_component_->CheckUserSettings();
 
         // Check for Position Adjustment
         auto pos_str = stereo_display_component_->CheckPositionInput();
@@ -888,7 +890,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
                 // Convert to float
                 buffer[bytesRead] = '\0';
                 float depthValue = strtof(buffer, nullptr);
-                stereo_display_component_->AdjustDepth(depthValue, false, device_index_);
+                stereo_display_component_->AdjustDepth(depthValue, false);
             }
         }
 
@@ -913,7 +915,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         // Attempt to read the JSON settings file
         if (JsonManager().LoadProfileFromJson(app_name + "_config.json", config))
         {
-            stereo_display_component_->LoadSettings(config, device_index_);
+            stereo_display_component_->LoadSettings(config);
             DriverLog("Loaded %s profile\n", app_name.c_str());
             BeepSuccess();
             app_updated_ = true;
@@ -989,6 +991,18 @@ StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfigu
     : config_( config ), depth_(config.depth), convergence_(config.convergence)
 {
 }
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Initialize the Stereo Display Component
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::Init(uint32_t device_index) {
+    device_index_ = device_index;
+
+
+
+}
+
 
 //-----------------------------------------------------------------------------
 // Purpose: To inform vrcompositor if this display is considered an on-desktop display.
@@ -1145,7 +1159,7 @@ StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 //-----------------------------------------------------------------------------
 // Purpose: To update the Depth value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_t device_index)
+void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta)
 {
     float cur_depth = GetDepth();
     if (is_delta) {
@@ -1153,7 +1167,7 @@ void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_
         new_depth = (new_depth < 0) ? 0 : new_depth;
     }
     while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
-    vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index);
+    vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
     vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
 }
 
@@ -1161,7 +1175,7 @@ void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta, uint32_
 //-----------------------------------------------------------------------------
 // Purpose: To update the Convergence value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index)
+void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta)
 {
     float cur_conv = GetConvergence();
     if (is_delta) {
@@ -1171,7 +1185,7 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, ui
     if (cur_conv == new_conv)
         return;
     while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
-    ResetProjection(device_index);
+    ResetProjection();
 }
 
 
@@ -1196,25 +1210,14 @@ float StereoDisplayComponent::GetConvergence()
 //-----------------------------------------------------------------------------
 // Purpose: Check User Settings and act on them
 //-----------------------------------------------------------------------------
-std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
+std::string StereoDisplayComponent::CheckUserSettings()
 {
     static int sleep_ctrl = 0;
     static int sleep_rest = 0;
     std::string overlay_msg = "";
     
-    // Get the state of the first controller (index 0)
-    XINPUT_STATE state;
-    ZeroMemory(&state, sizeof(XINPUT_STATE));
-    bool got_xinput = (_XInputGetState(0, &state) == ERROR_SUCCESS);
-
-    DWORD xstate = 0x00000000;
-    xstate = state.Gamepad.wButtons;
-    if (state.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
-        xstate |= XINPUT_GAMEPAD_LEFT_TRIGGER;
-    }
-    if (state.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
-        xstate |= XINPUT_GAMEPAD_RIGHT_TRIGGER;
-    }
+    DWORD xstate;
+    bool got_xinput = GetXInputButtonState(xstate);
 
     auto config = GetConfig();
 
@@ -1265,66 +1268,17 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
         sleep_rest--;
     }
 
-    for (int i = 0; i < config.num_user_settings; i++)
-    {
-        // Decrement the sleep count if it's greater than zero
-        if (config.sleep_count[i] > 0)
-            config.sleep_count[i]--;
+    DepthConvBackend b{
+      +[](void* ctx)->float { return static_cast<StereoDisplayComponent*>(ctx)->GetDepth(); },
+      +[](void* ctx)->float { return static_cast<StereoDisplayComponent*>(ctx)->GetConvergence(); },
+      +[](void* ctx, float v) { static_cast<StereoDisplayComponent*>(ctx)->AdjustDepth(v, false); },
+      +[](void* ctx, float v) { static_cast<StereoDisplayComponent*>(ctx)->AdjustConvergence(v, false); },
+      nullptr,
+      this
+    };
 
-        // Load stored depth & convergence
-        if ((config.load_xinput[i] && got_xinput &&
-            ((xstate & config.user_load_key[i]) == config.user_load_key[i]))
-            || (!config.load_xinput[i] && isDown(config.user_load_key[i])))
-        {
-            if (config.user_key_type[i] == HOLD && !config.was_held[i])
-            {
-                config.prev_depth[i] = GetDepth();
-                config.prev_convergence[i] = GetConvergence();
-                config.was_held[i] = true;
-                AdjustDepth(config.user_depth[i], false, device_index);
-                AdjustConvergence(config.user_convergence[i], false, device_index);
-            }
-            else if (config.user_key_type[i] == TOGGLE && config.sleep_count[i] < 1)
-            {
-                config.sleep_count[i] = config.sleep_count_max;
-                if (GetDepth() == config.user_depth[i] && GetConvergence() == config.user_convergence[i])
-                {
-                    // If the current state matches the user settings, revert to the previous state
-                    AdjustDepth(config.prev_depth[i], false, device_index);
-                    AdjustConvergence(config.prev_convergence[i], false, device_index);
-                }
-                else
-                {
-                    // Save the current state and apply the user settings
-                    config.prev_depth[i] = GetDepth();
-                    config.prev_convergence[i] = GetConvergence();
-                    AdjustDepth(config.user_depth[i], false, device_index);
-                    AdjustConvergence(config.user_convergence[i], false, device_index);
-                }
-            }
-            else if (config.user_key_type[i] == SWITCH)
-            {
-                AdjustDepth(config.user_depth[i], false, device_index);
-                AdjustConvergence(config.user_convergence[i], false, device_index);
-            }
-        }
-        // Release depth & convergence back to normal for HOLD key type
-        else if (config.user_key_type[i] == HOLD && config.was_held[i])
-        {
-            config.was_held[i] = false;
-            AdjustDepth(config.prev_depth[i], false, device_index);
-            AdjustConvergence(config.prev_convergence[i], false, device_index);
-        }
-
-        // Store current depth & convergence to user setting
-        if (isDown(config.user_store_key[i]))
-        {
-            config.user_depth[i] = GetDepth();
-            config.user_convergence[i] = GetConvergence();
-            BeepSuccess();
-            overlay_msg = "Hotkey " + config.user_load_str[i] + " updated";
-        }
-    }
+    auto msg = ApplyUserSettingsHotkeys(config, got_xinput, xstate, b);
+    if (!msg.empty()) overlay_msg = std::move(msg);
 
     // Update the config
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
@@ -1433,29 +1387,29 @@ void StereoDisplayComponent::SetReset()
 //-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& config, uint32_t device_index)
+void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& config)
 {
     // Apply loaded settings
-    AdjustDepth(config.depth, false, device_index);
-    AdjustConvergence(config.convergence, false, device_index);
+    AdjustDepth(config.depth, false);
+    AdjustConvergence(config.convergence, false);
     
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_ = config;
     lock.unlock();
-    ResetProjection(device_index);
+    ResetProjection();
 }
 
 
 //-----------------------------------------------------------------------------
 // Purpose: Reset per-eye FoV calculation
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::ResetProjection(uint32_t device_index)
+void StereoDisplayComponent::ResetProjection()
 {
     // Regenerate the Projection
     vr::HmdRect2_t eyeLeft, eyeRight;
     GetProjectionRaw(vr::Eye_Left, &eyeLeft.vTopLeft.v[0], &eyeLeft.vBottomRight.v[0], &eyeLeft.vTopLeft.v[1], &eyeLeft.vBottomRight.v[1]);
     GetProjectionRaw(vr::Eye_Right, &eyeRight.vTopLeft.v[0], &eyeRight.vBottomRight.v[0], &eyeRight.vTopLeft.v[1], &eyeRight.vBottomRight.v[1]);
     vr::VREvent_Data_t temp;
-    vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index, eyeLeft, eyeRight);
-    vr::VRServerDriverHost()->VendorSpecificEvent(device_index, vr::VREvent_LensDistortionChanged, temp, 0.0f);
+    vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index_, eyeLeft, eyeRight);
+    vr::VRServerDriverHost()->VendorSpecificEvent(device_index_, vr::VREvent_LensDistortionChanged, temp, 0.0f);
 }

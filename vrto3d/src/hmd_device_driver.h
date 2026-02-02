@@ -43,25 +43,29 @@ public:
     bool ComputeInverseDistortion(vr::HmdVector2_t* pResult, vr::EVREye eEye, uint32_t unChannel, float fU, float fV) override;
     void GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight ) override;
     StereoDisplayDriverConfiguration GetConfig();
-    void AdjustDepth(float new_depth, bool is_delta, uint32_t device_index);
-    void AdjustConvergence(float new_conv, bool is_delta, uint32_t device_index);
+    void AdjustDepth(float new_depth, bool is_delta);
+    void AdjustConvergence(float new_conv, bool is_delta);
     float GetDepth();
     float GetConvergence();
-    std::string CheckUserSettings(uint32_t device_index);
+    std::string CheckUserSettings();
     std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
     void AdjustRadius(float delta);
     void SetReset();
-    void LoadSettings(StereoDisplayDriverConfiguration& config, uint32_t device_index);
-    void ResetProjection(uint32_t device_index);
+    void LoadSettings(StereoDisplayDriverConfiguration& config);
+    void ResetProjection();
+    void Init(uint32_t device_index);
 
 private:
     StereoDisplayDriverConfiguration config_;
     std::atomic< float > depth_;
     std::atomic< float > convergence_;
+    std::atomic< uint32_t > device_index_;
 
     std::shared_mutex  cfg_mutex_;
 };
+
+
 
 //-----------------------------------------------------------------------------
 // Purpose: Represents a Mock HMD in the system
