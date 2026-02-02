@@ -16,9 +16,7 @@
  */
 #pragma once
 
-#include <memory>
 #include <string>
-#include <unordered_set>
 
 #include "hmd_device_driver.h"
 #include "openvr_driver.h"
@@ -31,7 +29,6 @@ public:
     const char *const *GetInterfaceVersions() override;
 
     void RunFrame() override;
-    std::string GetProcessName(uint32_t processID);
 
     bool ShouldBlockStandbyMode() override;
     void EnterStandby() override;
@@ -47,31 +44,4 @@ private:
     std::string app_name_;
     uint32_t app_pid_ = 0;
     uint32_t wait_count_ = 0;
-
-    std::unordered_set<std::string> skip_processes_ = {
-        "vrcompositor.exe",
-        "vrserver.exe",
-        "vrmonitor.exe",
-        "vrstartup.exe",
-        "removeusbhelper.exe",
-        "restarthelper.exe",
-        "vrcmd.exe",
-        "vrdashboard.exe",
-        "vrpathreg.exe",
-        "vrwebhelper.exe",
-        "vrprismhost.exe",
-        "vrserverhelper.exe",
-        "vrservice.exe",
-        "vrurlhandler.exe",
-        "steam.exe",
-        "steamwebhelper.exe",
-        "steamerrorreporter.exe",
-        "steamservice.exe",
-        "ReviveOverlay.exe",
-        "ReviveInjector.exe",
-        "Rundll32.exe",
-        "Rundll64.exe",
-        "fpsVR.exe",
-        "Driver4VR.exe"
-    };
 };

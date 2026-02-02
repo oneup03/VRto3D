@@ -21,6 +21,7 @@
 #include "vrto3dlib/json_manager.h"
 #include "vrto3dlib/app_id_mgr.h"
 #include "vrto3dlib/overlay_mgr.h"
+#include "vrto3dlib/win32_helper.hpp"
 #include "driverlog.h"
 #include "vrmath.h"
 
@@ -33,148 +34,6 @@
 #pragma comment (lib, "WSock32.Lib")
 #include <windows.h>
 #include <xinput.h>
-
-// Link the XInput library
-#pragma comment(lib, "XInput.lib")
-
-//-----------------------------------------------------------------------------
-// Purpose:
-// Set a function pointer to the xinput get state call. By default, set it to
-// XInputGetState() in whichever xinput we are linked to (xinput9_1_0.dll). If
-// the d3dx.ini is using the guide button we will try to switch to either
-// xinput 1.3 or 1.4 to get access to the undocumented XInputGetStateEx() call.
-// We can't rely on these existing on Win7 though, so if we fail to load them
-// don't treat it as fatal and continue using the original one.
-//-----------------------------------------------------------------------------
-static HMODULE xinput_lib;
-typedef DWORD(WINAPI* tXInputGetState)(DWORD dwUserIndex, XINPUT_STATE* pState);
-static tXInputGetState _XInputGetState = XInputGetState;
-static void SwitchToXinpuGetStateEx()
-{
-    tXInputGetState XInputGetStateEx;
-
-    if (xinput_lib)
-        return;
-
-    // 3DMigoto is linked against xinput9_1_0.dll, but that version does
-    // not export XInputGetStateEx to get the guide button. Try loading
-    // xinput 1.3 and 1.4, which both support this functionality.
-    xinput_lib = LoadLibrary(L"xinput1_3.dll");
-    if (xinput_lib) {
-        DriverLog("Loaded xinput1_3.dll for guide button support\n");
-    }
-    else {
-        xinput_lib = LoadLibrary(L"xinput1_4.dll");
-        if (xinput_lib) {
-            DriverLog("Loaded xinput1_4.dll for guide button support\n");
-        }
-        else {
-            DriverLog("ERROR: Unable to load xinput 1.3 or 1.4: Guide button will not be available\n");
-            return;
-        }
-    }
-
-    // Unnamed and undocumented exports FTW
-    LPCSTR XInputGetStateExOrdinal = (LPCSTR)100;
-    XInputGetStateEx = (tXInputGetState)GetProcAddress(xinput_lib, XInputGetStateExOrdinal);
-    if (!XInputGetStateEx) {
-        DriverLog("ERROR: Unable to get XInputGetStateEx: Guide button will not be available\n");
-        return;
-    }
-
-    _XInputGetState = XInputGetStateEx;
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Force focus to a specific window
-//-----------------------------------------------------------------------------
-void ForceFocus(HWND hTarget, DWORD currentThread, DWORD targetThread) {
-    // Send dummy input to enable focus control
-    INPUT input = {};
-    input.type = INPUT_KEYBOARD;
-    input.ki.wVk = VK_MENU;
-    SendInput(1, &input, sizeof(INPUT));
-    input.ki.dwFlags = KEYEVENTF_KEYUP;
-    SendInput(1, &input, sizeof(INPUT));
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));  // let input register
-
-    // Attach input threads so you can manipulate the foreground window
-    AttachThreadInput(currentThread, targetThread, TRUE);
-    ShowWindow(hTarget, SW_RESTORE);
-    SetForegroundWindow(hTarget);
-    SetFocus(hTarget);
-    SetActiveWindow(hTarget);
-    BringWindowToTop(hTarget);
-    AttachThreadInput(currentThread, targetThread, FALSE);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Return window handle from process ID
-//-----------------------------------------------------------------------------
-HWND GetHWNDFromPID(DWORD targetPID) {
-    struct FindWindowData {
-        DWORD targetPID;
-        HWND result;
-    } data = { targetPID, nullptr };
-
-    EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-        auto* pData = reinterpret_cast<FindWindowData*>(lParam);
-        DWORD pid = 0;
-        GetWindowThreadProcessId(hwnd, &pid);
-
-        if (pid == pData->targetPID && IsWindowVisible(hwnd)) {
-            pData->result = hwnd;
-            return FALSE;
-        }
-        return TRUE;
-    }, reinterpret_cast<LPARAM>(&data));
-
-    return data.result;
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Check if a game is still running
-//-----------------------------------------------------------------------------
-bool IsProcessRunning(DWORD pid) {
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (!hProcess) return false;
-
-    DWORD exitCode = 0;
-    bool isRunning = false;
-
-    if (GetExitCodeProcess(hProcess, &exitCode)) {
-        isRunning = (exitCode == STILL_ACTIVE);
-    }
-
-    CloseHandle(hProcess);
-    return isRunning;
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Signify Operation Success
-//-----------------------------------------------------------------------------
-static void BeepSuccess()
-{
-    // High beep for success
-    Beep(400, 400);
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Signify Operation Failure
-//-----------------------------------------------------------------------------
-static void BeepFailure()
-{
-    // Brnk, dunk sound for failure.
-    Beep(300, 200); Beep(200, 150);
-}
 
 
 // Load settings from default.vrsettings
@@ -672,8 +531,6 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
 
     InitGDIPlus();
 
-    auto isDown = [](int vk) { return GetAsyncKeyState(vk) & 0x8000; };
-    auto isCtrlDown = [&]() { return isDown(VK_CONTROL); };
     auto setOverlay = [&](const std::string& msg) {
         overlay_msg = msg;
         sleep.overlay = stereo_display_component_->GetConfig().sleep_count_max * 3;
@@ -1364,7 +1221,7 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     // Toggle Pitch and Yaw control
     if ((config.ctrl_xinput && got_xinput &&
         ((xstate & config.ctrl_toggle_key) == config.ctrl_toggle_key))
-        || (!config.ctrl_xinput && (GetAsyncKeyState(config.ctrl_toggle_key) & 0x8000)))
+        || (!config.ctrl_xinput && isDown(config.ctrl_toggle_key)))
     {
         if (config.ctrl_type == HOLD && !config.ctrl_held)
         {
@@ -1396,7 +1253,7 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
     // Reset HMD position
     if (((config.reset_xinput && got_xinput &&
         ((xstate & config.pose_reset_key) == config.pose_reset_key))
-        || (!config.reset_xinput && (GetAsyncKeyState(config.pose_reset_key) & 0x8000)))
+        || (!config.reset_xinput && isDown(config.pose_reset_key)))
         && sleep_rest == 0)
     {
         sleep_rest = config.sleep_count_max;
@@ -1417,7 +1274,7 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
         // Load stored depth & convergence
         if ((config.load_xinput[i] && got_xinput &&
             ((xstate & config.user_load_key[i]) == config.user_load_key[i]))
-            || (!config.load_xinput[i] && (GetAsyncKeyState(config.user_load_key[i]) & 0x8000)))
+            || (!config.load_xinput[i] && isDown(config.user_load_key[i])))
         {
             if (config.user_key_type[i] == HOLD && !config.was_held[i])
             {
@@ -1460,7 +1317,7 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
         }
 
         // Store current depth & convergence to user setting
-        if ((GetAsyncKeyState(config.user_store_key[i]) & 0x8000))
+        if (isDown(config.user_store_key[i]))
         {
             config.user_depth[i] = GetDepth();
             config.user_convergence[i] = GetConvergence();
@@ -1481,38 +1338,38 @@ std::string StereoDisplayComponent::CheckUserSettings(uint32_t device_index)
 // Purpose: Move HMD origin position with keyboard input
 //-----------------------------------------------------------------------------
 std::string StereoDisplayComponent::CheckPositionInput() {
-    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) == 0)
+    if (!isCtrlDown())
         return "";
 
     const float step = 0.01f;
     auto config = GetConfig();
 
-    if (GetAsyncKeyState(VK_HOME) & 0x8000) {
+    if (isDown(VK_HOME)) {
             config.hmd_y -= step;       // Forward
     }
-    else if (GetAsyncKeyState(VK_END) & 0x8000) {
+    else if (isDown(VK_END)) {
             config.hmd_y += step;       // Backward
     }
-    else if (GetAsyncKeyState(VK_DELETE) & 0x8000) {
+    else if (isDown(VK_DELETE)) {
         config.hmd_x -= step;       // Left
     }
-    else if (GetAsyncKeyState(VK_NEXT) & 0x8000) {
-        if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
+    else if (isDown(VK_NEXT)) {
+        if (isDown(VK_SHIFT)) {
             config.hmd_height -= step;  // Down
         }
         else {
             config.hmd_x += step;       // Right
         }
     }
-    else if (GetAsyncKeyState(VK_PRIOR) & 0x8000) {
-        if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
+    else if (isDown(VK_PRIOR)) {
+        if (isDown(VK_SHIFT)) {
             config.hmd_height += step;  // Up
         }
         else {
             config.hmd_yaw -= step * 10;     // Yaw CW
         }
     }
-    else if (GetAsyncKeyState(VK_INSERT) & 0x8000) {
+    else if (isDown(VK_INSERT)) {
         config.hmd_yaw += step * 10;     // Yaw CCW
     }
     else {

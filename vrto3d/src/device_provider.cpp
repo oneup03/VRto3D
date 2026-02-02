@@ -21,6 +21,7 @@
 #include <psapi.h>
 #include <tchar.h>
 
+#include "vrto3dlib/win32_helper.hpp"
 #include "device_provider.h"
 #include "driverlog.h"
 
@@ -30,7 +31,7 @@
 //-----------------------------------------------------------------------------
 vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 {
-    global_mtx_ = CreateMutex(NULL, TRUE, L"Global\\VRto3DDriver");
+    global_mtx_ = CreateMutex(NULL, TRUE, kVRto3DMutexName);
 
     // We need to initialise our driver context to make calls to the server.
     // OpenVR provides a macro to do this for us.
@@ -93,7 +94,7 @@ void MyDeviceProvider::RunFrame()
             auto lowerAppName = appName;
             std::transform(lowerAppName.begin(), lowerAppName.end(), lowerAppName.begin(), ::tolower);
             
-            if (skip_processes_.find(appName) == skip_processes_.end() &&
+            if (Skip_Processes.find(appName) == Skip_Processes.end() &&
                 lowerAppName.find("exe") != std::string::npos)
             {
                 app_name_ = appName;
@@ -149,34 +150,3 @@ void MyDeviceProvider::Cleanup()
     my_hmd_device_ = nullptr;
 }
 
-//-----------------------------------------------------------------------------
-// Purpose: To get the executable name given a process ID
-//-----------------------------------------------------------------------------
-std::string MyDeviceProvider::GetProcessName(uint32_t processID)
-{
-    std::string result = "<unknown>";
-
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, processID);
-    if (hProcess)
-    {
-        TCHAR processName[MAX_PATH] = TEXT("<unknown>");
-        DWORD size = MAX_PATH;
-
-        // Try QueryFullProcessImageName for better accuracy and access support
-        if (QueryFullProcessImageName(hProcess, 0, processName, &size))
-        {
-#ifdef UNICODE
-            std::wstring ws(processName);
-            result.assign(ws.begin(), ws.end());
-#else
-            result.assign(processName);
-#endif
-            std::filesystem::path fullPath = result;
-            result = fullPath.filename().string();
-        }
-
-        CloseHandle(hProcess);
-    }
-
-    return result;
-}
