@@ -202,7 +202,7 @@
     <ClInclude Include="src\device_provider.h" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.vcxproj">
+    <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">
       <Project>{404cb76a-b1a8-456e-b805-bb3f9696947a}</Project>
     </ProjectReference>
     <ProjectReference Include="..\utils\driverlog\util_driverlog.vcxproj">

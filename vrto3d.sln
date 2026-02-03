@@ -13,7 +13,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "util_driverlog", "utils\dri
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "util_vrmath", "utils\vrmath\util_vrmath.vcxproj", "{AC31972F-E424-4C19-86EB-7BCF1E9F8460}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VRto3DLib", "external\VRto3DLib\VRto3DLib.vcxproj", "{404CB76A-B1A8-456E-B805-BB3F9696947A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VRto3DLib.v143", "external\VRto3DLib\VRto3DLib.v143.vcxproj", "{404CB76A-B1A8-456E-B805-BB3F9696947A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
