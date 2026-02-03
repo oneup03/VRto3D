@@ -45,8 +45,10 @@ public:
     StereoDisplayDriverConfiguration GetConfig();
     void AdjustDepth(float new_depth, bool is_delta);
     void AdjustConvergence(float new_conv, bool is_delta);
+    void AdjustFoV(float new_fov);
     float GetDepth();
     float GetConvergence();
+    float GetFoV();
     std::string CheckUserSettings();
     std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
@@ -60,6 +62,7 @@ private:
     StereoDisplayDriverConfiguration config_;
     std::atomic< float > depth_;
     std::atomic< float > convergence_;
+    std::atomic< float > fov_;
     std::atomic< uint32_t > device_index_;
 
     std::shared_mutex  cfg_mutex_;

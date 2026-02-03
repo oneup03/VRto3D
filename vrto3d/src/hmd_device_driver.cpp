@@ -988,7 +988,7 @@ void MockControllerDeviceDriver::Deactivate()
 //-----------------------------------------------------------------------------
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
-    : config_( config ), depth_(config.depth), convergence_(config.convergence)
+    : config_( config ), depth_(config.depth), convergence_(config.convergence), fov_(config.fov)
 {
 }
 
@@ -1098,7 +1098,7 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
 
     // Convert horizontal FOV from degrees to radians
-    float horFovRadians = tan((config_.fov * (M_PI / 180.0f)) / 2);
+    float horFovRadians = tan((GetFoV() * (M_PI / 180.0f)) / 2);
 
     // Calculate vertical FOV in radians
     float verFovRadians = horFovRadians / config_.aspect_ratio;
@@ -1182,9 +1182,22 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta)
         new_conv += cur_conv;
         new_conv = (new_conv < 0.001) ? 0.001 : new_conv;
     }
-    if (cur_conv == new_conv)
+    if (NearlyEqual(cur_conv, new_conv))
         return;
     while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
+    ResetProjection();
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: To update the FoV value
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustFoV(float new_fov)
+{
+    float cur_fov = GetFoV();
+    if (NearlyEqual(cur_fov, new_fov))
+        return;
+    while (!fov_.compare_exchange_weak(cur_fov, new_fov, std::memory_order_relaxed));
     ResetProjection();
 }
 
@@ -1204,6 +1217,15 @@ float StereoDisplayComponent::GetDepth()
 float StereoDisplayComponent::GetConvergence()
 {
     return convergence_.load(std::memory_order_relaxed);
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Get FoV value
+//-----------------------------------------------------------------------------
+float StereoDisplayComponent::GetFoV()
+{
+    return fov_.load(std::memory_order_relaxed);
 }
 
 
@@ -1273,6 +1295,8 @@ std::string StereoDisplayComponent::CheckUserSettings()
       +[](void* ctx)->float { return static_cast<StereoDisplayComponent*>(ctx)->GetConvergence(); },
       +[](void* ctx, float v) { static_cast<StereoDisplayComponent*>(ctx)->AdjustDepth(v, false); },
       +[](void* ctx, float v) { static_cast<StereoDisplayComponent*>(ctx)->AdjustConvergence(v, false); },
+      +[](void* ctx)->float { return static_cast<StereoDisplayComponent*>(ctx)->GetFoV(); },
+      +[](void* ctx, float v) { static_cast<StereoDisplayComponent*>(ctx)->AdjustFoV(v); },
       nullptr,
       this
     };
