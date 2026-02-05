@@ -901,7 +901,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
+// Purpose: Load Game Specific Settings from Steam\config\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status)
 {
@@ -1409,7 +1409,7 @@ void StereoDisplayComponent::SetReset()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Load Game Specific Settings from Documents\My games\vrto3d\app_name_config.json
+// Purpose: Load Game Specific Settings from Steam\config\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& config)
 {
