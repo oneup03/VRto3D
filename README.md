@@ -7,12 +7,6 @@
 - Provides HMD Pitch and Yaw emulation for games that require it
 - Currently targeting OpenVR 2.5.1.
 - Windows-only solution currently, but there are other solutions on Linux like Monado XR.
-- Check out the video guide here (there are 2 parts):
-
-
-<a href="https://www.youtube.com/watch?v=0caYbmcthkg" target="_blank" rel="noopener noreferrer">
-  <img src="https://img.youtube.com/vi/0caYbmcthkg/hqdefault.jpg" alt="Video guide available here">
-</a>
 
 
 ## Compatible 3D Displays
@@ -21,7 +15,7 @@
 - AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, use [Base Installation](#base-installation) instructions. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended. VertoXR can be used for 3DoF
 - Lume Pad - works great, use [Base Installation](#base-installation) instructions, requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a>
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, use [SR Displays](#sr-simulated-reality-displays-only-if-you-need-this-output-format) instructions
-- 3D Vision/Frame Sequential - works well, use [Frame Sequential](#frame-sequential-wibblewobble-installation-only-if-you-need-this-output-format) instructions
+- 3D Vision/Frame Sequential - use [WibbleWobbleVR](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0) instead
 - Virtual Desktop with a VR headset - works with [additional setup](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop)
  
 
@@ -37,7 +31,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Reload the profile settings (ones with a `"+"`) from the current game's `game.exe_config.json` with `Ctrl + F10` A beep will indicate success
 - Reload the profile settings (ones with a `"+"`) from `default_config.json` with `Ctrl + Shift + F10` A beep will indicate success
 - Toggle locking the SteamVR Headset Window to the foreground and focusing the game window with `Ctrl + F8`
-    - This also works with WibbleWobbleReshade active
 - Adjust HMD position and yaw origin with `Ctrl + Home/End` for Y, `Ctrl + Delete/PageDown` for X, `Ctrl + Insert/PageUp` for Yaw, and `Ctrl + Shift + PageUp/PageDown` for Height
     - Save `hmd_height, hmd_x, hmd_y, hmd_yaw` using `Ctrl + F9`
     - This is useful if you want to align the HMD to a lighthouse tracked position
@@ -78,7 +71,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `reverse_enable`    | `bool`  | Enable or disable reversed 3D output                                                        | `false`        |
 | `vd_fsbs_hack`      | `bool`  | Enable or disable half height Full-SbS for Virtual Desktop                                  | `false`        |
 | `dash_enable`       | `bool`  | Enable or disable SteamVR Dashboard and Home                                                | `false`        |
-| `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D or WibbleWobble to foreground          | `true`         |
+| `auto_focus`        | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground                          | `true`         |
 | `display_latency`   | `float` | The display latency in seconds                                                              | `0.011`        |
 | `display_frequency` | `float` | The display refresh rate per-eye, in Hz                                                     | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
@@ -211,135 +204,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - If you experience a super dark screen, try enabling a random ReShade shader
 
 
-## Frame Sequential (WibbleWobble) Installation (only if you need this output format)
-
-- Using WibbleWobble is at your own risk to your monitor/emitter/glasses. It works well but is unofficial
-- WibbleWobble works with 3DVision, Open3DOLED, and several DIY hardware solutions
-- WibbleWobble Hotkeys may not work on non-english keyboard layouts
-- If you don't need VRto3D features (User Hotkeys, Per-Game Profiles, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
-### Initial Install
-- 3DVision installation detailed below. Other configurations can still follow the WibbleWobble Reshade Add-On instructions but will need to check the <a href="https://github.com/PHARTGAMES/WibbleWobbleCore" target="_blank" rel="noopener noreferrer">WibbleWobble GitHub</a> for other WibbleWobble Settings
-- Complete the [Base Installation](#base-installation) section and modify these VRto3D settings in `Steam\config\vrto3d\default_config.json`:
-    - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
-    - Set the `window_width` to 2x your `render_width` (i.e. 3840x1080 for 1920x1080 per-eye)
-        - This sometimes causes SteamVR to crash. If you want more stability and are ok with half-width, you can set `window_width` and `window_height` to your desktop resolution
-    - Leave it in the default SBS display mode
-    - May need to test and see if `async_enable` provides better performance
-    - If you decide to target 100Hz refresh rate (recommended for performance/stability), set `display_frequency` to `50.0`
-        - If using `async_enable`, you may want to set this value to x1.5 your target refresh rate (i.e. `75.0` for `50.0`)
-- Use <a href="https://helixmod.blogspot.com/2017/05/3d-fix-manager.html" target="_blank" rel="noopener noreferrer">3D Fix Manager</a> to install the 3D Vision Driver
-    - If the emitter driver didn't install, browse to the place you installed the manager and run the `Drivers\3DVisionControllerDriver\3dvisioncontrollerdriver.exe`
-- Download the latest <a href="https://github.com/PHARTGAMES/WibbleWobbleCore/releases" target="_blank" rel="noopener noreferrer">WibbleWobble Release</a> and extract it somewhere without spaces in the path like `C:\`
-- Under the `WibbleWobbleClient` folder, run `Register.bat` as an administrator and reply `Yes` if prompted
-- Under the `WWReshadeAddon\Reshade` folder, run the included ReShade Setup
-    - Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
-    - Select `vrserver.exe` and click Next
-    - Select `DirectX 11` and click Next
-    - Click `Uncheck All` and click Next, Next, Finish
-- Under the `WWReshadeAddon\Release\x64` folder, copy all files to your `Steam\steamapps\common\SteamVR\bin\win64` folder
-- Check if there is a WibbleWobble.zip folder you can download from [here](https://github.com/oneup03/VRto3D/tree/main/wibblewobble_profiles) and extract to `%APPDATA%\..\LocalLow\PHARTGAMES\`
-    - If one is available for your monitor, you can skip CRU, NVTimingsEd, and WibbleWobble Config steps below
-- Download the latest <a href="https://customresolutionutility.net/" target="_blank" rel="noopener noreferrer">CRU Release</a> and save it to your WibbleWobble folder
-- Run `CRU.exe` and grant it admin
-    - Take note of your monitor's EDID (first 7 characters in the dropdown list)
-    - Exit CRU
-- Download the latest <a href="https://github.com/rajkosto/NvTimingsEd/releases" target="_blank" rel="noopener noreferrer">NvTimingsEd Release</a> and save it to your WibbleWobble folder
-- Run `NvTimingsEd.exe` and grant it admin
-    - From the drop down list, select your monitor's EDID you got from CRU (AUS_27B1 for Asus PG278QR for example)
-    - Choose your target refresh rate / framerate you want to run 3D at
-    - Click `Edit` but don't change anything
-    - Copy the nearest integer refresh rate for WibbleWobble's `Sync Rate HZ`
-    - Copy the `X` value for WibbleWobble's `Open Delay Microseconds`
-    - Copy the `Y` value for WibbleWobble's `Open Duration Microseconds`
-    - Copy the `W` value for WibbleWobble's `W`
-- Open Nvidia Control Panel 
-    - Under `Manage 3D Settings` tab:
-      - Set `Low Latency Mode` to `Ultra`
-      - Set `Max Frame Rate` to match your target refresh rate
-      - Set `Power Management Mode` to `Prefer Maximum Performance`
-      - Set `Vertical Sync` to `Use the 3D application setting`
-    - Under `Set up G-Sync` tab, uncheck `Enable G-Sync` and click `Apply`
-    - Under `Set up stereoscopic 3D` tab, uncheck `Enable stereoscopic 3D` and click `Apply`
-    - Activate LightBoost using one of these 3 options:
-        - Monitor OSD has LightBoost option:
-            - Under the `Change Resolution` tab, set your target `Refresh Rate` and click `Apply`
-            - Activate LightBoost in the monitor OSD
-        - NVidia Custom Resolution:
-            - If your monitor has a WibbleWobble profile, you can match the settings from the images [here](https://github.com/oneup03/VRto3D/tree/main/wibblewobble_profiles)
-            - Open the `Change Resolution` tab
-            - Select `Customize`
-            - Check `Enable resolutions not exposed by the display` and click `Create Custom Resolution`
-            - The Horizontal Pixels and Vertical Lines should be the same as your monitor's native resolution
-            - Set the `Refresh Rate (Hz)` to the same `Refresh Rate` as NvTimingsEd (nearest integer)
-            - Change Timing `Standard` to `Manual`
-            - Increase the `Vertical Total Pixels` value by `+5` and click `Test`
-            - If the Test is successful (Your monitor should switch to LightBoost mode), click `Yes` and then `OK`
-            - Select your new `Custom` Resolution and corresponding `Refresh Rate` and click `Apply` and `Yes`
-        - ToastyX Strobelight:
-            - May cause monitor `Out of Range` errors: can try to fix using its hotkeys, but may need a second monitor or perhaps safe mode to fix
-            - Try following the instructions on the <a href="https://www.monitortests.com/forum/Thread-Strobelight-LightBoost-Utility-for-AMD-ATI-and-NVIDIA" target="_blank" rel="noopener noreferrer">release page</a>
-- WibbleWobble Config
-    - Launch SteamVR
-    - Press `Shift + END` to start WibbleWobble
-    - Press `Shift + END` again to bring up the WibbleWobble menu
-    - ***You have to press `Enter` key to apply any WibbleWobble setting***
-    - Press `Shift + /` to (un)focus WibbleWobble (necessary to see anything else on desktop)
-    - Select `Client Config`
-        - Set `Window Size X/Y` for your Fullscreen Resolution
-        - Set `Source Format` to `Side By Side Half`
-        - Set `Reprojection` to `Disabled`
-        - Set `DWM` to `Enabled`
-        - Set `Elevate Process Priority` to `Enabled`
-        - DO NOT MODIFY Other Settings unless you are using something other than 3DVision
-        - Click `Save` and `X` to close the window
-    - Select `Game Config`
-        - Set `Window Size X` to be your VRto3D horizontal render resolution (i.e. 1920 for 1920x1080 per-eye)
-        - Set `Window Size Y` to be your VRto3D vertical render resolution
-	- DO NOT MODIFY Other Settings
-        - Click `Save` and `X` to close the window
-        - This may crash SteamVR, just close out and try again
-    - Select `Emitter Config`
-        - Set `Sync Rate HZ` to match your nearest integer refresh rate from NvTimingsEd
-            - If you experience eye flips, try setting this to the exact decimal value instead
-        - Click `Nvidia Config`
-            - Select `Enabled`
-            - Set `Open Delay Microseconds` to the NvTimingsEd `X` value
-            - Set `Open Duration Microseconds` to the NvTimingsEd `Y` value
-            - Set `W` to the NvTimingsEd `W` value
-            - Click `Save` and `X` to close the window
-        - Click `Save` and `X` to close the window
-    - Press `Shift + END` to close the WibbleWobble menu
-    - Use `Shift + /` to focus/unfocus WibbleWobble when starting VR games/mods
-        - VRto3D `Ctrl + F8` hotkey will also work and should be easier to use
-    - Use `Shift + ,` to flip eye output
-    - Close the `SteamVR Status` window to completely exit out of things
-- Edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4` and `PerformanceMode=1`
-### Playing a Game
-- Once configuration is complete, you can run everything in single display mode similar to the Base Installation
-- Start SteamVR
-- Press `Shift + END` to start WibbleWobble
-- Press `Shift + /` or `Ctrl + F8` to unfocus WibbleWobble
-- Launch VR Game/Mod
-- If using VRto3D `auto_focus` the WibbleWobble window should be brought to the foreground and the game window focused
-    - If needed, press `Ctrl + F8` to foreground WibbleWobble and focus the game window
-- If needed, use `Shift + ,` to flip eye output
-- If controls or audio aren't working, `Alt + Tab` to the game window
-- Mouse controls can work on a single display as long as you are clicking somewhere on the game window that is covered by WibbleWobble
-### Troubleshooting
-- If SteamVR crashes, close everything, you may need to temporarily edit your VRto3D `window_width` to half, run SteamVR and activate WibbleWobble, close everything, then revert to full
-- If you get a black screen, open WibbleWobble config with `Shift + END` and under `Game Config` set `Window Size X` to either half or double your current setting, and then immedietely set it back to the original value. If SteamVR crashes, close everything and try again.
-- If you experience ghosting, try turning on your monitor's `Lightboost` or `Ultra Low Motion Blur` or `ULMB` feature. You may have to enable 3DVision in Nvidia Control Panel for this setting to be available
-- If your 3D Emitter doesn't activate, try the following:
-    - Unplug/replug the emitter
-    - Toggle 3DVision On/Off
-    - Restart SteamVR
-- If you are getting too much wobbling, try the following:
-    - Toggle VSync off or on in-game
-    - Close all other applications
-    - Toggling GSync On/Off
-    - Toggling 3DVision On/Off
-    - Or try rebooting
-- If WibbleWobble settings are really messed up, delete your `%APPDATA%\..\LocalLow\PHARTGAMES\WibbleWobble` folder
+## Frame Sequential (3DVision)
+- Use [WibbleWobbleVR](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0) instead - it has support for VRto3D profiles
 
 
 ## Notes
