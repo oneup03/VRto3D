@@ -51,7 +51,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 ## Configuration
 
 - VRto3D has to be installed and SteamVR launched once for this config file to show up
-- Modify the `Documents\My Games\vrto3d\default_config.json` for your setup
+- Modify the `Steam\config\vrto3d\default_config.json` for your setup
 - Some changes made to this configuration require a restart of SteamVR to take effect
 - Fields with a `"+"` next to them will be saved to a game's profile when you press `Ctrl + F7` and can be reloaded from either the game's profile using `Ctrl + F10` or the `default_config.json` using `Ctrl + Shift + F10`
 - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> strings for user hotkeys
@@ -105,12 +105,12 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
 - Close SteamVR
-- Edit the `Documents\My Games\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
+- Edit the `Steam\config\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
     - Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
         - Your 3D display MUST BE YOUR PRIMARY DISPLAY, and the window resolution MUST MATCH your full desktop resolution to avoid issues 
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
-- Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Documents\My Games\vrto3d\` folder
+- Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Steam\config\vrto3d\` folder
 - Run SteamVR to verify that you see the Headset window covering your entire display. This is usually not needed before running games.
     - The Headset window must be on your primary 3D display
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
@@ -138,7 +138,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 ## Interlaced, Checkerboard, and Anaglyph Installation (only if you need this output format)
 
 - Complete the [Base Installation](#base-installation) section
-- Optionally set `tab_enable` to true in `Documents\My Games\vrto3d\default_config.json` if you prefer to lose half vertical resolution instead of half horizontal resolution
+- Optionally set `tab_enable` to true in `Steam\config\vrto3d\default_config.json` if you prefer to lose half vertical resolution instead of half horizontal resolution
     - If using interlaced mode, you want SbS for Column Interlaced and TaB for Row/Line Interlaced
 - Download the latest <a href="https://reshade.me/#download" target="_blank" rel="noopener noreferrer">ReShade</a> with full add-on support
 - Run the ReShade installer
@@ -164,7 +164,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 ## FramePacking, HDMI 3D (only if you need this output format)
 
 - Complete the [Base Installation](#base-installation) section
-- In `Documents\My Games\vrto3d\default_config.json` set these settings:
+- In `Steam\config\vrto3d\default_config.json` set these settings:
     - `window_width` to `1920` or `1280` depending on your desktop resolution
     - `window_height` to `2205` or `1470` depending on your desktop resolution
     - `tab_enable` to true
@@ -185,10 +185,10 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 ## SR (Simulated Reality) Displays (only if you need this output format)
 
-- If you don't need VRto3D features (User Hotkeys, Per-Game Profiles, Pitch/Yaw Emulation, etc) and <a href="https://github.com/JoeyAnthony/XRGameBridge/releases" target="_blank" rel="noopener noreferrer">XRGameBridge</a> is more stable, that may be preferable to use instead of VRto3D for games/mods with OpenXR support
 - SR displays work in either Multi or Single Display environments
     - For both, read the Base Installation configuration and usage instructions to ensure that you get a proper 3D image and can control the game
 - Complete the [Base Installation](#base-installation) section
+- If your display supports higher refresh rates than 60hz, you can optionally set `display_frequency` to match in `Steam\config\vrto3d\default_config.json`
 - Install the software package provided with your SR display, if yours did not come with one, install the `SR-VERSION-win64.exe` and `simulatedreality-VERSION-win64-Release.exe` from the <a href="https://github.com/LeiaInc/leiainc.github.io/tree/master/SRSDK" target="_blank" rel="noopener noreferrer">LeiaInc Github</a>
 - Download the latest <a href="https://reshade.me/#download" target="_blank" rel="noopener noreferrer">ReShade</a> with full add-on support
 - Run the ReShade installer
@@ -219,7 +219,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - If you don't need VRto3D features (User Hotkeys, Per-Game Profiles, Pitch/Yaw Emulation, etc) it will be easier to use the <a href="https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR" target="_blank" rel="noopener noreferrer">WibbleWobbleVR plugin directly</a>
 ### Initial Install
 - 3DVision installation detailed below. Other configurations can still follow the WibbleWobble Reshade Add-On instructions but will need to check the <a href="https://github.com/PHARTGAMES/WibbleWobbleCore" target="_blank" rel="noopener noreferrer">WibbleWobble GitHub</a> for other WibbleWobble Settings
-- Complete the [Base Installation](#base-installation) section and modify these VRto3D settings in `Documents\My Games\vrto3d\default_config.json`:
+- Complete the [Base Installation](#base-installation) section and modify these VRto3D settings in `Steam\config\vrto3d\default_config.json`:
     - Set the Render Resolution to match your Fullscreen Resolution or something lower for performance
     - Set the `window_width` to 2x your `render_width` (i.e. 3840x1080 for 1920x1080 per-eye)
         - This sometimes causes SteamVR to crash. If you want more stability and are ok with half-width, you can set `window_width` and `window_height` to your desktop resolution
@@ -415,12 +415,12 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 9. Save the profile with `Ctrl + F7`
 10. Open your new profile from `Documents\My Games\vrto3d` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
 11. Close out of SteamVR and the game and restart the game. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still make any adjustments per above instructions
-12. Share your `Documents\My Games\vrto3d\Game.exe_config.json` with others
+12. Share your `Steam\config\vrto3d\Game.exe_config.json` with others
 
 #### Troubleshooting
 - If you set the Window Resolution to anything above your desktop resolution, SteamVR won't start
 - If SteamVR crashes and disables add-ons, you will need to re-enable VRto3D in the SteamVR Status window
-- The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Documents\My Games\vrto3d\default_config.json`
+- The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Steam\config\vrto3d\default_config.json`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them
     - Run SteamVR
     - On the SteamVR Status window, go to `Menu -> Settings`
