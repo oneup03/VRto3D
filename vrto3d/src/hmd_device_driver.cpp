@@ -58,6 +58,9 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     char serial_number[ 1024 ];
     vrs->GetString( stereo_main_settings_section, "serial_number", serial_number, sizeof( serial_number ) );
     stereo_serial_number_ = serial_number;
+    char version_number[ 1024 ];
+    vrs->GetString( stereo_main_settings_section, "version_number", version_number, sizeof( version_number ) );
+    stereo_version_number_ = version_number;
 
     DriverLog( "VRto3D Model Number: %s", stereo_model_number_.c_str() );
     DriverLog( "VRto3D Serial Number: %s", stereo_serial_number_.c_str() );
@@ -548,6 +551,8 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             << " Conv: " << stereo_display_component_->GetConvergence();
         return ss.str();
     };
+
+    setOverlay("VRto3D: " + stereo_version_number_);
 
     while (is_active_) {
         auto cfg = stereo_display_component_->GetConfig();

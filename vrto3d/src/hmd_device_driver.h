@@ -98,6 +98,7 @@ private:
 
     std::string stereo_model_number_;
     std::string stereo_serial_number_;
+    std::string stereo_version_number_;
 
     std::string app_name_;
     std::string prev_name_;
