@@ -28,6 +28,7 @@
 #include <string>
 #include <sstream>
 #include <ctime>
+#include <cstdlib>
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -47,6 +48,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     app_name_ = "";
     prev_name_ = "";
     app_pid_ = 0;
+    launch_script_executed_ = false;
 
     auto* vrs = vr::VRSettings();
     JsonManager json_manager;
@@ -223,6 +225,23 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForceFadeOnBadTracking_Bool, false);
     vrs->SetBool(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ActivateMultipleDrivers_Bool, true);
     vrs->SetString(vr::k_pch_SteamVR_Section, vr::k_pch_SteamVR_ForcedDriverKey_String, "vrto3d");
+
+    const auto launch_script = stereo_display_component_->GetConfig().launch_script;
+    bool can_execute_launch_script = false;
+    if (!launch_script.empty() && launch_script_executed_.compare_exchange_strong(can_execute_launch_script, true))
+    {
+        std::thread([launch_script]() {
+            DriverLog("Executing launch_script: %s\n", launch_script.c_str());
+            const std::string command = "cmd.exe /C " + launch_script;
+            const int result = std::system(command.c_str());
+            if (result == 0) {
+                DriverLog("launch_script completed successfully\n");
+            }
+            else {
+                DriverLog("launch_script failed with exit code: %d\n", result);
+            }
+        }).detach();
+    }
     
     // Thread setup
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
