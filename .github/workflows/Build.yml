@@ -20,7 +20,10 @@ jobs:
 
     - name: Clone repo and submodule
       run: |
-        git clone --recurse-submodules https://github.com/${{github.repository}}.git .
+        git clone https://github.com/${{github.repository}}.git .
+        git checkout $env:GITHUB_REF_NAME
+        git submodule update --init --recursive
+
 
     - name: Get current date, commit hash and count
       run: |
