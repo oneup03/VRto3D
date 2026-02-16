@@ -1,0 +1,132 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Init git submodules",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "submodule",
+        "update",
+        "--init",
+        "--recursive"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build vrto3d (Release|x64)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\build-driver.ps1",
+        "-Target",
+        "Build",
+        "-Configuration",
+        "Release",
+        "-Platform",
+        "x64"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Init git submodules"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$msCompile"
+      ]
+    },
+    {
+      "label": "Build vrto3d (Debug|x64)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\build-driver.ps1",
+        "-Target",
+        "Build",
+        "-Configuration",
+        "Debug",
+        "-Platform",
+        "x64"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Init git submodules"
+      ],
+      "problemMatcher": [
+        "$msCompile"
+      ]
+    },
+    {
+      "label": "Clean vrto3d (Release|x64)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\build-driver.ps1",
+        "-Target",
+        "Clean",
+        "-Configuration",
+        "Release",
+        "-Platform",
+        "x64"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$msCompile"
+      ]
+    },
+    {
+      "label": "Rebuild vrto3d (Release|x64)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\build-driver.ps1",
+        "-Target",
+        "Rebuild",
+        "-Configuration",
+        "Release",
+        "-Platform",
+        "x64"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Init git submodules"
+      ],
+      "problemMatcher": [
+        "$msCompile"
+      ]
+    }
+  ]
+}
