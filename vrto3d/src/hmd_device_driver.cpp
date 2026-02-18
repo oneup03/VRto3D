@@ -29,6 +29,9 @@
 #include <sstream>
 #include <ctime>
 #include <cstdlib>
+#include <cctype>
+#include <cstring>
+#include <vector>
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -39,6 +42,173 @@
 
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
+
+namespace {
+
+struct MonitorBounds
+{
+    int32_t x = 0;
+    int32_t y = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    bool is_primary = false;
+    int32_t display_index = 0; // Windows DISPLAY# (1-based)
+    std::string device_name;
+};
+
+int32_t ParseDisplayIndexFromDeviceName(const char* device_name)
+{
+    if (device_name == nullptr) {
+        return 0;
+    }
+
+    const char* display_token = std::strstr(device_name, "DISPLAY");
+    if (display_token == nullptr) {
+        return 0;
+    }
+
+    display_token += std::strlen("DISPLAY");
+    if (*display_token == '\0' || !std::isdigit(static_cast<unsigned char>(*display_token))) {
+        return 0;
+    }
+
+    return static_cast<int32_t>(std::atoi(display_token));
+}
+
+BOOL CALLBACK EnumMonitorBoundsProc(HMONITOR monitor, HDC, LPRECT, LPARAM user_data)
+{
+    auto* monitors = reinterpret_cast<std::vector<MonitorBounds>*>(user_data);
+    MONITORINFOEXA info{};
+    info.cbSize = sizeof(info);
+
+    if (!GetMonitorInfoA(monitor, &info)) {
+        return TRUE;
+    }
+
+    MonitorBounds bounds{};
+    bounds.x = info.rcMonitor.left;
+    bounds.y = info.rcMonitor.top;
+    bounds.width = static_cast<uint32_t>(info.rcMonitor.right - info.rcMonitor.left);
+    bounds.height = static_cast<uint32_t>(info.rcMonitor.bottom - info.rcMonitor.top);
+    bounds.is_primary = (info.dwFlags & MONITORINFOF_PRIMARY) != 0;
+    bounds.device_name = info.szDevice;
+    bounds.display_index = ParseDisplayIndexFromDeviceName(info.szDevice);
+    monitors->push_back(bounds);
+
+    return TRUE;
+}
+
+bool ResolveMonitorBoundsByDisplayIndex(
+    int32_t requested_display_index,
+    MonitorBounds& out_bounds,
+    bool& used_primary_fallback,
+    bool& used_primary_default)
+{
+    used_primary_fallback = false;
+    used_primary_default = false;
+
+    std::vector<MonitorBounds> monitors;
+    EnumDisplayMonitors(nullptr, nullptr, EnumMonitorBoundsProc, reinterpret_cast<LPARAM>(&monitors));
+
+    if (monitors.empty()) {
+        return false;
+    }
+
+    DriverLog("Detected %d active monitor(s)", static_cast<int>(monitors.size()));
+    for (const auto& monitor : monitors) {
+        DriverLog(
+            "Display %d (%s)%s bounds=(%d,%d %ux%u)",
+            monitor.display_index,
+            monitor.device_name.c_str(),
+            monitor.is_primary ? " [primary]" : "",
+            monitor.x,
+            monitor.y,
+            monitor.width,
+            monitor.height);
+    }
+
+    auto pick_primary = [&]() -> bool {
+        for (const auto& monitor : monitors) {
+            if (monitor.is_primary) {
+                out_bounds = monitor;
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (requested_display_index <= 0) {
+        used_primary_default = pick_primary();
+        return used_primary_default;
+    }
+
+    for (const auto& monitor : monitors) {
+        if (monitor.display_index == requested_display_index) {
+            out_bounds = monitor;
+            return true;
+        }
+    }
+
+    used_primary_fallback = pick_primary();
+    return used_primary_fallback;
+}
+
+bool ApplyDisplaySelectionToWindowConfig(StereoDisplayDriverConfiguration& config)
+{
+    MonitorBounds selected{};
+    bool used_primary_fallback = false;
+    bool used_primary_default = false;
+
+    if (!ResolveMonitorBoundsByDisplayIndex(
+        config.display_index,
+        selected,
+        used_primary_fallback,
+        used_primary_default)) {
+        DriverLog("Failed to resolve monitor bounds. Keeping existing window bounds.");
+        return false;
+    }
+
+    config.window_x = selected.x;
+    config.window_y = selected.y;
+    config.window_width = selected.width;
+    config.window_height = selected.height;
+
+    if (used_primary_default) {
+        DriverLog(
+            "display_index not set. Using primary display %d (%s) for window bounds (%d,%d %ux%u)",
+            selected.display_index,
+            selected.device_name.c_str(),
+            selected.x,
+            selected.y,
+            selected.width,
+            selected.height);
+    }
+    else if (used_primary_fallback) {
+        DriverLog(
+            "Configured display_index=%d is unavailable. Falling back to primary display %d (%s) for window bounds (%d,%d %ux%u)",
+            config.display_index,
+            selected.display_index,
+            selected.device_name.c_str(),
+            selected.x,
+            selected.y,
+            selected.width,
+            selected.height);
+    }
+    else {
+        DriverLog(
+            "Using display_index=%d (%s) for window bounds (%d,%d %ux%u)",
+            config.display_index,
+            selected.device_name.c_str(),
+            selected.x,
+            selected.y,
+            selected.width,
+            selected.height);
+    }
+
+    return true;
+}
+
+} // namespace
 
 MockControllerDeviceDriver::MockControllerDeviceDriver()
 {
@@ -71,12 +241,18 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
     // Display settings
     StereoDisplayDriverConfiguration display_configuration{};
+    display_configuration.display_index = 0;
     display_configuration.window_x = 0;
     display_configuration.window_y = 0;
+    display_configuration.window_width = 1920;
+    display_configuration.window_height = 1080;
     json_manager.LoadParamsFromJson(display_configuration);
 
     // Profile settings
     json_manager.LoadProfileFromJson(DEF_CFG, display_configuration);
+
+    // Resolve display-index-driven window bounds from the active desktop layout
+    ApplyDisplaySelectionToWindowConfig(display_configuration);
 
     // Instantiate our display component
     stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
@@ -755,6 +931,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
     static DWORD last_pid = 0;
     static bool was_on_top = false;
     static bool was_focused = false;
+    static bool window_bounds_applied = false;
 
     while (is_active_)
     {
@@ -764,6 +941,41 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             if (vr_window != NULL) {
                 ex_style = GetWindowLong(vr_window, GWL_EXSTYLE);
             }
+        }
+
+        // Place the Headset Window once on creation + one delayed retry.
+        if (vr_window != NULL && !window_bounds_applied) {
+            auto cfg = stereo_display_component_->GetConfig();
+            ApplyDisplaySelectionToWindowConfig(cfg);
+
+            DriverLog(
+                "Applying Headset Window placement to (%d,%d %ux%u)",
+                cfg.window_x,
+                cfg.window_y,
+                cfg.window_width,
+                cfg.window_height);
+
+            SetWindowPos(
+                vr_window,
+                nullptr,
+                cfg.window_x,
+                cfg.window_y,
+                cfg.window_width,
+                cfg.window_height,
+                SWP_NOACTIVATE | SWP_NOZORDER);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+            SetWindowPos(
+                vr_window,
+                nullptr,
+                cfg.window_x,
+                cfg.window_y,
+                cfg.window_width,
+                cfg.window_height,
+                SWP_NOACTIVATE | SWP_NOZORDER);
+
+            window_bounds_applied = true;
         }
 
         // Keep VR display always on top for 3D rendering

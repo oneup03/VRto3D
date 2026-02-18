@@ -52,10 +52,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
-| `window_width`      | `int`   | The width of the application window                                                         | `1920`         |
-| `window_height`     | `int`   | The height of the application window                                                        | `1080`         |
-| `render_width`      | `int`   | The width to render per eye (can be higher or lower than the application window)            | `1920`         |
-| `render_height`     | `int`   | The height to render per eye (can be higher or lower than the application window)           | `1080`         |
+| `display_index`     | `int`   | Target monitor using Windows DISPLAY# numbering (`0` = auto primary, `1` = DISPLAY1, etc.) | `0`            |
+| `render_width`      | `int`   | The width to render per eye                                                                 | `1920`         |
+| `render_height`     | `int`   | The height to render per eye                                                                | `1080`         |
 | `hmd_height` +      | `float` | The height/Z position origin of the simulated HMD                                           | `1.0`          |
 | `hmd_x`             | `float` | The X position origin of the simulated HMD                                                  | `0.0`          |
 | `hmd_y`             | `float` | The y position origin of the simulated HMD                                                  | `0.0`          |
@@ -101,13 +100,12 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
 - Close SteamVR
 - Edit the `Steam\config\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
-    - Set your window resolution to match your fullscreen resolution (i.e. 3840x1080 for Full-SbS or 1920x1080 for Half-SbS)
-        - Your 3D display MUST BE YOUR PRIMARY DISPLAY, and the window resolution MUST MATCH your full desktop resolution to avoid issues 
+    - Set `display_index` to your 3D display using Windows numbering (`DISPLAY1`, `DISPLAY2`, etc). Leave it as `0` to auto-use the current primary display
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
 - Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Steam\config\vrto3d\` folder
 - Run SteamVR to verify that you see the Headset window covering your entire display. This is usually not needed before running games.
-    - The Headset window must be on your primary 3D display
+    - The Headset window should appear on the configured `display_index` monitor
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
 - Try launching a VR game
 #### Single-Display Setup:
@@ -160,8 +158,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 - Complete the [Base Installation](#base-installation) section
 - In `Steam\config\vrto3d\default_config.json` set these settings:
-    - `window_width` to `1920` or `1280` depending on your desktop resolution
-    - `window_height` to `2205` or `1470` depending on your desktop resolution
+    - Set `display_index` to the 3D display where frame-packed output should appear
+    - Set the target desktop resolution of that display to `1920x2205` or `1280x1470`
     - `tab_enable` to true
     - `framepack_offset` to `45` for 1920x2205 or `30` for 1280x1470 (this may vary by display)
 - More instructions and discussion are in <a href="https://www.mtbs3d.com/phpbb/viewtopic.php?t=26494" target="_blank" rel="noopener noreferrer">this forum</a>
@@ -211,7 +209,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 
 ## Notes
-- The primary display will be where the "Headset" window is located and should be 3D capable
+- The `Headset` window is placed on the monitor selected by `display_index` (`0` means auto primary)
+- `display_index` uses Windows DISPLAY numbering (`DISPLAY1`, `DISPLAY2`, ...)
 - The game's main window has to be in focus for control input from your mouse/keyboard/controller to work
 - SteamVR may still complain about Direct Display mode, but this can be safely dismissed
 - Exiting SteamVR may "restart" Steam - this is normal
@@ -230,7 +229,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
 - <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> can be paired with VRto3D to provide 3DoF Head Tracking for popular AR glasses
-    - Connect AR glasses, switch to Full-SbS mode, set them as your primary display
+    - Connect AR glasses, switch to Full-SbS mode, and set `display_index` to that display's Windows DISPLAY number
     - Open VertoXR, connect to the AR glasses
     - Select `Game Mode`, place glasses on a flat surface looking straight ahead, and click `Start Calibrate`. Calibration may need to be redone if misalignment occurs
     - Edit `OpenTrack Configuration` and disable `Enable Roll` if needed
@@ -287,7 +286,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 12. Share your `Steam\config\vrto3d\Game.exe_config.json` with others
 
 #### Troubleshooting
-- If you set the Window Resolution to anything above your desktop resolution, SteamVR won't start
+- If SteamVR appears on the wrong monitor, set `display_index` to the correct Windows DISPLAY number and restart SteamVR
 - If SteamVR crashes and disables add-ons, you will need to re-enable VRto3D in the SteamVR Status window
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Steam\config\vrto3d\default_config.json`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them
