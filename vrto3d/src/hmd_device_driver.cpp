@@ -922,8 +922,6 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 {
     static int sleep_time = 1000;
     static HWND vr_window = NULL;
-    static HWND ww_window = NULL;
-    static HWND main_window = NULL;
     static HWND top_window = NULL;
     static HWND game_window = NULL;
     static LONG ex_style = 0;
@@ -980,22 +978,10 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 
         // Keep VR display always on top for 3D rendering
         if (is_on_top_ && IsProcessRunning(app_pid_)) {
-            if (ww_window == NULL && !was_on_top) {
-                ww_window = FindWindow(NULL, L"WibbleWobble");
-                if (ww_window != NULL) {
-                    if (vr_window != NULL) {
-                        SetWindowPos(main_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                        SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                    }
-                    ex_style = GetWindowLong(ww_window, GWL_EXSTYLE);
-                }
-            }
             top_window = GetTopWindow(GetDesktopWindow());
-            main_window = ww_window != NULL ? ww_window : vr_window;
-            if (main_window != NULL && main_window != top_window) {
-                SetWindowPos(main_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                SetWindowLong(main_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
+            if (vr_window != NULL && vr_window != top_window) {
+                SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                SetWindowLong(vr_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
                 // Recenter VR
@@ -1010,9 +996,9 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             was_on_top = true;
         }
         // Unfocus and check to see if the game is still running to re-enable focus
-        else if (main_window != NULL && was_on_top) {
-            SetWindowPos(main_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-            SetWindowLong(main_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
+        else if (vr_window != NULL && was_on_top) {
+            SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            SetWindowLong(vr_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
             if (man_on_top_)
             {
                 std::this_thread::sleep_for(std::chrono::seconds(15));
