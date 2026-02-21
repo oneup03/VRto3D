@@ -12,7 +12,7 @@
 ## Compatible 3D Displays
 - 3D TVs & Projectors - work great, use [Base Installation](#base-installation) in SbS/TaB mode or potentially [Frame Packing](#framepacking-hdmi-3d-only-if-you-need-this-output-format) instructions
 - Passive/Interlaced 3D displays - work great, use [Interlaced](#interlaced-checkerboard-and-anaglyph-installation-only-if-you-need-this-output-format) instructions
-- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, use [Base Installation](#base-installation) instructions. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended. VertoXR can be used for 3DoF
+- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, use [Base Installation](#base-installation) instructions. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended. VertoXR can be used for 3DoF Head Tracking
 - Lume Pad - works great, use [Base Installation](#base-installation) instructions, requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a>
 - SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, use [SR Displays](#sr-simulated-reality-displays-only-if-you-need-this-output-format) instructions
 - 3D Vision/Frame Sequential - use [WibbleWobbleVR](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0) instead
@@ -52,7 +52,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
-| `display_index`     | `int`   | Target monitor using Windows DISPLAY# numbering (`0` = auto primary, `1` = DISPLAY1, etc.) | `0`            |
+| `display_index`     | `int`   | 3D Display number using Windows DISPLAY# (`0` = auto primary, `1` = DISPLAY1, etc.)         | `0`            |
 | `render_width`      | `int`   | The width to render per eye                                                                 | `1920`         |
 | `render_height`     | `int`   | The height to render per eye                                                                | `1080`         |
 | `hmd_height` +      | `float` | The height/Z position origin of the simulated HMD                                           | `1.0`          |
@@ -61,8 +61,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `hmd_yaw`           | `float` | The yaw attitude of the simulated HMD                                                       | `0.0`          |
 | `aspect_ratio`      | `float` | The aspect ratio used to calculate vertical FoV                                             | `1.77778`      |
 | `fov` +             | `float` | The horizontal field of view (FoV) for the VR rendering                                     | `90.0`         |
-| `depth` +           | `float` | The max separation. Overrides VR's IPD field                                                | `0.4`          |
-| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum                                   | `4.0`          |
+| `depth` +           | `float` | The max separation. Overrides VR's IPD field                                                | `0.1`          |
+| `convergence` +     | `float` | Where the left and right images converge. Adjusts frustum                                   | `1.0`          |
 | `async_enable` +    | `bool`  | Whether or not to use Asynchronous Reprojection. May improve or worsen smoothness           | `false`        |
 | `disable_hotkeys`   | `bool`  | Disable Depth & Convergence adjustment hotkeys to avoid conflict with other 3D mods         | `false`        |
 | `tab_enable`        | `bool`  | Enable or disable top-and-bottom (TaB/OU) 3D output (Side by Side is default)               | `false`        |
@@ -77,7 +77,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
 | `use_open_track`    | `bool`  | Enables or disables OpenTrack 3DoF HMD Control                                              | `false`        |
 | `open_track_port`   | `int`   | UDP Port for OpenTrack                                                                      | `4242`         |
-| `launch_script`     | `string`| Command executed once when VRto3D driver activates (for example `start vertoxr://steamvr`) | `""`          |
+| `launch_script`     | `string`| Command executed once when VRto3D driver activates (`"start vertoxr://steamvr"`)            | `""`           |
 | `pose_reset_key` +  | `string`| The Virtual-Key Code to reset the HMD position and orientation                              | `"VK_NUMPAD7"` |
 | `ctrl_toggle_key` + | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
 | `ctrl_toggle_type` +| `string`| The ctrl_toggle_key's behavior ("toggle" "hold")                                            | `"toggle"`     |
@@ -87,17 +87,17 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `user_load_key` +   | `string`| The Virtual-Key Code to load user preset                                                    | `"VK_NUMPAD1"` |
 | `user_store_key` +  | `string`| The Virtual-Key Code to store user preset temporarily                                       | `"VK_NUMPAD4"` |
 | `user_key_type` +   | `string`| The store key's behavior ("switch" "toggle" "hold")                                         | `"switch"`     |
-| `user_depth` +      | `float` | The separation value for a user preset                                                      | `0.4`          |
-| `user_convergence` +| `float` | The convergence value for a user preset                                                     | `4.0`          |
+| `user_depth` +      | `float` | The separation value for a user preset                                                      | `0.1`          |
+| `user_convergence` +| `float` | The convergence value for a user preset                                                     | `1.0`          |
 | `user_fov` +        | `float` | The fov value for a user preset (optional, will default to global fov)                      | `90.0`         |
 
 
 ## Base Installation
 
-- A Single Display configuration is recommended, but you can also use a multi-display configuration if desired
 - Install <a href="https://store.steampowered.com/app/250820/SteamVR/" target="_blank" rel="noopener noreferrer">SteamVR</a>
-- Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder to your `Steam\steamapps\common\SteamVR\drivers` folder
-- Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window`
+- Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder from inside the VRto3D.zip to your `Steam\steamapps\common\SteamVR\drivers` folder
+- Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window` upscaled to fullscreen
+- <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>
 - Close SteamVR
 - Edit the `Steam\config\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
     - Set `display_index` to your 3D display using Windows numbering (`DISPLAY1`, `DISPLAY2`, etc). Leave it as `0` to auto-use the current primary display
@@ -108,38 +108,28 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - The Headset window should appear on the configured `display_index` monitor
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
 - Try launching a VR game
-#### Single-Display Setup:
 - Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
     - Can try using <a href="https://github.com/James-LG/AutoCursorLock" target="_blank" rel="noopener noreferrer">AutoCursorLock</a> if the mouse keeps escaping
-- Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues
+- Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues. (Borderless fullscreen/windowed sometimes also work)
 - If needed, press `Ctrl + F8` to lock the 3D window to the foreground and focus the game window
     - This is automated by default with the `auto_focus` setting when a VRto3D profile exists for the game
 - If game controls & audio aren't working, use `Alt + Tab` to switch to the game window
 - To quit, exit the game and try to `Alt + Tab` out
     - If the 3D window remains in the foreground, press `Ctrl + F8` to toggle the foregrounding off, and then `Alt + Tab` out
-#### Multi-Display Setup:
-- Keyboard and Mouse are usable, but make sure the mouse is captured by the 2D game's window
-- Make sure you set your displays to ***EXTENDED MODE*** or this will not work
-- Move all windows besides the `Headset Window` over to your second display
-    - Some games provide the option to change which display to use - this is preferred over the options below
-    - Can use mouse to drag over
-    - Can use Windows shortcut keys to move windowed programs around `Win + Left/Right`
-    - Can use Windows shortcut keys to move fullscreen programs and the SteamVR Headset Window around `Shift + Win + Left/Right`
-    - May need to make the game windowed either in-game settings or with `Alt + Enter`
 
 
 ## Interlaced, Checkerboard, and Anaglyph Installation (only if you need this output format)
 
 - Complete the [Base Installation](#base-installation) section
 - Optionally set `tab_enable` to true in `Steam\config\vrto3d\default_config.json` if you prefer to lose half vertical resolution instead of half horizontal resolution
-    - If using interlaced mode, you want SbS for Column Interlaced and TaB for Row/Line Interlaced
+    - If using interlaced mode, you want SbS for Column Interlaced and TaB for Row/Line Interlaced. Most interlaced displays should use TaB
 - Download the latest <a href="https://reshade.me/#download" target="_blank" rel="noopener noreferrer">ReShade</a> with full add-on support
 - Run the ReShade installer
     - Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
     - Select `vrserver.exe` and click Next
     - Select `DirectX 11` and click Next
     - Click `Uncheck All` and click Next, Next, Finish
-- Download <a href="https://github.com/BlueSkyDefender/Depth3D/blob/master/Other%20%20Shaders/3DToElse.fx" target="_blank" rel="noopener noreferrer">3DToElse.fx</a> and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
+- Download <a href="https://github.com/BlueSkyDefender/Depth3D/raw/refs/heads/master/Other%20%20Shaders/3DToElse.fx" download>3DToElse.fx</a> and save it to `Steam\steamapps\common\SteamVR\bin\win64\reshade-shaders\Shaders`
 - Run SteamVR
 - Press `Home` to open ReShade and click `Skip Tutorial`
 - Select `To_Else` in the menu to enable 3DToElse
@@ -159,7 +149,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Complete the [Base Installation](#base-installation) section
 - In `Steam\config\vrto3d\default_config.json` set these settings:
     - Set `display_index` to the 3D display where frame-packed output should appear
-    - Set the target desktop resolution of that display to `1920x2205` or `1280x1470`
     - `tab_enable` to true
     - `framepack_offset` to `45` for 1920x2205 or `30` for 1280x1470 (this may vary by display)
 - More instructions and discussion are in <a href="https://www.mtbs3d.com/phpbb/viewtopic.php?t=26494" target="_blank" rel="noopener noreferrer">this forum</a>
@@ -178,11 +167,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 ## SR (Simulated Reality) Displays (only if you need this output format)
 
-- SR displays work in either Multi or Single Display environments
-    - For both, read the Base Installation configuration and usage instructions to ensure that you get a proper 3D image and can control the game
 - Complete the [Base Installation](#base-installation) section
 - If your display supports higher refresh rates than 60hz, you can optionally set `display_frequency` to match in `Steam\config\vrto3d\default_config.json`
-- Install the software package provided with your SR display, if yours did not come with one, install the `SR-VERSION-win64.exe` and `simulatedreality-VERSION-win64-Release.exe` from the <a href="https://github.com/LeiaInc/leiainc.github.io/tree/master/SRSDK" target="_blank" rel="noopener noreferrer">LeiaInc Github</a>
+- Install the software package provided with your SR display (Samsung Odyssey 3D Hub or Acer TrueGame)
 - Download the latest <a href="https://reshade.me/#download" target="_blank" rel="noopener noreferrer">ReShade</a> with full add-on support
 - Run the ReShade installer
     - Browse to to your `Steam\steamapps\common\SteamVR\bin\win64` folder
@@ -195,7 +182,10 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Press `Home` to open ReShade and click `Skip Tutorial`
 - Click on the `Add-Ons` tab
 - Select `srReshade` in the menu to enable it
-    - Expand the srReshade dropdown and if you get a `Status: Inactive - Unable to load all SR DLLs` then you need to install the SR Runtime + SDK from Leia's Github above
+    - Expand the srReshade dropdown and if you get a `Status: Inactive - Unable to load all SR DLLs` then you may need to do these additional steps:
+        - Open Windows Run with `Win + R`
+        - Paste this command: `cmd /k setx PATH "C:\Program Files\LeiaSR\Platform\bin;%PATH%"`
+        - Exit the terminal and reboot
     - 3D can be toggled on and off by using srReshade's `Ctrl + 2` hotkey
 - Click on the `Home` tab
     - Enable ReShade's `Performance Mode` checkbox
@@ -229,13 +219,14 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
 - <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> can be paired with VRto3D to provide 3DoF Head Tracking for popular AR glasses
-    - Connect AR glasses, switch to Full-SbS mode, and set `display_index` to that display's Windows DISPLAY number
+    - Connect AR glasses, switch to Full-SbS mode, and set `display_index` to the glasses' Windows DISPLAY number
     - Open VertoXR, connect to the AR glasses
     - Select `Game Mode`, place glasses on a flat surface looking straight ahead, and click `Start Calibrate`. Calibration may need to be redone if misalignment occurs
     - Edit `OpenTrack Configuration` and disable `Enable Roll` if needed
     - `Start` the OpenTrack VertoXR plugin
     - Set `use_open_track` to true and ensure `open_track_port` matches the VertoXR OpenTrack port in `default_config.json`
-- You can setup a Lighthouse + Vive Tracker + tracked controllers with VRto3D for a seated play area. See <a href="https://oneup03.github.io/VRto3D/wiki/Motion-Controls-&-Tracking" target="_blank" rel="noopener noreferrer">this guide</a> for details
+    - Once everything is setup, you can set `launch_script` to `"start vertoxr://steamvr"` and VertoXR will be auto started with Open Track active every time you start SteamVR
+- You can setup a Lighthouse + Vive Tracker + tracked controllers with VRto3D for a seated play area. See [this guide](https://oneup03.github.io/VRto3D/wiki/Motion-Controls-&-Tracking) for details
 - Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
     - Reference <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d/src/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> to find the strings to use for these hotkeys
@@ -256,9 +247,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
             "user_load_key": "VK_NUMPAD1",
             "user_store_key": "VK_NUMPAD4",
             "user_key_type": "switch",
-            "user_depth": 0.4,
-            "user_convergence": 4.0,
-            "user_fov": 50.0
+            "user_depth": 0.1,
+            "user_convergence": 1.0,
+            "user_fov": 70.0
         },
       ```
 - A Load key and a Store key can be configured to load and save Depth/Separation and Convergence settings for a preset
@@ -281,7 +272,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 7. Adjust depth/separation & convergence back to what you want the default to be (if you have a default `"switch"` preset, you can use its configured `user_load_key`)
 8. If applicable, adjust the `ctrl_sensitivity` with `Ctrl -` and `Ctrl +` and the `pitch_radius` with `Ctrl [` and `Ctrl ]`
 9. Save the profile with `Ctrl + F7`
-10. Open your new profile from `Documents\My Games\vrto3d` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
+10. Open your new profile from `Steam\config\vrto3d\` in a text editor and make final adjustments like: making all the convergence values match to avoid rendering or performance issues, changing virtual-key mappings, or tweaking other values/settings
 11. Close out of SteamVR and the game and restart the game. You should hear a loud beep to indicate the profile loaded. Test the profile and you can still make any adjustments per above instructions
 12. Share your `Steam\config\vrto3d\Game.exe_config.json` with others
 
@@ -300,13 +291,13 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - If you have a VR headset and run into issues with this driver, here's some things to try:
     - Disconnect VR headset from computer
     - <a href="https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/" target="_blank" rel="noopener noreferrer">Clean SteamVR Install</a>
-    - <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>[]()
+    - <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>
 
 
 ## Building
 
 - Clone the code and initialize submodules
 - Define `STEAM_PATH` environment variable with the path to your main Steam folder
-- Open Solution in Visual Studio 2022
+- Open Solution in Visual Studio 2022 or VSCode
 - Use the solution to build this driver
 - Build output is automatically copied to your `SteamVR\drivers` folder
