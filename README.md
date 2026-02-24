@@ -52,7 +52,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
-| `display_index`     | `int`   | 3D Display number using Windows DISPLAY# (`0` = auto primary, `1` = DISPLAY1, etc.)         | `0`            |
+| `display_index`     | `int`   | 3D display selection by monitor order (`0` = auto primary, `1` = first monitor, `2` = second, etc.) | `0`            |
 | `render_width`      | `int`   | The width to render per eye                                                                 | `1920`         |
 | `render_height`     | `int`   | The height to render per eye                                                                | `1080`         |
 | `hmd_height` +      | `float` | The height/Z position origin of the simulated HMD                                           | `1.0`          |
@@ -100,7 +100,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>
 - Close SteamVR
 - Edit the `Steam\config\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
-    - Set `display_index` to your 3D display using Windows numbering (`DISPLAY1`, `DISPLAY2`, etc). Leave it as `0` to auto-use the current primary display
+    - Set `display_index` to your 3D display using monitor enumeration order (`1` = first enumerated monitor, `2` = second, etc). Leave it as `0` to auto-use the current primary display
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
 - Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Steam\config\vrto3d\` folder
@@ -200,7 +200,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 ## Notes
 - The `Headset` window is placed on the monitor selected by `display_index` (`0` means auto primary)
-- `display_index` uses Windows DISPLAY numbering (`DISPLAY1`, `DISPLAY2`, ...)
+- `display_index` uses monitor enumeration order (`1` = first enumerated monitor, `2` = second, ...)
 - The game's main window has to be in focus for control input from your mouse/keyboard/controller to work
 - SteamVR may still complain about Direct Display mode, but this can be safely dismissed
 - Exiting SteamVR may "restart" Steam - this is normal
@@ -219,7 +219,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
 - <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> can be paired with VRto3D to provide 3DoF Head Tracking for popular AR glasses
-    - Connect AR glasses, switch to Full-SbS mode, and set `display_index` to the glasses' Windows DISPLAY number
+    - Connect AR glasses, switch to Full-SbS mode, and set `display_index` to the glasses' monitor enumeration order
     - Open VertoXR, connect to the AR glasses
     - Select `Game Mode`, place glasses on a flat surface looking straight ahead, and click `Start Calibrate`. Calibration may need to be redone if misalignment occurs
     - Edit `OpenTrack Configuration` and disable `Enable Roll` if needed
@@ -277,7 +277,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 12. Share your `Steam\config\vrto3d\Game.exe_config.json` with others
 
 #### Troubleshooting
-- If SteamVR appears on the wrong monitor, set `display_index` to the correct Windows DISPLAY number and restart SteamVR
+- If SteamVR appears on the wrong monitor, set `display_index` to the correct monitor enumeration order and restart SteamVR
 - If SteamVR crashes and disables add-ons, you will need to re-enable VRto3D in the SteamVR Status window
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Steam\config\vrto3d\default_config.json`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them

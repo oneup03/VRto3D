@@ -83,7 +83,14 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     json_manager.LoadProfileFromJson(DEF_CFG, display_configuration);
 
     // Resolve display-index-driven window bounds from the active desktop layout
-    ApplyDisplaySelectionToWindowConfig(display_configuration);
+    const bool monitor_bounds_applied = ApplyDisplaySelectionToWindowConfig(display_configuration);
+    DriverLog("Pre-init window bounds before StereoDisplayComponent: resolved=%s display_index=%d bounds=(%d,%d %dx%d)",
+        monitor_bounds_applied ? "true" : "false",
+        display_configuration.display_index,
+        display_configuration.window_x,
+        display_configuration.window_y,
+        display_configuration.window_width,
+        display_configuration.window_height);
 
     // Instantiate our display component
     stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
@@ -1193,8 +1200,8 @@ bool StereoDisplayComponent::ComputeInverseDistortion(vr::HmdVector2_t* pResult,
 void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    *pnX = config_.window_x;
-    *pnY = config_.window_y;
+    *pnX = 0;
+    *pnY = 0;
     *pnWidth = config_.window_width;
     *pnHeight = config_.window_height;
 }
