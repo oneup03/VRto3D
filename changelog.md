@@ -1,22 +1,5 @@
 # Changelog
 
-## V4.0.0 (V4.0.0) - 2026-02-21T07:07:28Z
-
-- VRto3D PROFILES LOCATION HAS MOVED to `Steam/config/vrto3d/` due to Windows restrictions
-- [VertoXR](https://vertoxr.com/) integration for 3DoF tracking on AR glasses
-- [WibbleWobbleVR](https://github.com/oneup03/VRto3D/wiki/WibbleWobbleVR3.0) now has all the essential VRto3D features integrated and should be used instead of VRto3D + WibbleWobbleReshade. 3DVision hardware is natively supported on any driver
-- Settings changes:
-    - `display_index` added to specify a display number that matches Windows' display setting numbering or `0` to use the primary. This will automatically move VRto3D to any display and set the window size to match that desktop resolution.
-    - `window_height` and `window_width` were removed, as display_index replaced the need for them
-    - `launch_script` added to run a command on startup. This is useful for starting head tracking services like VertoXR when set to `"start vertoxr://steamvr"` for example
-    - `user_fov` added to user presets. Allows you to jump to another FoV when the corresponding key is activated
-- Moved reusable functions to separate VRto3DLib for use with WibbleWobble
-- Removed WibbleWobbleReshade from docs and code workarounds
-- Updated game profiles for: Final Fantasy 7 Rebirth, Assassin's Creed Valhalla, Assassin's Creed Odyssey, Starfield
-
-**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V3.4.1...V4.0.0
-
-
 ## V3.4.1 (V3.4.1) - 2026-01-02T09:19:39Z
 
 - fix Open Track lag
