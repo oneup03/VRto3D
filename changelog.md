@@ -1,6 +1,6 @@
 # Changelog
 
-## V4.0.0 (V4.0.0) - 2026-02-27T17:15:07Z
+## V4.0.1 (V4.0.1) - 2026-02-27T17:15:07Z
 
 - ***VRto3D PROFILES LOCATION HAS MOVED to `Steam/config/vrto3d/` due to Windows restrictions***
 - [VertoXR](https://vertoxr.com/) integration for 3DoF tracking on AR glasses
@@ -14,7 +14,7 @@
 - Removed WibbleWobbleReshade from docs and code workarounds
 - Updated game profiles for: Final Fantasy 7 Rebirth, Assassin's Creed Valhalla, Assassin's Creed Odyssey, Starfield
 
-**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V3.4.1...V4.0.0
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V3.4.1...V4.0.1
 
 
 ## V3.4.1 (V3.4.1) - 2026-01-02T09:19:39Z
