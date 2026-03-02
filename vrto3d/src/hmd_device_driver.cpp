@@ -618,6 +618,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 if (!prev_name_.empty()) {
                     cfg.depth = stereo_display_component_->GetDepth();
                     cfg.convergence = stereo_display_component_->GetConvergence();
+                    cfg.fov = stereo_display_component_->GetFoV();
                     JsonManager().SaveProfileToJson(prev_name_ + "_config.json", cfg);
                     BeepSuccess();
                     setOverlay("Saved " + prev_name_ + "_config.json profile");
@@ -1476,7 +1477,8 @@ void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& conf
     // Apply loaded settings
     AdjustDepth(config.depth, false);
     AdjustConvergence(config.convergence, false);
-    
+    AdjustFoV(config.fov);
+
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_ = config;
     lock.unlock();
