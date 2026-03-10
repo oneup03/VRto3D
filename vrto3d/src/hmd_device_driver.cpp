@@ -22,6 +22,7 @@
 #include "vrto3dlib/app_id_mgr.h"
 #include "vrto3dlib/overlay_mgr.h"
 #include "vrto3dlib/win32_helper.hpp"
+#include "vrto3dlib/uevr_receiver.hpp"
 #include "driverlog.h"
 #include "vrmath.h"
 
@@ -397,6 +398,108 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         bool got_xinput = (_XInputGetState(0, &state) == ERROR_SUCCESS);
 
         auto config = stereo_display_component_->GetConfig();
+
+        // Monitor mode receiver
+        {
+            auto& rx = uevr::receiver();
+            if (!rx.is_connected()) rx.init();
+            rx.update(
+                stereo_display_component_->GetDepth(),
+                stereo_display_component_->GetConvergence(),
+                stereo_display_component_->GetFoV(),
+                0.0f,   // fov_adj (unused in monitor mode)
+                config.tab_enable ? 0 : 1,
+                !no_profile_.load()
+            );
+
+            bool mon = rx.is_connected() && rx.get_monitor_mode();
+            stereo_display_component_->SetMonitorMode(mon);
+
+            if (mon)
+            {
+
+                // Overlay IPD
+                float hint = rx.get_stereo_depth_hint();
+                if (std::isfinite(hint) && hint > 0.001f && hint < 2.0f)
+                {
+                    static float last_hint_ipd = -1.0f;
+                    if (std::abs(hint - last_hint_ipd) > 0.0001f)
+                    {
+                        vr::PropertyContainerHandle_t container =
+                            vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
+                        vr::VRProperties()->SetFloatProperty(
+                            container, vr::Prop_UserIpdMeters_Float, hint);
+                        last_hint_ipd = hint;
+                    }
+                }
+
+                // Static pose
+                vr::DriverPose_t pose = { 0 };
+                pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
+                pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
+                pose.qRotation = HmdQuaternion_Identity;
+                pose.vecPosition[1] = config.hmd_height;
+                pose.poseIsValid = true;
+                pose.deviceIsConnected = true;
+                pose.result = vr::TrackingResult_Running_OK;
+                pose.shouldApplyHeadModel = false;
+                pose.willDriftInYaw = false;
+                pose.poseTimeOffset = 0;
+
+                pose_mutex_.lock();
+                curr_pose_ = pose;
+                pose_mutex_.unlock();
+
+                lastPose = pose;
+                vr::VRServerDriverHost()->TrackedDevicePoseUpdated(
+                    device_index_, pose, sizeof(vr::DriverPose_t));
+
+                // Depth commands
+                uint8_t depth_cmd = rx.get_depth_request();
+                if (depth_cmd >= 2 && depth_cmd <= 6) {
+                    if (depth_cmd == 2) {  // Calibrate from world_scale
+                        float ad = 0.0f, ac = 0.0f;
+                        if (rx.calculate_auto_stereo(ad, ac)) {
+                            auto cfg_cal = stereo_display_component_->GetConfig();
+                            cfg_cal.depth = ad;
+                            cfg_cal.convergence = ac;
+                            stereo_display_component_->LoadSettings(cfg_cal);
+                            DriverLog("Calibrate 3D: d=%.4f c=%.2f\n", ad, ac);
+                            BeepSuccess();
+                            app_updated_ = true;
+                        }
+                    } else if (depth_cmd == 3) {  // VRto3D-: Decrease depth 20%
+                        float new_d = stereo_display_component_->GetDepth() * 0.8f;
+                        new_d = (std::max)(0.005f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        BeepSuccess(); app_updated_ = true;
+                    } else if (depth_cmd == 4) {  // VRto3D+: Increase depth 20%
+                        float new_d = stereo_display_component_->GetDepth() * 1.2f;
+                        new_d = (std::min)(1.0f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        BeepSuccess(); app_updated_ = true;
+                    } else if (depth_cmd == 5) {  // VRto3D--: Big decrease 40%
+                        float new_d = stereo_display_component_->GetDepth() * 0.6f;
+                        new_d = (std::max)(0.005f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        BeepSuccess(); app_updated_ = true;
+                    } else if (depth_cmd == 6) {  // VRto3D++: Big increase 40%
+                        float new_d = stereo_display_component_->GetDepth() * 1.4f;
+                        new_d = (std::min)(1.0f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        BeepSuccess(); app_updated_ = true;
+                    }
+                    rx.clear_depth_request();
+                }
+
+                // Sleep and continue — skip all VR pose logic below
+                auto endTime = std::chrono::high_resolution_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    endTime - currentTime);
+                std::this_thread::sleep_for(std::chrono::milliseconds(8) - elapsed);
+                continue;
+            }
+        }
 
         vr::DriverPose_t pose = { 0 };
 
@@ -1097,6 +1200,25 @@ void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, 
 void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pnX, uint32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
+
+    // Monitor mode SBS
+    if (monitor_mode_.load())
+    {
+        *pnY = 0;
+        *pnHeight = config_.window_height;
+        if (eEye == vr::Eye_Left)
+        {
+            *pnX = 0;
+            *pnWidth = config_.window_width / 2;
+        }
+        else
+        {
+            *pnX = config_.window_width / 2;
+            *pnWidth = config_.window_width - config_.window_width / 2;
+        }
+        return;
+    }
+
     if (config_.reverse_enable)
     {
         eEye = static_cast<vr::EVREye>(!static_cast<bool> (eEye));
@@ -1164,7 +1286,17 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
     // Calculate vertical FOV in radians
     float verFovRadians = horFovRadians / config_.aspect_ratio;
 
-    // IPD-based horizontal offset
+    // UE3D Monitor Mode: symmetric frustum (UEVR owns convergence via [2][0])
+    if (monitor_mode_.load())
+    {
+        *pfTop = -verFovRadians;
+        *pfBottom = verFovRadians;
+        *pfLeft = -horFovRadians;
+        *pfRight = horFovRadians;
+        return;
+    }
+
+    // VR Mode: asymmetric frustum with IPD-based horizontal offset
     float sep = GetDepth();
     float conv = GetConvergence();
     float eyeOffset = (eEye == vr::Eye_Left) ? sep * 0.5f / conv : -sep * 0.5f / conv;

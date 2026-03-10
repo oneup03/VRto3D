@@ -49,6 +49,10 @@ public:
     float GetDepth();
     float GetConvergence();
     float GetFoV();
+
+    // UE3D Monitor Mode
+    void SetMonitorMode(bool enabled) { monitor_mode_.store(enabled); }
+    bool IsMonitorMode() const { return monitor_mode_.load(); }
     std::string CheckUserSettings();
     std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
@@ -66,6 +70,9 @@ private:
     std::atomic< uint32_t > device_index_;
 
     std::shared_mutex  cfg_mutex_;
+
+    // UE3D Monitor Mode
+    std::atomic< bool > monitor_mode_{ false };
 };
 
 

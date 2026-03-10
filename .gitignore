@@ -396,3 +396,7 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# AI development scaffolding
+**/CLAUDE.md
+docs/UEVR_INTEGRATION.md
