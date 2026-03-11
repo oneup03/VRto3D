@@ -51,7 +51,13 @@ public:
     float GetFoV();
 
     // UE3D Monitor Mode
-    void SetMonitorMode(bool enabled) { monitor_mode_.store(enabled); }
+    void SetMonitorMode(bool enabled) {
+        bool was_monitor = monitor_mode_.load();
+        monitor_mode_.store(enabled);
+        if (enabled && !was_monitor) {
+            ResetProjection();
+        }
+    }
     bool IsMonitorMode() const { return monitor_mode_.load(); }
     std::string CheckUserSettings();
     std::string CheckPositionInput();
