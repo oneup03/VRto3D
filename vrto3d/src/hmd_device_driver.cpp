@@ -264,6 +264,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     depth_thread_ = std::thread(&MockControllerDeviceDriver::AutoDepthThread, this);
     if (stereo_display_component_->GetConfig().use_open_track) {
         open_track_att_ = HmdQuaternion_Identity;
+		open_track_pos_ = { 0.0, 0.0, 0.0 };
         track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
     }
 
@@ -363,6 +364,8 @@ void MockControllerDeviceDriver::OpenTrackThread()
         if (bytes_read > 0) {
             std::unique_lock<std::shared_mutex> lock(trk_mutex_);
             open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(open_track.Yaw));
+            // Map Opentrack pose data to steam_vr coordinate system
+            open_track_pos_ = { -(open_track.X / 100.0f), -(open_track.Y / 100.0f), open_track.Z / 100.0f };
             lock.unlock();
         }
         else std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -481,20 +484,22 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         {
             std::unique_lock<std::shared_mutex> lock(trk_mutex_);
             pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion * open_track_att_);
+            pose.vecPosition[0] = open_track_pos_[0];
+            pose.vecPosition[1] = open_track_pos_[1];
+            pose.vecPosition[2] = open_track_pos_[2];
             lock.unlock();
         }
         else
         {
             pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
-        }
-
         // Calculate the new position relative to the current pitch & yaw
-        pose.vecPosition[0] = config.hmd_x + config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
-        pose.vecPosition[1] = config.hmd_height - config.pitch_radius * sin(pitchRadians);
-        pose.vecPosition[2] = config.hmd_y + config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
-        if (pose.vecPosition[1] < config.hmd_height - 1.0)
-        {
-            pose.vecPosition[1] = config.hmd_height - 1.0;
+            pose.vecPosition[0] = config.hmd_x + config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
+            pose.vecPosition[1] = config.hmd_height - config.pitch_radius * sin(pitchRadians);
+            pose.vecPosition[2] = config.hmd_y + config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
+            if (pose.vecPosition[1] < config.hmd_height - 1.0)
+            {
+                pose.vecPosition[1] = config.hmd_height - 1.0;
+            }
         }
 
         // Calculate velocity using known update interval

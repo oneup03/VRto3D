@@ -16,6 +16,7 @@
  */
 #pragma once
 #include "openvr_driver.h"
+#include <array>
 #include <atomic>
 #include <thread>
 #include <shared_mutex>
@@ -124,5 +125,6 @@ private:
     std::thread track_thread_;
 
     vr::HmdQuaternion_t open_track_att_;
+    std::array<double, 3> open_track_pos_;
     std::shared_mutex  trk_mutex_;
 };
