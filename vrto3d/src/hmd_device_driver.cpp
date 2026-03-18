@@ -580,22 +580,25 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         // Recompose the rotation quaternion from pitch and yaw
         vr::HmdQuaternion_t pitchQuaternion = QuaternionFromAxisAngle(1.0f, 0.0f, 0.0f, pitchRadians);
 
+        // Calculate Position
+        pose.vecPosition[0] = config.hmd_x;
+        pose.vecPosition[1] = config.hmd_height;
+        pose.vecPosition[2] = config.hmd_y;
         if (config.use_open_track)
         {
             std::unique_lock<std::shared_mutex> lock(trk_mutex_);
             pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion * open_track_att_);
-            pose.vecPosition[0] = open_track_pos_[0];
-            pose.vecPosition[1] = open_track_pos_[1];
-            pose.vecPosition[2] = open_track_pos_[2];
+            pose.vecPosition[0] += open_track_pos_[0];
+            pose.vecPosition[1] += open_track_pos_[1];
+            pose.vecPosition[2] += open_track_pos_[2];
             lock.unlock();
         }
         else
         {
             pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
-        // Calculate the new position relative to the current pitch & yaw
-            pose.vecPosition[0] = config.hmd_x + config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
-            pose.vecPosition[1] = config.hmd_height - config.pitch_radius * sin(pitchRadians);
-            pose.vecPosition[2] = config.hmd_y + config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
+            pose.vecPosition[0] += config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
+            pose.vecPosition[1] += -config.pitch_radius * sin(pitchRadians);
+            pose.vecPosition[2] += config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
             if (pose.vecPosition[1] < config.hmd_height - 1.0)
             {
                 pose.vecPosition[1] = config.hmd_height - 1.0;
