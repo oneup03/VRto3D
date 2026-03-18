@@ -30,6 +30,7 @@
 #include <ctime>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -40,6 +41,24 @@
 
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
+
+constexpr float kMinDeltaTimeSeconds = 1e-5f;
+constexpr float kSmallAngleEpsilon = 1e-5f;
+
+float ApplyDeadzone(float value, float deadzone)
+{
+    if (std::abs(value) < deadzone)
+    {
+        return 0.0f;
+    }
+
+    if (value > 0.0f)
+    {
+        return (value - deadzone) / (1.0f - deadzone);
+    }
+
+    return (value + deadzone) / (1.0f - deadzone);
+}
 
 MockControllerDeviceDriver::MockControllerDeviceDriver()
 {
@@ -258,6 +277,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     }
     
     // Thread setup
+    xinput_thread_ = std::thread(&MockControllerDeviceDriver::XInputUpdateThread, this);
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
     focus_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
@@ -365,7 +385,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
             std::unique_lock<std::shared_mutex> lock(trk_mutex_);
             open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(open_track.Yaw));
             // Map Opentrack pose data to steam_vr coordinate system
-            open_track_pos_ = { -(open_track.X / 100.0f), -(open_track.Y / 100.0f), open_track.Z / 100.0f };
+            open_track_pos_ = { (open_track.X / 100.0f), -(open_track.Y / 100.0f), open_track.Z / 100.0f };
             lock.unlock();
         }
         else std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -376,30 +396,124 @@ void MockControllerDeviceDriver::OpenTrackThread()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Static Pose with pitch & yaw adjustment
+// Purpose: Poll XInput and publish controller-derived rotation and offset
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::PoseUpdateThread()
+void MockControllerDeviceDriver::XInputUpdateThread()
 {
-    static float currentPitch = 0.0f; // Keep track of the current pitch
-    static vr::HmdQuaternion_t currentYawQuat = { 1.0f, 0.0f, 0.0f, 0.0f }; // Initial yaw quaternion
-    static float lastPitch = 0.0f;
-    static float lastYaw = 0.0f;
-    static float lastHmdYaw = 0.0f;
-    static vr::DriverPose_t lastPose = { 0 };
-
-    auto lastTime = std::chrono::high_resolution_clock::now();
+    float current_pitch = 0.0f;
+    vr::HmdQuaternion_t current_yaw_quat = HmdQuaternion_Identity;
 
     while (is_active_)
     {
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        auto deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(currentTime - lastTime).count();
-        lastTime = currentTime;
+        const auto loop_start = std::chrono::steady_clock::now();
+        const auto config = stereo_display_component_->GetConfig();
 
         XINPUT_STATE state;
         ZeroMemory(&state, sizeof(XINPUT_STATE));
-        bool got_xinput = (_XInputGetState(0, &state) == ERROR_SUCCESS);
+        const bool got_xinput = (_XInputGetState(0, &state) == ERROR_SUCCESS);
 
-        auto config = stereo_display_component_->GetConfig();
+        if (config.pitch_enable && got_xinput)
+        {
+            float normalized_y = state.Gamepad.sThumbRY / 32767.0f;
+            normalized_y = ApplyDeadzone(normalized_y, config.ctrl_deadzone);
+
+            current_pitch += (normalized_y * config.ctrl_sensitivity);
+            current_pitch = std::clamp(current_pitch, -90.0f, 90.0f);
+        }
+
+        if (config.yaw_enable && got_xinput)
+        {
+            float normalized_x = state.Gamepad.sThumbRX / 32767.0f;
+            normalized_x = ApplyDeadzone(normalized_x, config.ctrl_deadzone);
+
+            const float yaw_adjustment = -normalized_x * config.ctrl_sensitivity;
+            const vr::HmdQuaternion_t yaw_quat_adjust =
+                QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(yaw_adjustment));
+
+            current_yaw_quat = HmdQuaternion_Normalize(yaw_quat_adjust * current_yaw_quat);
+        }
+
+        if (config.pose_reset)
+        {
+            current_pitch = 0.0f;
+            current_yaw_quat = HmdQuaternion_Identity;
+            stereo_display_component_->SetReset();
+        }
+
+        const float pitch_radians = DEG_TO_RAD(current_pitch);
+        const vr::HmdQuaternion_t pitch_quaternion =
+            QuaternionFromAxisAngle(1.0f, 0.0f, 0.0f, pitch_radians);
+
+        const vr::HmdQuaternion_t controller_rotation =
+            HmdQuaternion_Normalize(current_yaw_quat * pitch_quaternion);
+
+        // Build pitch-radius offset in local (pre-yaw) space, then rotate by yaw quaternion.
+        const vr::HmdVector3_t local_pitch_radius_offset = {
+            0.0f,
+            static_cast<float>(-config.pitch_radius * std::sin(pitch_radians)),
+            static_cast<float>(config.pitch_radius * (std::cos(pitch_radians) - 1.0f))
+        };
+        const vr::HmdVector3_t rotated_pitch_radius_offset = local_pitch_radius_offset * current_yaw_quat;
+
+        std::array<double, 3> controller_pos_offset = {
+            rotated_pitch_radius_offset.v[0],
+            rotated_pitch_radius_offset.v[1],
+            rotated_pitch_radius_offset.v[2]
+        };
+
+        {
+            std::lock_guard<std::mutex> lock(controller_pose_mutex_);
+            controller_rotation_ = controller_rotation;
+            controller_pos_offset_ = controller_pos_offset;
+        }
+
+        const auto elapsed = std::chrono::steady_clock::now() - loop_start;
+        const auto xinput_period = std::chrono::milliseconds(8); // 125Hz
+        if (elapsed < xinput_period)
+        {
+            std::this_thread::sleep_for(xinput_period - elapsed);
+        }
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Compose final pose and calculate velocity/acceleration
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::PoseUpdateThread()
+{
+    vr::DriverPose_t last_pose = { 0 };
+    vr::HmdQuaternion_t last_rotation = HmdQuaternion_Identity;
+    std::array<float, 3> last_angular_velocity = { 0.0f, 0.0f, 0.0f };
+    bool has_previous_pose = false;
+
+    auto last_time = std::chrono::steady_clock::now();
+
+    while (is_active_)
+    {
+        const auto loop_start = std::chrono::steady_clock::now();
+        float delta_time =
+            std::chrono::duration_cast<std::chrono::duration<float>>(loop_start - last_time).count();
+        last_time = loop_start;
+        if (delta_time < kMinDeltaTimeSeconds)
+        {
+            delta_time = kMinDeltaTimeSeconds;
+        }
+
+        const auto config = stereo_display_component_->GetConfig();
+
+        vr::HmdQuaternion_t controller_rotation = HmdQuaternion_Identity;
+        std::array<double, 3> controller_pos_offset = { 0.0, 0.0, 0.0 };
+        {
+            std::lock_guard<std::mutex> lock(controller_pose_mutex_);
+            controller_rotation = controller_rotation_;
+            controller_pos_offset = controller_pos_offset_;
+        }
+
+        const vr::HmdQuaternion_t hmd_yaw_quat =
+            QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(config.hmd_yaw));
+        const vr::HmdQuaternion_t final_controller_rotation =
+            HmdQuaternion_Normalize(hmd_yaw_quat * controller_rotation);
 
         // ===== UE3D: UEVR Shared Memory (heartbeat + monitor mode) =====
         {
@@ -505,80 +619,7 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 
         pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
         pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
-        pose.qRotation = HmdQuaternion_Identity;
-
-        // Adjust pitch based on controller input
-        if (config.pitch_enable && got_xinput)
-        {
-            float normalizedY = state.Gamepad.sThumbRY / 32767.0f;
-
-            // Apply deadzone
-            if (std::abs(normalizedY) < config.ctrl_deadzone)
-            {
-                normalizedY = 0.0f;
-            }
-            else
-            {
-                if (normalizedY > 0)
-                    normalizedY = (normalizedY - config.ctrl_deadzone) / (1.0f - config.ctrl_deadzone);
-                else
-                    normalizedY = (normalizedY + config.ctrl_deadzone) / (1.0f - config.ctrl_deadzone);
-            }
-
-            // Scale Pitch
-            currentPitch += (normalizedY * config.ctrl_sensitivity);
-            if (currentPitch > 90.0f) currentPitch = 90.0f;
-            if (currentPitch < -90.0f) currentPitch = -90.0f;
-        }
-
-        // Apply yaw offset if applicable
-        if (config.hmd_yaw != lastHmdYaw)
-        {
-            currentYawQuat = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(config.hmd_yaw));
-            lastHmdYaw = config.hmd_yaw;
-        }
-
-        // Adjust yaw based on controller input
-        if (config.yaw_enable && got_xinput)
-        {
-            float normalizedX = state.Gamepad.sThumbRX / 32767.0f;
-
-            // Apply deadzone
-            if (std::abs(normalizedX) < config.ctrl_deadzone)
-            {
-                normalizedX = 0.0f;
-            }
-            else
-            {
-                if (normalizedX > 0)
-                    normalizedX = (normalizedX - config.ctrl_deadzone) / (1.0f - config.ctrl_deadzone);
-                else
-                    normalizedX = (normalizedX + config.ctrl_deadzone) / (1.0f - config.ctrl_deadzone);
-            }
-
-            // Scale Yaw
-            float yawAdjustment = -normalizedX * config.ctrl_sensitivity;
-
-            // Create a quaternion for the yaw adjustment
-            vr::HmdQuaternion_t yawQuatAdjust = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(yawAdjustment));
-
-            // Update the current yaw quaternion
-            currentYawQuat = HmdQuaternion_Normalize(yawQuatAdjust * currentYawQuat);
-        }
-
-        // Reset Pose to origin
-        if (config.pose_reset)
-        {
-            currentPitch = 0.0f;
-            currentYawQuat = QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(config.hmd_yaw));
-            stereo_display_component_->SetReset();
-        }
-
-        float pitchRadians = DEG_TO_RAD(currentPitch);
-        float yawRadians = 2.0f * acos(currentYawQuat.w);
-
-        // Recompose the rotation quaternion from pitch and yaw
-        vr::HmdQuaternion_t pitchQuaternion = QuaternionFromAxisAngle(1.0f, 0.0f, 0.0f, pitchRadians);
+        pose.qRotation = final_controller_rotation;
 
         // Calculate Position
         pose.vecPosition[0] = config.hmd_x;
@@ -586,40 +627,72 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         pose.vecPosition[2] = config.hmd_y;
         if (config.use_open_track)
         {
-            std::unique_lock<std::shared_mutex> lock(trk_mutex_);
-            pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion * open_track_att_);
+            std::shared_lock<std::shared_mutex> lock(trk_mutex_);
+            pose.qRotation = HmdQuaternion_Normalize(final_controller_rotation * open_track_att_);
             pose.vecPosition[0] += open_track_pos_[0];
             pose.vecPosition[1] += open_track_pos_[1];
             pose.vecPosition[2] += open_track_pos_[2];
-            lock.unlock();
         }
         else
         {
-            pose.qRotation = HmdQuaternion_Normalize(currentYawQuat * pitchQuaternion);
-            pose.vecPosition[0] += config.pitch_radius * cos(pitchRadians) * sin(yawRadians) - config.pitch_radius * sin(yawRadians);
-            pose.vecPosition[1] += -config.pitch_radius * sin(pitchRadians);
-            pose.vecPosition[2] += config.pitch_radius * cos(pitchRadians) * cos(yawRadians) - config.pitch_radius * cos(yawRadians);
+            pose.qRotation = final_controller_rotation;
+            pose.vecPosition[0] += controller_pos_offset[0];
+            pose.vecPosition[1] += controller_pos_offset[1];
+            pose.vecPosition[2] += controller_pos_offset[2];
             if (pose.vecPosition[1] < config.hmd_height - 1.0)
             {
                 pose.vecPosition[1] = config.hmd_height - 1.0;
             }
         }
 
-        // Calculate velocity using known update interval
-        pose.vecVelocity[0] = (pose.vecPosition[0] - lastPose.vecPosition[0]) / deltaTime;
-        pose.vecVelocity[1] = (pose.vecPosition[1] - lastPose.vecPosition[1]) / deltaTime;
-        pose.vecVelocity[2] = (pose.vecPosition[2] - lastPose.vecPosition[2]) / deltaTime;
-        pose.vecAngularVelocity[0] = AngleDifference(pitchRadians, lastPitch) / deltaTime; // Pitch angular velocity
-        pose.vecAngularVelocity[1] = AngleDifference(yawRadians, lastYaw) / deltaTime; // Yaw angular velocity
-        pose.vecAngularVelocity[2] = 0.0f;
+        if (has_previous_pose)
+        {
+            // Linear velocity
+            pose.vecVelocity[0] = (pose.vecPosition[0] - last_pose.vecPosition[0]) / delta_time;
+            pose.vecVelocity[1] = (pose.vecPosition[1] - last_pose.vecPosition[1]) / delta_time;
+            pose.vecVelocity[2] = (pose.vecPosition[2] - last_pose.vecPosition[2]) / delta_time;
 
-        // Calculate acceleration based on change in velocity
-        pose.vecAcceleration[0] = (pose.vecVelocity[0] - lastPose.vecVelocity[0]) / deltaTime;
-        pose.vecAcceleration[1] = (pose.vecVelocity[1] - lastPose.vecVelocity[1]) / deltaTime;
-        pose.vecAcceleration[2] = (pose.vecVelocity[2] - lastPose.vecVelocity[2]) / deltaTime;
-        pose.vecAngularAcceleration[0] = (pose.vecAngularVelocity[0] - lastPose.vecAngularVelocity[0]) / deltaTime;
-        pose.vecAngularAcceleration[1] = (pose.vecAngularVelocity[1] - lastPose.vecAngularVelocity[1]) / deltaTime;
-        pose.vecAngularAcceleration[2] = 0.0f;
+            // Angular velocity from quaternion delta (roll/pitch/yaw all included)
+            const vr::HmdQuaternion_t stable_rotation =
+                HmdQuaternion_EnsureSignContinuity(pose.qRotation, last_rotation);
+            const std::array<float, 3> angular_velocity =
+                HmdQuaternion_AngularVelocity(stable_rotation, last_rotation, delta_time, kSmallAngleEpsilon);
+            pose.vecAngularVelocity[0] = angular_velocity[0];
+            pose.vecAngularVelocity[1] = angular_velocity[1];
+            pose.vecAngularVelocity[2] = angular_velocity[2];
+
+            // Linear acceleration
+            pose.vecAcceleration[0] = (pose.vecVelocity[0] - last_pose.vecVelocity[0]) / delta_time;
+            pose.vecAcceleration[1] = (pose.vecVelocity[1] - last_pose.vecVelocity[1]) / delta_time;
+            pose.vecAcceleration[2] = (pose.vecVelocity[2] - last_pose.vecVelocity[2]) / delta_time;
+
+            // Angular acceleration
+            pose.vecAngularAcceleration[0] = (angular_velocity[0] - last_angular_velocity[0]) / delta_time;
+            pose.vecAngularAcceleration[1] = (angular_velocity[1] - last_angular_velocity[1]) / delta_time;
+            pose.vecAngularAcceleration[2] = (angular_velocity[2] - last_angular_velocity[2]) / delta_time;
+
+            last_rotation = stable_rotation;
+            last_angular_velocity = angular_velocity;
+        }
+        else
+        {
+            pose.vecVelocity[0] = 0.0;
+            pose.vecVelocity[1] = 0.0;
+            pose.vecVelocity[2] = 0.0;
+            pose.vecAngularVelocity[0] = 0.0;
+            pose.vecAngularVelocity[1] = 0.0;
+            pose.vecAngularVelocity[2] = 0.0;
+            pose.vecAcceleration[0] = 0.0;
+            pose.vecAcceleration[1] = 0.0;
+            pose.vecAcceleration[2] = 0.0;
+            pose.vecAngularAcceleration[0] = 0.0;
+            pose.vecAngularAcceleration[1] = 0.0;
+            pose.vecAngularAcceleration[2] = 0.0;
+
+            last_rotation = pose.qRotation;
+            last_angular_velocity = { 0.0f, 0.0f, 0.0f };
+            has_previous_pose = true;
+        }
 
         pose.poseIsValid = true;
         pose.deviceIsConnected = true;
@@ -634,16 +707,20 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         pose_mutex_.unlock();
 
         // Update for next iteration
-        lastPitch = pitchRadians;
-        lastYaw = yawRadians;
-        lastPose = pose;
+        last_pose = pose;
 
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, pose, sizeof(vr::DriverPose_t));
 
-        // XInput polling limit is 125Hz
-        auto endTime = std::chrono::high_resolution_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - currentTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(8) - elapsed);
+        // Pose update cadence: 2x display frequency.
+        const float target_frequency = (config.display_frequency * 2.0f > 1.0f)
+            ? (config.display_frequency * 2.0f)
+            : 1.0f;
+        const auto target_period = std::chrono::duration<double>(1.0 / target_frequency);
+        const auto elapsed = std::chrono::steady_clock::now() - loop_start;
+        if (elapsed < target_period)
+        {
+            std::this_thread::sleep_for(target_period - elapsed);
+        }
     }
 }
 
@@ -1138,10 +1215,21 @@ void MockControllerDeviceDriver::Deactivate()
 {
     if ( is_active_.exchange( false ) )
     {
-        pose_thread_.join();
-        hotkey_thread_.join();
-        focus_thread_.join();
-        depth_thread_.join();
+        if (xinput_thread_.joinable()) {
+            xinput_thread_.join();
+        }
+        if (pose_thread_.joinable()) {
+            pose_thread_.join();
+        }
+        if (hotkey_thread_.joinable()) {
+            hotkey_thread_.join();
+        }
+        if (focus_thread_.joinable()) {
+            focus_thread_.join();
+        }
+        if (depth_thread_.joinable()) {
+            depth_thread_.join();
+        }
         if (track_thread_.joinable()) {
             track_thread_.join();
         }

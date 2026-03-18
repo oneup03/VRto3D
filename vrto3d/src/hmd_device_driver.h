@@ -101,6 +101,7 @@ public:
     void Deactivate() override;
 
     void OpenTrackThread();
+    void XInputUpdateThread();
     void PoseUpdateThread();
     void PollHotkeysThread();
     void FocusUpdateThread();
@@ -133,6 +134,11 @@ private:
     std::mutex pose_mutex_;
     vr::DriverPose_t curr_pose_;
 
+    std::mutex controller_pose_mutex_;
+    vr::HmdQuaternion_t controller_rotation_ = { 1.0, 0.0, 0.0, 0.0 };
+    std::array<double, 3> controller_pos_offset_ = { 0.0, 0.0, 0.0 };
+
+    std::thread xinput_thread_;
     std::thread pose_thread_;
     std::thread hotkey_thread_;
     std::thread focus_thread_;
