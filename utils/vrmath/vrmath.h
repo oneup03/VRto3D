@@ -2,6 +2,8 @@
 #pragma once
 
 #include "openvr_driver.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 
 #ifndef M_PI
@@ -101,6 +103,75 @@ static vr::HmdQuaternion_t HmdQuaternion_Normalize( const vr::HmdQuaternion_t &q
     return result;
 }
 
+static float HmdQuaternion_Dot( const vr::HmdQuaternion_t &lhs, const vr::HmdQuaternion_t &rhs )
+{
+    return static_cast< float >( lhs.w * rhs.w + lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z );
+}
+
+static vr::HmdQuaternion_t HmdQuaternion_Conjugate( const vr::HmdQuaternion_t &q )
+{
+    return { q.w, -q.x, -q.y, -q.z };
+}
+
+static vr::HmdQuaternion_t HmdQuaternion_Negate( const vr::HmdQuaternion_t &q )
+{
+    return { -q.w, -q.x, -q.y, -q.z };
+}
+
+static vr::HmdQuaternion_t HmdQuaternion_EnsureSignContinuity( const vr::HmdQuaternion_t &current, const vr::HmdQuaternion_t &reference )
+{
+    if ( HmdQuaternion_Dot( current, reference ) < 0.0f )
+    {
+        return HmdQuaternion_Negate( current );
+    }
+
+    return current;
+}
+
+static std::array< float, 3 > HmdQuaternion_AngularVelocity(
+    const vr::HmdQuaternion_t &current,
+    const vr::HmdQuaternion_t &previous,
+    float delta_time,
+    float epsilon = 1e-5f )
+{
+    if ( delta_time <= epsilon )
+    {
+        return { 0.0f, 0.0f, 0.0f };
+    }
+
+    const vr::HmdQuaternion_t prev_conj = HmdQuaternion_Conjugate( previous );
+    const vr::HmdQuaternion_t delta = HmdQuaternion_Normalize(
+        {
+            current.w * prev_conj.w - current.x * prev_conj.x - current.y * prev_conj.y - current.z * prev_conj.z,
+            current.w * prev_conj.x + current.x * prev_conj.w + current.y * prev_conj.z - current.z * prev_conj.y,
+            current.w * prev_conj.y - current.x * prev_conj.z + current.y * prev_conj.w + current.z * prev_conj.x,
+            current.w * prev_conj.z + current.x * prev_conj.y - current.y * prev_conj.x + current.z * prev_conj.w,
+        } );
+
+    const float w = std::clamp( static_cast< float >( delta.w ), -1.0f, 1.0f );
+    float angle = 2.0f * std::acos( w );
+
+    if ( angle > static_cast< float >( M_PI ) )
+    {
+        angle -= static_cast< float >( 2.0 * M_PI );
+    }
+
+    const float sin_half_angle = std::sqrt( std::fmax( 0.0f, 1.0f - w * w ) );
+    if ( sin_half_angle < epsilon || std::abs( angle ) < epsilon )
+    {
+        return { 0.0f, 0.0f, 0.0f };
+    }
+
+    const float inv_sin_half = 1.0f / sin_half_angle;
+    const float angular_speed = angle / delta_time;
+
+    return {
+        static_cast< float >( delta.x ) * inv_sin_half * angular_speed,
+        static_cast< float >( delta.y ) * inv_sin_half * angular_speed,
+        static_cast< float >( delta.z ) * inv_sin_half * angular_speed,
+    };
+}
+
 static vr::HmdQuaternion_t HmdQuaternion_FromEulerAngles(double roll, double pitch, double yaw) {
   double cr = cos(roll * 0.5);
   double sr = sin(roll * 0.5);
@@ -118,7 +189,7 @@ static vr::HmdQuaternion_t HmdQuaternion_FromEulerAngles(double roll, double pit
   return q;
 }
 
-vr::HmdQuaternion_t QuaternionFromAxisAngle(float x, float y, float z, float angle)
+static vr::HmdQuaternion_t QuaternionFromAxisAngle(float x, float y, float z, float angle)
 {
     vr::HmdQuaternion_t quat;
     float halfAngle = angle / 2.0f;
