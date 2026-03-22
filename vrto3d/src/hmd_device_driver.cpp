@@ -22,7 +22,6 @@
 #include "vrto3dlib/app_id_mgr.h"
 #include "vrto3dlib/overlay_mgr.h"
 #include "vrto3dlib/win32_helper.hpp"
-#include "vrto3dlib/uevr_receiver.hpp"
 #include "driverlog.h"
 #include "vrmath.h"
 
@@ -399,35 +398,104 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 
         auto config = stereo_display_component_->GetConfig();
 
-        // Monitor mode: static pose, skip VR logic
-        // (shared memory + depth commands handled in AutoDepthThread)
-        if (stereo_display_component_->IsMonitorMode())
+        // ===== UE3D: UEVR Shared Memory (heartbeat + monitor mode) =====
         {
-            vr::DriverPose_t pose = { 0 };
-            pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
-            pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
-            pose.qRotation = HmdQuaternion_Identity;
-            pose.vecPosition[1] = config.hmd_height;
-            pose.poseIsValid = true;
-            pose.deviceIsConnected = true;
-            pose.result = vr::TrackingResult_Running_OK;
-            pose.shouldApplyHeadModel = false;
-            pose.willDriftInYaw = false;
-            pose.poseTimeOffset = 0;
+            auto& rx = uevr::receiver();
+            if (!rx.is_connected()) rx.init();
 
-            pose_mutex_.lock();
-            curr_pose_ = pose;
-            pose_mutex_.unlock();
+            rx.update(
+                stereo_display_component_->GetDepth(),
+                stereo_display_component_->GetConvergence(),
+                stereo_display_component_->GetFoV(),
+                0.0f,   // fov_adj (unused in monitor mode)
+                config.tab_enable ? 0 : 1,
+                !no_profile_.load()
+            );
 
-            lastPose = pose;
-            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(
-                device_index_, pose, sizeof(vr::DriverPose_t));
+            bool mon = rx.is_connected() && rx.get_monitor_mode();
+            stereo_display_component_->SetMonitorMode(mon);
 
-            auto endTime = std::chrono::high_resolution_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                endTime - currentTime);
-            std::this_thread::sleep_for(std::chrono::milliseconds(8) - elapsed);
-            continue;
+            if (mon)
+            {
+                // Overlay IPD from UEVR stereo depth hint
+                float hint = rx.get_stereo_depth_hint();
+                if (std::isfinite(hint) && hint > 0.001f && hint < 2.0f)
+                {
+                    static float last_hint_ipd = -1.0f;
+                    if (std::abs(hint - last_hint_ipd) > 0.0001f)
+                    {
+                        vr::PropertyContainerHandle_t container =
+                            vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
+                        vr::VRProperties()->SetFloatProperty(
+                            container, vr::Prop_UserIpdMeters_Float, hint);
+                        last_hint_ipd = hint;
+                    }
+                }
+
+                // Depth commands from UEVR (Calibrate, VRto3D++/+/-/--)
+                uint8_t depth_cmd = rx.get_depth_request();
+                if (depth_cmd >= 2 && depth_cmd <= 6) {
+                    if (depth_cmd == 2) {  // Calibrate from world_scale
+                        float ad = 0.0f, ac = 0.0f;
+                        if (rx.calculate_auto_stereo(ad, ac)) {
+                            auto cfg_cal = stereo_display_component_->GetConfig();
+                            cfg_cal.depth = ad;
+                            cfg_cal.convergence = ac;
+                            stereo_display_component_->LoadSettings(cfg_cal);
+                            DriverLog("UE3D Calibrate: d=%.4f c=%.2f\n", ad, ac);
+                            app_updated_ = true;
+                        }
+                    } else if (depth_cmd == 3) {  // VRto3D-: Decrease depth 20%
+                        float new_d = stereo_display_component_->GetDepth() * 0.8f;
+                        new_d = (std::max)(0.005f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        app_updated_ = true;
+                    } else if (depth_cmd == 4) {  // VRto3D+: Increase depth 20%
+                        float new_d = stereo_display_component_->GetDepth() * 1.2f;
+                        new_d = (std::min)(1.0f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        app_updated_ = true;
+                    } else if (depth_cmd == 5) {  // VRto3D--: Big decrease 40%
+                        float new_d = stereo_display_component_->GetDepth() * 0.6f;
+                        new_d = (std::max)(0.005f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        app_updated_ = true;
+                    } else if (depth_cmd == 6) {  // VRto3D++: Big increase 40%
+                        float new_d = stereo_display_component_->GetDepth() * 1.4f;
+                        new_d = (std::min)(1.0f, new_d);
+                        stereo_display_component_->AdjustDepth(new_d, false);
+                        app_updated_ = true;
+                    }
+                    rx.clear_depth_request();
+                }
+
+                // Monitor mode: static pose, skip VR tracking logic
+                vr::DriverPose_t pose = { 0 };
+                pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
+                pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
+                pose.qRotation = HmdQuaternion_Identity;
+                pose.vecPosition[1] = config.hmd_height;
+                pose.poseIsValid = true;
+                pose.deviceIsConnected = true;
+                pose.result = vr::TrackingResult_Running_OK;
+                pose.shouldApplyHeadModel = false;
+                pose.willDriftInYaw = false;
+                pose.poseTimeOffset = 0;
+
+                pose_mutex_.lock();
+                curr_pose_ = pose;
+                pose_mutex_.unlock();
+
+                lastPose = pose;
+                vr::VRServerDriverHost()->TrackedDevicePoseUpdated(
+                    device_index_, pose, sizeof(vr::DriverPose_t));
+
+                auto endTime = std::chrono::high_resolution_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    endTime - currentTime);
+                std::this_thread::sleep_for(std::chrono::milliseconds(8) - elapsed);
+                continue;
+            }
         }
 
         vr::DriverPose_t pose = { 0 };
@@ -911,147 +979,83 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::AutoDepthThread() {
     const std::string pipeName = R"(\\.\pipe\AutoDepth)";
-    HANDLE hPipe = INVALID_HANDLE_VALUE;
-    enum PipeState { DISCONNECTED, LISTENING, READING };
-    PipeState pipe_state = DISCONNECTED;
 
     while (is_active_) {
+        // Create the named pipe in NON-BLOCKING mode
+        HANDLE hPipe = CreateNamedPipeA(
+            pipeName.c_str(),
+            PIPE_ACCESS_INBOUND,        // Read-only access
+            PIPE_TYPE_MESSAGE |         // Message-type pipe
+            PIPE_READMODE_MESSAGE |     // Message read mode
+            PIPE_NOWAIT,                // Non-blocking mode (prevents blocking when client disconnects)
+            1,                          // Max instances
+            512,                        // Output buffer size
+            512,                        // Input buffer size
+            0,                          // Default timeout
+            NULL                        // Default security attributes
+        );
 
-        // ===== UEVR Shared Memory (moved from PoseUpdateThread) =====
-        {
-            auto& rx = uevr::receiver();
-            if (!rx.is_connected()) rx.init();
-
-            auto config = stereo_display_component_->GetConfig();
-            rx.update(
-                stereo_display_component_->GetDepth(),
-                stereo_display_component_->GetConvergence(),
-                stereo_display_component_->GetFoV(),
-                0.0f,   // fov_adj (unused in monitor mode)
-                config.tab_enable ? 0 : 1,
-                !no_profile_.load()
-            );
-
-            bool mon = rx.is_connected() && rx.get_monitor_mode();
-            stereo_display_component_->SetMonitorMode(mon);
-
-            if (mon)
-            {
-                // Overlay IPD from UEVR hint
-                float hint = rx.get_stereo_depth_hint();
-                if (std::isfinite(hint) && hint > 0.001f && hint < 2.0f)
-                {
-                    static float last_hint_ipd = -1.0f;
-                    if (std::abs(hint - last_hint_ipd) > 0.0001f)
-                    {
-                        vr::PropertyContainerHandle_t container =
-                            vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
-                        vr::VRProperties()->SetFloatProperty(
-                            container, vr::Prop_UserIpdMeters_Float, hint);
-                        last_hint_ipd = hint;
-                    }
-                }
-
-                // Depth commands from UEVR
-                uint8_t depth_cmd = rx.get_depth_request();
-                if (depth_cmd >= 2 && depth_cmd <= 6) {
-                    if (depth_cmd == 2) {  // Calibrate from world_scale
-                        float ad = 0.0f, ac = 0.0f;
-                        if (rx.calculate_auto_stereo(ad, ac)) {
-                            auto cfg_cal = stereo_display_component_->GetConfig();
-                            cfg_cal.depth = ad;
-                            cfg_cal.convergence = ac;
-                            stereo_display_component_->LoadSettings(cfg_cal);
-                            DriverLog("Calibrate 3D: d=%.4f c=%.2f\n", ad, ac);
-                            BeepSuccess();
-                            app_updated_ = true;
-                        }
-                    } else if (depth_cmd == 3) {  // VRto3D-: Decrease depth 20%
-                        float new_d = stereo_display_component_->GetDepth() * 0.8f;
-                        new_d = (std::max)(0.005f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        BeepSuccess(); app_updated_ = true;
-                    } else if (depth_cmd == 4) {  // VRto3D+: Increase depth 20%
-                        float new_d = stereo_display_component_->GetDepth() * 1.2f;
-                        new_d = (std::min)(1.0f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        BeepSuccess(); app_updated_ = true;
-                    } else if (depth_cmd == 5) {  // VRto3D--: Big decrease 40%
-                        float new_d = stereo_display_component_->GetDepth() * 0.6f;
-                        new_d = (std::max)(0.005f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        BeepSuccess(); app_updated_ = true;
-                    } else if (depth_cmd == 6) {  // VRto3D++: Big increase 40%
-                        float new_d = stereo_display_component_->GetDepth() * 1.4f;
-                        new_d = (std::min)(1.0f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        BeepSuccess(); app_updated_ = true;
-                    }
-                    rx.clear_depth_request();
-                }
-            }
+        if (hPipe == INVALID_HANDLE_VALUE) {
+            DriverLog("Failed to create named pipe. Error: %d\n", GetLastError());
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            continue;
         }
 
-        // ===== Named Pipe Auto-Depth (state machine) =====
-        switch (pipe_state) {
-        case DISCONNECTED:
-            hPipe = CreateNamedPipeA(
-                pipeName.c_str(),
-                PIPE_ACCESS_INBOUND,
-                PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_NOWAIT,
-                1, 512, 512, 0, NULL
-            );
-            if (hPipe == INVALID_HANDLE_VALUE) {
-                DriverLog("Failed to create named pipe. Error: %d\n", GetLastError());
-            } else {
-                DriverLog("Waiting for depth client to connect...\n");
-                pipe_state = LISTENING;
-            }
-            break;
+        DriverLog("Waiting for depth client to connect...\n");
 
-        case LISTENING: {
+        while (is_active_) {
+            // Check if a client is trying to connect
             BOOL connected = ConnectNamedPipe(hPipe, NULL);
             DWORD err = GetLastError();
+
             if (connected || err == ERROR_PIPE_CONNECTED) {
                 DriverLog("Client connected! Receiving values...\n");
-                pipe_state = READING;
-            } else if (err != ERROR_NO_DATA && err != ERROR_PIPE_LISTENING) {
+                break; // Proceed to read data
+            }
+            else if (err == ERROR_NO_DATA || err == ERROR_PIPE_LISTENING) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+            else {
                 DriverLog("Failed to connect to client. Error: %d\n", err);
                 CloseHandle(hPipe);
-                hPipe = INVALID_HANDLE_VALUE;
-                pipe_state = DISCONNECTED;
+                break; // Recreate pipe
             }
-            break;
+
+            // Check if we should exit immediately
+            if (!is_active_) {
+                DriverLog("Exiting connection loop...\n");
+                CloseHandle(hPipe);
+                return;
+            }
         }
 
-        case READING: {
-            char buffer[16];
-            DWORD bytesRead;
+        char buffer[16];
+        DWORD bytesRead;
+
+        // Read data continuously until client disconnects
+        while (is_active_) {
             BOOL success = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL);
-            if (success && bytesRead > 0) {
-                if (use_auto_depth_) {
-                    buffer[bytesRead] = '\0';
-                    float depthValue = strtof(buffer, nullptr);
-                    stereo_display_component_->AdjustDepth(depthValue, false);
-                }
-            } else {
+            if (!success || bytesRead == 0) {
                 DWORD readErr = GetLastError();
-                if (readErr != ERROR_NO_DATA && readErr != ERROR_PIPE_LISTENING) {
-                    DriverLog("Depth client disconnected. Reconnecting...\n");
-                    DisconnectNamedPipe(hPipe);
-                    CloseHandle(hPipe);
-                    hPipe = INVALID_HANDLE_VALUE;
-                    pipe_state = DISCONNECTED;
+                if (readErr == ERROR_NO_DATA || readErr == ERROR_PIPE_LISTENING) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    continue;
                 }
+
+                DriverLog("Depth client disconnected. Reconnecting...\n");
+                break; // Exit inner loop and recreate the pipe
             }
-            break;
-        }
+
+            if (use_auto_depth_)
+            {
+                // Convert to float
+                buffer[bytesRead] = '\0';
+                float depthValue = strtof(buffer, nullptr);
+                stereo_display_component_->AdjustDepth(depthValue, false);
+            }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(33));
-    }
-
-    if (hPipe != INVALID_HANDLE_VALUE) {
+        // Close the current pipe handle (ready to reconnect)
         CloseHandle(hPipe);
     }
 }
@@ -1193,7 +1197,6 @@ void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, 
 void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pnX, uint32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-
     if (config_.reverse_enable)
     {
         eEye = static_cast<vr::EVREye>(!static_cast<bool> (eEye));
@@ -1271,7 +1274,7 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
         return;
     }
 
-    // VR Mode: asymmetric frustum with IPD-based horizontal offset
+    // IPD-based horizontal offset
     float sep = GetDepth();
     float conv = GetConvergence();
     float eyeOffset = (eEye == vr::Eye_Left) ? sep * 0.5f / conv : -sep * 0.5f / conv;

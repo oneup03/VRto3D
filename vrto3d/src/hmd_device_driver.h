@@ -22,6 +22,7 @@
 #include <string>
 
 #include "vrto3dlib/json_manager.h"
+#include "vrto3dlib/uevr_receiver.hpp"
 
  // Forward declare XINPUT_STATE
 struct _XINPUT_STATE;
@@ -59,6 +60,7 @@ public:
         }
     }
     bool IsMonitorMode() const { return monitor_mode_.load(); }
+
     std::string CheckUserSettings();
     std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
