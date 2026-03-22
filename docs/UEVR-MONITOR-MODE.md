@@ -4,7 +4,7 @@
 
 When used with UEVR's Monitor Mode, VRto3D acts as the stereo output — it takes the left and right eye views that UEVR renders and composites them into a side-by-side (or top-and-bottom) image on your 3D display.
 
-All the 3D rendering decisions (eye separation, convergence, depth flattening, HUD depth) are handled by UEVR. VRto3D just provides the display window. This means you don't need to fiddle with VRto3D's depth or convergence settings — UEVR controls everything through its Monitor 3D tab.
+In monitor mode, VRto3D is fully passive. All 3D rendering decisions (eye separation, convergence, depth flattening, HUD depth) are handled by UEVR. VRto3D just provides the display window. The only VRto3D settings you need to configure are display-related: which monitor, resolution, and output format. UEVR handles everything else through its Monitor 3D tab, with per-game settings saved automatically.
 
 ---
 
@@ -36,23 +36,28 @@ Most VRto3D settings can be left at their defaults when using UEVR Monitor Mode.
 
 **`reverse_enable`** — Swaps left/right eyes if the 3D appears reversed on your display.
 
-### Depth Adjustment (Hotkeys)
+### Depth Adjustment (HUD Overlay Only)
 
-VRto3D's depth can be adjusted with keyboard hotkeys during gameplay:
+In monitor mode, VRto3D's depth setting only affects the **HUD overlay** — the floating UI elements rendered by UEVR's stereo overlay. Scene 3D (the actual game world) is controlled entirely by UEVR's **3D Strength** slider and auto-depth system.
 
-- `Ctrl+F3` / `Ctrl+F4` — Decrease / increase depth
+You can adjust VRto3D's depth with keyboard hotkeys during gameplay:
+
+- `Ctrl+F3` / `Ctrl+F4` — Decrease / increase depth (HUD overlay)
 - `Ctrl+F7` — Save current settings as a profile for the running game
 
-UEVR also provides depth buttons in its Monitor 3D tab (**VRto3D++**, **VRto3D+**, **Calibrate**, **VRto3D-**, **VRto3D--**) that send commands to VRto3D through shared memory.
+UEVR also provides depth buttons in its Monitor 3D tab (**VRto3D++**, **VRto3D+**, **Calibrate**, **VRto3D-**, **VRto3D--**) that send commands to VRto3D through shared memory. These adjust VRto3D's depth for HUD overlay matching.
 
 ### What to Leave Alone
 
-In Monitor Mode, UEVR handles all stereo rendering decisions. These VRto3D settings are either overridden or irrelevant:
+In monitor mode, VRto3D is passive — UEVR owns all stereo rendering. You don't need to edit `default_config.json` for any 3D settings. UEVR profiles handle everything per-game automatically.
 
-- **`convergence`** — UEVR controls convergence through its projection matrix. VRto3D's convergence setting doesn't affect the game's stereo output.
+These VRto3D settings have no effect on scene 3D in monitor mode:
+
+- **`convergence`** — UEVR controls convergence through its projection matrix. VRto3D's convergence setting only affects HUD overlay alignment.
+- **`depth`** — Scene depth is controlled by UEVR's 3D Strength slider. VRto3D's depth setting only influences the HUD overlay.
 - **`fov`** — UEVR manages FOV through the engine. VRto3D's FOV is used for the virtual HMD shape but doesn't change what you see.
 - **Pitch/yaw emulation** — Not needed. UEVR doesn't use head rotation in monitor mode.
-- **User presets** — You can still use VRto3D presets for depth hotkeys, but convergence presets won't have a visible effect since UEVR controls convergence.
+- **User presets** — Convergence presets have no visible effect since UEVR controls convergence. Depth presets only affect the HUD overlay.
 
 ---
 
