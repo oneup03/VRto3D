@@ -22,6 +22,7 @@
 #include <string>
 
 #include "vrto3dlib/json_manager.h"
+#include "vrto3dlib/uevr_receiver.hpp"
 
  // Forward declare XINPUT_STATE
 struct _XINPUT_STATE;
@@ -49,6 +50,17 @@ public:
     float GetDepth();
     float GetConvergence();
     float GetFoV();
+
+    // UE3D Monitor Mode
+    void SetMonitorMode(bool enabled) {
+        bool was_monitor = monitor_mode_.load();
+        monitor_mode_.store(enabled);
+        if (enabled && !was_monitor) {
+            ResetProjection();
+        }
+    }
+    bool IsMonitorMode() const { return monitor_mode_.load(); }
+
     std::string CheckUserSettings();
     std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
@@ -66,6 +78,9 @@ private:
     std::atomic< uint32_t > device_index_;
 
     std::shared_mutex  cfg_mutex_;
+
+    // UE3D Monitor Mode
+    std::atomic< bool > monitor_mode_{ false };
 };
 
 
