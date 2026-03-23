@@ -53,13 +53,7 @@ public:
     float GetFoV();
 
     // UE3D Monitor Mode
-    void SetMonitorMode(bool enabled) {
-        bool was_monitor = monitor_mode_.load();
-        monitor_mode_.store(enabled);
-        if (enabled && !was_monitor) {
-            ResetProjection();
-        }
-    }
+    void SetMonitorMode(bool enabled);
     bool IsMonitorMode() const { return monitor_mode_.load(); }
 
     std::string CheckUserSettings();
@@ -128,7 +122,6 @@ private:
     std::atomic< bool > is_on_top_;
     std::atomic< bool > man_on_top_;
     std::atomic< bool > take_screenshot_;
-    std::atomic< bool > use_auto_depth_;
     std::atomic< bool > launch_script_executed_;
 
     std::mutex pose_mutex_;

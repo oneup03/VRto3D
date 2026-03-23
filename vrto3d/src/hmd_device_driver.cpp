@@ -128,7 +128,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     is_on_top_ = false;
     man_on_top_ = false;
     take_screenshot_ = false;
-    use_auto_depth_ = true;
     app_updated_ = false;
     no_profile_ = false;
 
@@ -502,204 +501,121 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 
         const auto config = stereo_display_component_->GetConfig();
 
-        vr::HmdQuaternion_t controller_rotation = HmdQuaternion_Identity;
-        std::array<double, 3> controller_pos_offset = { 0.0, 0.0, 0.0 };
-        {
-            std::lock_guard<std::mutex> lock(controller_pose_mutex_);
-            controller_rotation = controller_rotation_;
-            controller_pos_offset = controller_pos_offset_;
-        }
-
-        const vr::HmdQuaternion_t hmd_yaw_quat =
-            QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(config.hmd_yaw));
-        const vr::HmdQuaternion_t final_controller_rotation =
-            HmdQuaternion_Normalize(hmd_yaw_quat * controller_rotation);
-
-        // ===== UE3D: UEVR Shared Memory (heartbeat + monitor mode) =====
-        {
-            auto& rx = uevr::receiver();
-            if (!rx.is_connected()) rx.init();
-
-            rx.update(
-                stereo_display_component_->GetDepth(),
-                stereo_display_component_->GetConvergence(),
-                stereo_display_component_->GetFoV(),
-                0.0f,   // fov_adj (unused in monitor mode)
-                config.tab_enable ? 0 : 1,
-                !no_profile_.load()
-            );
-
-            bool mon = rx.is_connected() && rx.get_monitor_mode();
-            stereo_display_component_->SetMonitorMode(mon);
-
-            if (mon)
-            {
-                // Overlay IPD from UEVR stereo depth hint
-                float hint = rx.get_stereo_depth_hint();
-                if (std::isfinite(hint) && hint > 0.001f && hint < 2.0f)
-                {
-                    static float last_hint_ipd = -1.0f;
-                    if (std::abs(hint - last_hint_ipd) > 0.0001f)
-                    {
-                        vr::PropertyContainerHandle_t container =
-                            vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
-                        vr::VRProperties()->SetFloatProperty(
-                            container, vr::Prop_UserIpdMeters_Float, hint);
-                        last_hint_ipd = hint;
-                    }
-                }
-
-                // Depth commands from UEVR (Calibrate, VRto3D++/+/-/--)
-                uint8_t depth_cmd = rx.get_depth_request();
-                if (depth_cmd >= 2 && depth_cmd <= 6) {
-                    if (depth_cmd == 2) {  // Calibrate from world_scale
-                        float ad = 0.0f, ac = 0.0f;
-                        if (rx.calculate_auto_stereo(ad, ac)) {
-                            auto cfg_cal = stereo_display_component_->GetConfig();
-                            cfg_cal.depth = ad;
-                            cfg_cal.convergence = ac;
-                            stereo_display_component_->LoadSettings(cfg_cal);
-                            DriverLog("UE3D Calibrate: d=%.4f c=%.2f\n", ad, ac);
-                            app_updated_ = true;
-                        }
-                    } else if (depth_cmd == 3) {  // VRto3D-: Decrease depth 20%
-                        float new_d = stereo_display_component_->GetDepth() * 0.8f;
-                        new_d = (std::max)(0.005f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        app_updated_ = true;
-                    } else if (depth_cmd == 4) {  // VRto3D+: Increase depth 20%
-                        float new_d = stereo_display_component_->GetDepth() * 1.2f;
-                        new_d = (std::min)(1.0f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        app_updated_ = true;
-                    } else if (depth_cmd == 5) {  // VRto3D--: Big decrease 40%
-                        float new_d = stereo_display_component_->GetDepth() * 0.6f;
-                        new_d = (std::max)(0.005f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        app_updated_ = true;
-                    } else if (depth_cmd == 6) {  // VRto3D++: Big increase 40%
-                        float new_d = stereo_display_component_->GetDepth() * 1.4f;
-                        new_d = (std::min)(1.0f, new_d);
-                        stereo_display_component_->AdjustDepth(new_d, false);
-                        app_updated_ = true;
-                    }
-                    rx.clear_depth_request();
-                }
-
-                // Monitor mode: static pose, skip VR tracking logic
-                vr::DriverPose_t pose = { 0 };
-                pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
-                pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
-                pose.qRotation = HmdQuaternion_Identity;
-                pose.vecPosition[1] = config.hmd_height;
-                pose.poseIsValid = true;
-                pose.deviceIsConnected = true;
-                pose.result = vr::TrackingResult_Running_OK;
-                pose.shouldApplyHeadModel = false;
-                pose.willDriftInYaw = false;
-                pose.poseTimeOffset = 0;
-
-                pose_mutex_.lock();
-                curr_pose_ = pose;
-                pose_mutex_.unlock();
-
-                lastPose = pose;
-                vr::VRServerDriverHost()->TrackedDevicePoseUpdated(
-                    device_index_, pose, sizeof(vr::DriverPose_t));
-
-                auto endTime = std::chrono::high_resolution_clock::now();
-                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    endTime - currentTime);
-                std::this_thread::sleep_for(std::chrono::milliseconds(8) - elapsed);
-                continue;
-            }
-        }
-
         vr::DriverPose_t pose = { 0 };
 
-        pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
-        pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
-        pose.qRotation = final_controller_rotation;
-
-        // Calculate Position
-        pose.vecPosition[0] = config.hmd_x;
-        pose.vecPosition[1] = config.hmd_height;
-        pose.vecPosition[2] = config.hmd_y;
-        if (config.use_open_track)
+        // Monitor mode: static pose, skip VR tracking logic.
+        if (stereo_display_component_->IsMonitorMode())
         {
-            std::shared_lock<std::shared_mutex> lock(trk_mutex_);
-            pose.qRotation = HmdQuaternion_Normalize(final_controller_rotation * open_track_att_);
-            pose.vecPosition[0] += open_track_pos_[0];
-            pose.vecPosition[1] += open_track_pos_[1];
-            pose.vecPosition[2] += open_track_pos_[2];
+            pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
+            pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
+            pose.qRotation = HmdQuaternion_Identity;
+            pose.vecPosition[1] = config.hmd_height;
+            pose.poseIsValid = true;
+            pose.deviceIsConnected = true;
+            pose.result = vr::TrackingResult_Running_OK;
+            pose.shouldApplyHeadModel = false;
+            pose.willDriftInYaw = false;
+            pose.poseTimeOffset = 0;
         }
-        else
-        {
-            pose.qRotation = final_controller_rotation;
-            pose.vecPosition[0] += controller_pos_offset[0];
-            pose.vecPosition[1] += controller_pos_offset[1];
-            pose.vecPosition[2] += controller_pos_offset[2];
-            if (pose.vecPosition[1] < config.hmd_height - 1.0)
+        // Default mode: Static + HMD Emulation
+        else {
+            vr::HmdQuaternion_t controller_rotation = HmdQuaternion_Identity;
+            std::array<double, 3> controller_pos_offset = { 0.0, 0.0, 0.0 };
             {
-                pose.vecPosition[1] = config.hmd_height - 1.0;
+                std::lock_guard<std::mutex> lock(controller_pose_mutex_);
+                controller_rotation = controller_rotation_;
+                controller_pos_offset = controller_pos_offset_;
             }
+
+            const vr::HmdQuaternion_t hmd_yaw_quat =
+                QuaternionFromAxisAngle(0.0f, 1.0f, 0.0f, DEG_TO_RAD(config.hmd_yaw));
+            const vr::HmdQuaternion_t final_controller_rotation =
+                HmdQuaternion_Normalize(hmd_yaw_quat * controller_rotation);
+
+            pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
+            pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
+            pose.qRotation = final_controller_rotation;
+
+            // Calculate Position
+            pose.vecPosition[0] = config.hmd_x;
+            pose.vecPosition[1] = config.hmd_height;
+            pose.vecPosition[2] = config.hmd_y;
+            if (config.use_open_track)
+            {
+                std::shared_lock<std::shared_mutex> lock(trk_mutex_);
+                pose.qRotation = HmdQuaternion_Normalize(final_controller_rotation * open_track_att_);
+                pose.vecPosition[0] += open_track_pos_[0];
+                pose.vecPosition[1] += open_track_pos_[1];
+                pose.vecPosition[2] += open_track_pos_[2];
+            }
+            else
+            {
+                pose.qRotation = final_controller_rotation;
+                pose.vecPosition[0] += controller_pos_offset[0];
+                pose.vecPosition[1] += controller_pos_offset[1];
+                pose.vecPosition[2] += controller_pos_offset[2];
+                if (pose.vecPosition[1] < config.hmd_height - 1.0)
+                {
+                    pose.vecPosition[1] = config.hmd_height - 1.0;
+                }
+            }
+
+            if (has_previous_pose)
+            {
+                // Linear velocity
+                pose.vecVelocity[0] = (pose.vecPosition[0] - last_pose.vecPosition[0]) / delta_time;
+                pose.vecVelocity[1] = (pose.vecPosition[1] - last_pose.vecPosition[1]) / delta_time;
+                pose.vecVelocity[2] = (pose.vecPosition[2] - last_pose.vecPosition[2]) / delta_time;
+
+                // Angular velocity from quaternion delta (roll/pitch/yaw all included)
+                const vr::HmdQuaternion_t stable_rotation =
+                    HmdQuaternion_EnsureSignContinuity(pose.qRotation, last_rotation);
+                const std::array<float, 3> angular_velocity =
+                    HmdQuaternion_AngularVelocity(stable_rotation, last_rotation, delta_time, kSmallAngleEpsilon);
+                pose.vecAngularVelocity[0] = angular_velocity[0];
+                pose.vecAngularVelocity[1] = angular_velocity[1];
+                pose.vecAngularVelocity[2] = angular_velocity[2];
+
+                // Linear acceleration
+                pose.vecAcceleration[0] = (pose.vecVelocity[0] - last_pose.vecVelocity[0]) / delta_time;
+                pose.vecAcceleration[1] = (pose.vecVelocity[1] - last_pose.vecVelocity[1]) / delta_time;
+                pose.vecAcceleration[2] = (pose.vecVelocity[2] - last_pose.vecVelocity[2]) / delta_time;
+
+                // Angular acceleration
+                pose.vecAngularAcceleration[0] = (angular_velocity[0] - last_angular_velocity[0]) / delta_time;
+                pose.vecAngularAcceleration[1] = (angular_velocity[1] - last_angular_velocity[1]) / delta_time;
+                pose.vecAngularAcceleration[2] = (angular_velocity[2] - last_angular_velocity[2]) / delta_time;
+
+                last_rotation = stable_rotation;
+                last_angular_velocity = angular_velocity;
+            }
+            else
+            {
+                pose.vecVelocity[0] = 0.0;
+                pose.vecVelocity[1] = 0.0;
+                pose.vecVelocity[2] = 0.0;
+                pose.vecAngularVelocity[0] = 0.0;
+                pose.vecAngularVelocity[1] = 0.0;
+                pose.vecAngularVelocity[2] = 0.0;
+                pose.vecAcceleration[0] = 0.0;
+                pose.vecAcceleration[1] = 0.0;
+                pose.vecAcceleration[2] = 0.0;
+                pose.vecAngularAcceleration[0] = 0.0;
+                pose.vecAngularAcceleration[1] = 0.0;
+                pose.vecAngularAcceleration[2] = 0.0;
+
+                last_rotation = pose.qRotation;
+                last_angular_velocity = { 0.0f, 0.0f, 0.0f };
+                has_previous_pose = true;
+            }
+
+            pose.poseIsValid = true;
+            pose.deviceIsConnected = true;
+            pose.result = vr::TrackingResult_Running_OK;
+            pose.shouldApplyHeadModel = false;
+            pose.willDriftInYaw = false;
+            pose.poseTimeOffset = 0;
         }
-
-        if (has_previous_pose)
-        {
-            // Linear velocity
-            pose.vecVelocity[0] = (pose.vecPosition[0] - last_pose.vecPosition[0]) / delta_time;
-            pose.vecVelocity[1] = (pose.vecPosition[1] - last_pose.vecPosition[1]) / delta_time;
-            pose.vecVelocity[2] = (pose.vecPosition[2] - last_pose.vecPosition[2]) / delta_time;
-
-            // Angular velocity from quaternion delta (roll/pitch/yaw all included)
-            const vr::HmdQuaternion_t stable_rotation =
-                HmdQuaternion_EnsureSignContinuity(pose.qRotation, last_rotation);
-            const std::array<float, 3> angular_velocity =
-                HmdQuaternion_AngularVelocity(stable_rotation, last_rotation, delta_time, kSmallAngleEpsilon);
-            pose.vecAngularVelocity[0] = angular_velocity[0];
-            pose.vecAngularVelocity[1] = angular_velocity[1];
-            pose.vecAngularVelocity[2] = angular_velocity[2];
-
-            // Linear acceleration
-            pose.vecAcceleration[0] = (pose.vecVelocity[0] - last_pose.vecVelocity[0]) / delta_time;
-            pose.vecAcceleration[1] = (pose.vecVelocity[1] - last_pose.vecVelocity[1]) / delta_time;
-            pose.vecAcceleration[2] = (pose.vecVelocity[2] - last_pose.vecVelocity[2]) / delta_time;
-
-            // Angular acceleration
-            pose.vecAngularAcceleration[0] = (angular_velocity[0] - last_angular_velocity[0]) / delta_time;
-            pose.vecAngularAcceleration[1] = (angular_velocity[1] - last_angular_velocity[1]) / delta_time;
-            pose.vecAngularAcceleration[2] = (angular_velocity[2] - last_angular_velocity[2]) / delta_time;
-
-            last_rotation = stable_rotation;
-            last_angular_velocity = angular_velocity;
-        }
-        else
-        {
-            pose.vecVelocity[0] = 0.0;
-            pose.vecVelocity[1] = 0.0;
-            pose.vecVelocity[2] = 0.0;
-            pose.vecAngularVelocity[0] = 0.0;
-            pose.vecAngularVelocity[1] = 0.0;
-            pose.vecAngularVelocity[2] = 0.0;
-            pose.vecAcceleration[0] = 0.0;
-            pose.vecAcceleration[1] = 0.0;
-            pose.vecAcceleration[2] = 0.0;
-            pose.vecAngularAcceleration[0] = 0.0;
-            pose.vecAngularAcceleration[1] = 0.0;
-            pose.vecAngularAcceleration[2] = 0.0;
-
-            last_rotation = pose.qRotation;
-            last_angular_velocity = { 0.0f, 0.0f, 0.0f };
-            has_previous_pose = true;
-        }
-
-        pose.poseIsValid = true;
-        pose.deviceIsConnected = true;
-        pose.result = vr::TrackingResult_Running_OK;
-        pose.shouldApplyHeadModel = false;
-        pose.willDriftInYaw = false;
-        pose.poseTimeOffset = 0;
 
         // Update the pose
         pose_mutex_.lock();
@@ -744,7 +660,6 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         int hmd = 0;
         int top = 0;
         int save = 0;
-        int depth = 0;
         int overlay = 0;
     } sleep;
 
@@ -850,14 +765,6 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             }
             else if (sleep.save > 0) {
                 --sleep.save;
-            }
-            // Ctrl+F11 Toggle Auto Depth
-            if (isCtrlDown() && isDown(VK_F11) && sleep.depth == 0) {
-                use_auto_depth_ = !use_auto_depth_;
-                sleep.depth = cfg.sleep_count_max;
-            }
-            else if (sleep.depth > 0) {
-                --sleep.depth;
             }
         }
         // Ctrl+F8 Toggle Always On Top
@@ -1060,88 +967,88 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Receive Depth Values from Game
+// Purpose: Process UE3D/UEVR shared-memory monitor/depth requests
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::AutoDepthThread() {
-    const std::string pipeName = R"(\\.\pipe\AutoDepth)";
+    auto& rx = uevr::receiver();
+    static float last_hint_ipd = -1.0f;
 
     while (is_active_) {
-        // Create the named pipe in NON-BLOCKING mode
-        HANDLE hPipe = CreateNamedPipeA(
-            pipeName.c_str(),
-            PIPE_ACCESS_INBOUND,        // Read-only access
-            PIPE_TYPE_MESSAGE |         // Message-type pipe
-            PIPE_READMODE_MESSAGE |     // Message read mode
-            PIPE_NOWAIT,                // Non-blocking mode (prevents blocking when client disconnects)
-            1,                          // Max instances
-            512,                        // Output buffer size
-            512,                        // Input buffer size
-            0,                          // Default timeout
-            NULL                        // Default security attributes
+        const auto config = stereo_display_component_->GetConfig();
+
+        if (!rx.is_connected()) rx.init();
+
+        rx.update(
+            stereo_display_component_->GetDepth(),
+            stereo_display_component_->GetConvergence(),
+            stereo_display_component_->GetFoV(),
+            0.0f,   // fov_adj (unused in monitor mode)
+            config.tab_enable ? 0 : 1,
+            !no_profile_.load()
         );
 
-        if (hPipe == INVALID_HANDLE_VALUE) {
-            DriverLog("Failed to create named pipe. Error: %d\n", GetLastError());
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            continue;
-        }
+        const bool mon = rx.is_connected() && rx.get_monitor_mode();
+        stereo_display_component_->SetMonitorMode(mon);
 
-        DriverLog("Waiting for depth client to connect...\n");
-
-        while (is_active_) {
-            // Check if a client is trying to connect
-            BOOL connected = ConnectNamedPipe(hPipe, NULL);
-            DWORD err = GetLastError();
-
-            if (connected || err == ERROR_PIPE_CONNECTED) {
-                DriverLog("Client connected! Receiving values...\n");
-                break; // Proceed to read data
-            }
-            else if (err == ERROR_NO_DATA || err == ERROR_PIPE_LISTENING) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            }
-            else {
-                DriverLog("Failed to connect to client. Error: %d\n", err);
-                CloseHandle(hPipe);
-                break; // Recreate pipe
-            }
-
-            // Check if we should exit immediately
-            if (!is_active_) {
-                DriverLog("Exiting connection loop...\n");
-                CloseHandle(hPipe);
-                return;
-            }
-        }
-
-        char buffer[16];
-        DWORD bytesRead;
-
-        // Read data continuously until client disconnects
-        while (is_active_) {
-            BOOL success = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL);
-            if (!success || bytesRead == 0) {
-                DWORD readErr = GetLastError();
-                if (readErr == ERROR_NO_DATA || readErr == ERROR_PIPE_LISTENING) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    continue;
-                }
-
-                DriverLog("Depth client disconnected. Reconnecting...\n");
-                break; // Exit inner loop and recreate the pipe
-            }
-
-            if (use_auto_depth_)
+        if (mon)
+        {
+            // Overlay IPD from UEVR stereo depth hint
+            const float hint = rx.get_stereo_depth_hint();
+            if (std::isfinite(hint) && hint > 0.001f && hint < 2.0f)
             {
-                // Convert to float
-                buffer[bytesRead] = '\0';
-                float depthValue = strtof(buffer, nullptr);
-                stereo_display_component_->AdjustDepth(depthValue, false);
+                if (std::abs(hint - last_hint_ipd) > 0.0001f)
+                {
+                    vr::PropertyContainerHandle_t container =
+                        vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
+                    vr::VRProperties()->SetFloatProperty(
+                        container, vr::Prop_UserIpdMeters_Float, hint);
+                    last_hint_ipd = hint;
+                }
+            }
+
+            // Depth commands from UEVR (Calibrate, VRto3D++/+/-/--)
+            uint8_t depth_cmd = rx.get_depth_request();
+            if (depth_cmd >= 2 && depth_cmd <= 6) {
+                if (depth_cmd == 2) {  // Calibrate from world_scale
+                    float ad = 0.0f, ac = 0.0f;
+                    if (rx.calculate_auto_stereo(ad, ac)) {
+                        auto cfg_cal = stereo_display_component_->GetConfig();
+                        cfg_cal.depth = ad;
+                        cfg_cal.convergence = ac;
+                        stereo_display_component_->LoadSettings(cfg_cal);
+                        DriverLog("UE3D Calibrate: d=%.4f c=%.2f\n", ad, ac);
+                        app_updated_ = true;
+                    }
+                }
+                else if (depth_cmd == 3) {  // VRto3D-: Decrease depth 20%
+                    float new_d = stereo_display_component_->GetDepth() * 0.8f;
+                    new_d = (std::max)(0.005f, new_d);
+                    stereo_display_component_->AdjustDepth(new_d, false);
+                    app_updated_ = true;
+                }
+                else if (depth_cmd == 4) {  // VRto3D+: Increase depth 20%
+                    float new_d = stereo_display_component_->GetDepth() * 1.2f;
+                    new_d = (std::min)(1.0f, new_d);
+                    stereo_display_component_->AdjustDepth(new_d, false);
+                    app_updated_ = true;
+                }
+                else if (depth_cmd == 5) {  // VRto3D--: Big decrease 40%
+                    float new_d = stereo_display_component_->GetDepth() * 0.6f;
+                    new_d = (std::max)(0.005f, new_d);
+                    stereo_display_component_->AdjustDepth(new_d, false);
+                    app_updated_ = true;
+                }
+                else if (depth_cmd == 6) {  // VRto3D++: Big increase 40%
+                    float new_d = stereo_display_component_->GetDepth() * 1.4f;
+                    new_d = (std::min)(1.0f, new_d);
+                    stereo_display_component_->AdjustDepth(new_d, false);
+                    app_updated_ = true;
+                }
+                rx.clear_depth_request();
             }
         }
 
-        // Close the current pipe handle (ready to reconnect)
-        CloseHandle(hPipe);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 }
 
@@ -1704,4 +1611,16 @@ void StereoDisplayComponent::ResetProjection()
     vr::VREvent_Data_t temp;
     vr::VRServerDriverHost()->SetDisplayProjectionRaw(device_index_, eyeLeft, eyeRight);
     vr::VRServerDriverHost()->VendorSpecificEvent(device_index_, vr::VREvent_LensDistortionChanged, temp, 0.0f);
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Enable/Disable Monitor Mode
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::SetMonitorMode(bool enabled) {
+    bool was_monitor = monitor_mode_.load();
+    monitor_mode_.store(enabled);
+    if (enabled && !was_monitor) {
+        ResetProjection();
+    }
 }
