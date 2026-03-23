@@ -383,9 +383,9 @@ void MockControllerDeviceDriver::OpenTrackThread()
 
         if (bytes_read > 0) {
             std::unique_lock<std::shared_mutex> lock(trk_mutex_);
-            open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(open_track.Yaw));
+            open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(-open_track.Yaw));
             // Map Opentrack pose data to steam_vr coordinate system
-            open_track_pos_ = { (open_track.X / 100.0f), -(open_track.Y / 100.0f), open_track.Z / 100.0f };
+            open_track_pos_ = { -(open_track.X / 100.0f), -(open_track.Y / 100.0f), open_track.Z / 100.0f };
             lock.unlock();
         }
         else std::this_thread::sleep_for(std::chrono::milliseconds(1));
