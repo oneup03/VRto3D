@@ -127,6 +127,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     is_active_ = true;
     is_on_top_ = false;
     man_on_top_ = false;
+    ue3d_on_top_ = false;
     take_screenshot_ = false;
     app_updated_ = false;
     no_profile_ = false;
@@ -992,6 +993,14 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 
         if (mon)
         {
+            if (config.auto_focus && !is_on_top_ && !ue3d_on_top_) {
+                BeepSuccess();
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                is_on_top_ = true;
+                man_on_top_ = true;
+                ue3d_on_top_ = true;
+            }
+
             // Overlay IPD from UEVR stereo depth hint
             const float hint = rx.get_stereo_depth_hint();
             if (std::isfinite(hint) && hint > 0.001f && hint < 2.0f)
@@ -1088,6 +1097,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
     else if (status == vr::VREvent_ProcessDisconnected)
     {
         is_on_top_ = false;
+        ue3d_on_top_ = false;
     }
 }
 
