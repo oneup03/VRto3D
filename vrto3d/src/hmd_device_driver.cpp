@@ -91,6 +91,7 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     // Display settings
     StereoDisplayDriverConfiguration display_configuration{};
     display_configuration.display_index = 0;
+    display_configuration.multi_display = false;
     display_configuration.window_x = 0;
     display_configuration.window_y = 0;
     display_configuration.window_width = 1920;
@@ -887,7 +888,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
                 cfg.window_x,
                 cfg.window_y,
                 cfg.window_width / 2,
-                cfg.window_height / 2,
+                cfg.window_height,
                 SWP_NOACTIVATE | SWP_NOZORDER);
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             SetWindowPos(
