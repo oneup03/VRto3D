@@ -871,7 +871,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             }
         }
 
-        // Place the Headset Window once on creation + one delayed retry.
+        // Place the Headset Window - Has to be done twice to fix render issues
         if (vr_window != NULL && !window_bounds_applied) {
             auto cfg = stereo_display_component_->GetConfig();
             ApplyDisplaySelectionToWindowConfig(cfg);
@@ -886,12 +886,10 @@ void MockControllerDeviceDriver::FocusUpdateThread()
                 nullptr,
                 cfg.window_x,
                 cfg.window_y,
-                cfg.window_width,
-                cfg.window_height,
+                cfg.window_width / 2,
+                cfg.window_height / 2,
                 SWP_NOACTIVATE | SWP_NOZORDER);
-
-                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
             SetWindowPos(
                 vr_window,
                 nullptr,
