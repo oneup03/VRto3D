@@ -23,7 +23,6 @@
 
 #include "vrto3dlib/win32_helper.hpp"
 #include "device_provider.h"
-#include "driverlog.h"
 
 //-----------------------------------------------------------------------------
 // Purpose: This is called by vrserver after it receives a pointer back from HmdDriverFactory.
@@ -43,7 +42,7 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
     // TrackedDeviceAdded returning true means we have had our device added to SteamVR.
     if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3D-1234", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
     {
-        DriverLog( "Failed to create hmd device!" );
+        LOG() << "Failed to create hmd device!";
         return vr::VRInitError_Driver_Unknown;
     }
 
@@ -99,7 +98,7 @@ void MyDeviceProvider::RunFrame()
             {
                 app_name_ = appName;
                 app_pid_ = vrEvent.data.process.pid;
-                DriverLog("AppName = %s\n", app_name_.c_str());
+                LOG() << "AppName = " << app_name_.c_str();
                 my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessConnected);
                 wait_count_ = 500;
             }
@@ -109,7 +108,7 @@ void MyDeviceProvider::RunFrame()
                   vrEvent.eventType == vr::VREvent_SceneAppPipeDisconnected) &&
                  !app_name_.empty() && vrEvent.data.process.pid == app_pid_ && wait_count_ == 0)
         {
-            DriverLog("Unload = %s\n", app_name_.c_str());
+            LOG() << "Unload = " << app_name_.c_str();
             my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessDisconnected);
             app_name_ = "";
             app_pid_ = 0;
