@@ -22,7 +22,6 @@
 #include "vrto3dlib/app_id_mgr.h"
 #include "vrto3dlib/overlay_mgr.h"
 #include "vrto3dlib/win32_helper.hpp"
-#include "driverlog.h"
 #include "vrmath.h"
 
 #include <string>
@@ -84,8 +83,8 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     vrs->GetString( stereo_main_settings_section, "version_number", version_number, sizeof( version_number ) );
     stereo_version_number_ = version_number;
 
-    DriverLog( "VRto3D Model Number: %s", stereo_model_number_.c_str() );
-    DriverLog( "VRto3D Serial Number: %s", stereo_serial_number_.c_str() );
+    LOG() << "VRto3D Model Number: " << stereo_model_number_.c_str();
+    LOG() << "VRto3D Serial Number: " << stereo_serial_number_.c_str();
 
     SwitchToXinpuGetStateEx();
 
@@ -103,18 +102,17 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 
     // Resolve display-index-driven window bounds from the active desktop layout
     const bool monitor_bounds_applied = ApplyDisplaySelectionToWindowConfig(display_configuration);
-    DriverLog("Pre-init window bounds before StereoDisplayComponent: resolved=%s display_index=%d bounds=(%d,%d %dx%d)",
-        monitor_bounds_applied ? "true" : "false",
-        display_configuration.display_index,
-        display_configuration.window_x,
-        display_configuration.window_y,
-        display_configuration.window_width,
-        display_configuration.window_height);
+    LOG()
+        << "Pre-init window bounds before StereoDisplayComponent: resolved="
+        << (monitor_bounds_applied ? "true" : "false")
+        << " display_index=" << display_configuration.display_index
+        << " bounds=(" << display_configuration.window_x << "," << display_configuration.window_y
+        << " " << display_configuration.window_width << "x" << display_configuration.window_height << ")";
 
     // Instantiate our display component
     stereo_display_component_ = std::make_unique< StereoDisplayComponent >( display_configuration );
 
-    DriverLog("Default Config Loaded\n");
+    LOG() << "Default Config Loaded";
 }
 
 
@@ -264,14 +262,14 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     if (!launch_script.empty() && launch_script_executed_.compare_exchange_strong(can_execute_launch_script, true))
     {
         std::thread([launch_script]() {
-            DriverLog("Executing launch_script: %s\n", launch_script.c_str());
+            LOG() << "Executing launch_script: " << launch_script.c_str();
             const std::string command = "cmd.exe /C " + launch_script;
             const int result = std::system(command.c_str());
             if (result == 0) {
-                DriverLog("launch_script completed successfully\n");
+                LOG() << "launch_script completed successfully";
             }
             else {
-                DriverLog("launch_script failed with exit code: %d\n", result);
+                LOG() << "launch_script failed with exit code: " << result;
             }
         }).detach();
     }
@@ -293,10 +291,10 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     // Set the thread priority
     if (!SetThreadPriority(thread_handle, THREAD_PRIORITY_HIGHEST)) {
         // Handle error if setting priority fails
-        DriverLog("Failed to set thread priority: %d\n", GetLastError());
+        LOG() << "Failed to set thread priority: " << GetLastError();
     }
 
-    DriverLog("Activation Complete\n");
+    LOG() << "Activation Complete";
 
     return vr::VRInitError_None;
 }
@@ -347,7 +345,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
-        DriverLog("WSAStartup failed: %d", iResult);
+        LOG() << "WSAStartup failed: " << iResult;
     }
     else {
         struct sockaddr_in local = {};
@@ -357,19 +355,19 @@ void MockControllerDeviceDriver::OpenTrackThread()
 
         socket_s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (socket_s == INVALID_SOCKET) {
-            DriverLog("Socket creation failed: %d", WSAGetLastError());
+            LOG() << "Socket creation failed: " << WSAGetLastError();
             WSACleanup();  // Cleanup only if socket creation fails
         }
         else {
             // Set non-blocking mode
             u_long nonblocking_enabled = 1;
             if (ioctlsocket(socket_s, FIONBIO, &nonblocking_enabled) == SOCKET_ERROR) {
-                DriverLog("Failed to set non-blocking mode: %d", WSAGetLastError());
+                LOG() << "Failed to set non-blocking mode: " << WSAGetLastError();
                 closesocket(socket_s);
                 WSACleanup();
             }
             else if (bind(socket_s, (struct sockaddr*)&local, sizeof(local)) == SOCKET_ERROR) {
-                DriverLog("Bind failed: %d", WSAGetLastError());
+                LOG() << "Bind failed: " << WSAGetLastError();
                 closesocket(socket_s);
                 WSACleanup();
             }
@@ -754,7 +752,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 if (JsonManager().LoadProfileFromJson(path, cfg)) {
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
-                    DriverLog("Loaded %s profile\n", path.c_str());
+                    LOG() << "Loaded " << path.c_str() << " profile";
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
                 }
@@ -878,12 +876,10 @@ void MockControllerDeviceDriver::FocusUpdateThread()
             auto cfg = stereo_display_component_->GetConfig();
             ApplyDisplaySelectionToWindowConfig(cfg);
 
-            DriverLog(
-                "Applying Headset Window placement to (%d,%d %ux%u)",
-                cfg.window_x,
-                cfg.window_y,
-                cfg.window_width,
-                cfg.window_height);
+            LOG()
+                << "Applying Headset Window placement to ("
+                << cfg.window_x << "," << cfg.window_y << " "
+                << cfg.window_width << "x" << cfg.window_height << ")";
 
             SetWindowPos(
                 vr_window,
@@ -894,7 +890,7 @@ void MockControllerDeviceDriver::FocusUpdateThread()
                 cfg.window_height,
                 SWP_NOACTIVATE | SWP_NOZORDER);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
             SetWindowPos(
                 vr_window,
@@ -1025,7 +1021,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
                         cfg_cal.depth = ad;
                         cfg_cal.convergence = ac;
                         stereo_display_component_->LoadSettings(cfg_cal);
-                        DriverLog("UE3D Calibrate: d=%.4f c=%.2f\n", ad, ac);
+                        LOG() << "UE3D Calibrate: d=" << ad << " c=" << ac;
                         app_updated_ = true;
                     }
                 }
@@ -1078,7 +1074,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         if (JsonManager().LoadProfileFromJson(app_name + "_config.json", config))
         {
             stereo_display_component_->LoadSettings(config);
-            DriverLog("Loaded %s profile\n", app_name.c_str());
+            LOG() << "Loaded " << app_name.c_str() << " profile";
             BeepSuccess();
             app_updated_ = true;
             if (config.auto_focus) {
@@ -1110,9 +1106,7 @@ void MockControllerDeviceDriver::SetAsync(bool enable)
     auto app_ids = AppIdMgr().GetSteamAppIDs();
     for (const std::string& app_id : app_ids) {
         vr::VRSettings()->SetBool(app_id.c_str(), vr::k_pch_SteamVR_DisableAsyncReprojection_Bool, !enable);
-        DriverLog("%s Async Reprojection for appkey: %s",
-            enable ? "Enabled" : "Disabled",
-            app_id.c_str());
+        LOG() << (enable ? "Enabled" : "Disabled") << " Async Reprojection for appkey: " << app_id.c_str();
     }
 }
 
@@ -1122,7 +1116,7 @@ void MockControllerDeviceDriver::SetAsync(bool enable)
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::EnterStandby()
 {
-    DriverLog( "HMD has been put into standby." );
+    LOG() << "HMD has been put into standby.";
 }
 
 //-----------------------------------------------------------------------------

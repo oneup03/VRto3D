@@ -98,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -123,7 +123,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -148,7 +148,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -173,7 +173,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\driverlog;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -204,9 +204,6 @@
   <ItemGroup>
     <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">
       <Project>{404cb76a-b1a8-456e-b805-bb3f9696947a}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\utils\driverlog\util_driverlog.vcxproj">
-      <Project>{89689a91-fb38-4893-ba67-3d6f45eb2712}</Project>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
