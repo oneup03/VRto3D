@@ -105,7 +105,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
 - Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Steam\config\vrto3d\` folder
 - Run SteamVR to verify that you see the Headset window covering your entire display. This is usually not needed before running games.
-    - The Headset window should appear on the configured `display_index` display. ***If you set this to a secondary display and your primary display is lower resolution than the 3D display, you may need to select the Headset Window and then press `Win + Shift + Left` followed by `Win + Shift + Right` to fix the 3D display***
+    - The Headset window should appear on the configured `display_index` display
     - Dismiss Headset Notice about `Enable Direct Display Mode` as this does nothing
 - Try launching a VR game
 - Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
@@ -276,7 +276,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 #### Troubleshooting
 - If SteamVR appears on the wrong display, set `display_index` to the correct display enumeration order and restart SteamVR
-- If using a secondary display for 3D and SteamVR appears weird, you may need to select the Headset Window and then press `Win + Shift + Left` followed by `Win + Shift + Right` to fix the 3D display
 - If SteamVR crashes and disables add-ons, you will need to re-enable VRto3D in the SteamVR Status window
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Steam\config\vrto3d\default_config.json`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them
