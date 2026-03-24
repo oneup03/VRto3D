@@ -52,6 +52,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | Field Name          | Type    | Description                                                                                 | Default Value  |
 |---------------------|---------|---------------------------------------------------------------------------------------------|----------------|
 | `display_index`     | `int`   | 3D display selection by display order (`0` = auto primary, `1` = first display, `2` = second, etc.) | `0`            |
+| `multi_display`     | `bool`  | Span 3D window across two displays, starting from display_index and moving to the right     | `false`        |
 | `render_width`      | `int`   | The width to render per eye                                                                 | `1920`         |
 | `render_height`     | `int`   | The height to render per eye                                                                | `1080`         |
 | `hmd_height` +      | `float` | The height/Z position origin of the simulated HMD                                           | `1.0`          |
