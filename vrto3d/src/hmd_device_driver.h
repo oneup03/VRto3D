@@ -131,6 +131,7 @@ private:
     std::mutex controller_pose_mutex_;
     vr::HmdQuaternion_t controller_rotation_ = { 1.0, 0.0, 0.0, 0.0 };
     std::array<double, 3> controller_pos_offset_ = { 0.0, 0.0, 0.0 };
+    std::atomic< double > xinput_pose_sample_time_seconds_ = 0.0;
 
     std::thread xinput_thread_;
     std::thread pose_thread_;
@@ -141,5 +142,6 @@ private:
 
     vr::HmdQuaternion_t open_track_att_;
     std::array<double, 3> open_track_pos_;
-    std::shared_mutex  trk_mutex_;
+    std::atomic< double > open_track_pose_sample_time_seconds_ = 0.0;
+    std::mutex trk_mutex_;
 };

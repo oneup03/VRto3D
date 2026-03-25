@@ -381,11 +381,17 @@ void MockControllerDeviceDriver::OpenTrackThread()
         auto bytes_read = recvfrom(socket_s, (char*)(&open_track), sizeof(open_track), 0, (sockaddr*)&from, &from_len);
 
         if (bytes_read > 0) {
-            std::unique_lock<std::shared_mutex> lock(trk_mutex_);
-            open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(-open_track.Yaw));
-            // Map Opentrack pose data to steam_vr coordinate system
-            open_track_pos_ = { -(open_track.X / 100.0f), -(open_track.Y / 100.0f), open_track.Z / 100.0f };
-            lock.unlock();
+            const auto sample_time = std::chrono::steady_clock::now();
+            {
+                std::lock_guard<std::mutex> lock(trk_mutex_);
+                open_track_att_ = HmdQuaternion_FromEulerAngles(DEG_TO_RAD(open_track.Roll), DEG_TO_RAD(open_track.Pitch), DEG_TO_RAD(-open_track.Yaw));
+                // Map Opentrack pose data to steam_vr coordinate system
+                open_track_pos_ = { -(open_track.X / 100.0f), -(open_track.Y / 100.0f), open_track.Z / 100.0f };
+            }
+
+            open_track_pose_sample_time_seconds_.store(
+                std::chrono::duration<double>(sample_time.time_since_epoch()).count(),
+                std::memory_order_relaxed);
         }
         else std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -466,6 +472,11 @@ void MockControllerDeviceDriver::XInputUpdateThread()
             controller_pos_offset_ = controller_pos_offset;
         }
 
+        const auto sample_time = std::chrono::steady_clock::now();
+        xinput_pose_sample_time_seconds_.store(
+            std::chrono::duration<double>(sample_time.time_since_epoch()).count(),
+            std::memory_order_relaxed);
+
         const auto elapsed = std::chrono::steady_clock::now() - loop_start;
         const auto xinput_period = std::chrono::milliseconds(8); // 125Hz
         if (elapsed < xinput_period)
@@ -481,26 +492,11 @@ void MockControllerDeviceDriver::XInputUpdateThread()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::PoseUpdateThread()
 {
-    vr::DriverPose_t last_pose = { 0 };
-    vr::HmdQuaternion_t last_rotation = HmdQuaternion_Identity;
-    std::array<float, 3> last_angular_velocity = { 0.0f, 0.0f, 0.0f };
-    bool has_previous_pose = false;
-
-    auto last_time = std::chrono::steady_clock::now();
-
     while (is_active_)
     {
         const auto loop_start = std::chrono::steady_clock::now();
-        float delta_time =
-            std::chrono::duration_cast<std::chrono::duration<float>>(loop_start - last_time).count();
-        last_time = loop_start;
-        if (delta_time < kMinDeltaTimeSeconds)
-        {
-            delta_time = kMinDeltaTimeSeconds;
-        }
-
+        double pose_sample_time = 0.0;
         const auto config = stereo_display_component_->GetConfig();
-
         vr::DriverPose_t pose = { 0 };
 
         // Monitor mode: static pose, skip VR tracking logic.
@@ -542,11 +538,12 @@ void MockControllerDeviceDriver::PoseUpdateThread()
             pose.vecPosition[2] = config.hmd_y;
             if (config.use_open_track)
             {
-                std::shared_lock<std::shared_mutex> lock(trk_mutex_);
+                std::lock_guard<std::mutex> lock(trk_mutex_);
                 pose.qRotation = HmdQuaternion_Normalize(final_controller_rotation * open_track_att_);
                 pose.vecPosition[0] += open_track_pos_[0];
                 pose.vecPosition[1] += open_track_pos_[1];
                 pose.vecPosition[2] += open_track_pos_[2];
+                pose_sample_time = open_track_pose_sample_time_seconds_.load(std::memory_order_relaxed);
             }
             else
             {
@@ -554,59 +551,12 @@ void MockControllerDeviceDriver::PoseUpdateThread()
                 pose.vecPosition[0] += controller_pos_offset[0];
                 pose.vecPosition[1] += controller_pos_offset[1];
                 pose.vecPosition[2] += controller_pos_offset[2];
+                pose_sample_time = xinput_pose_sample_time_seconds_.load(std::memory_order_relaxed);
+
                 if (pose.vecPosition[1] < config.hmd_height - 1.0)
                 {
                     pose.vecPosition[1] = config.hmd_height - 1.0;
                 }
-            }
-
-            if (has_previous_pose)
-            {
-                // Linear velocity
-                pose.vecVelocity[0] = (pose.vecPosition[0] - last_pose.vecPosition[0]) / delta_time;
-                pose.vecVelocity[1] = (pose.vecPosition[1] - last_pose.vecPosition[1]) / delta_time;
-                pose.vecVelocity[2] = (pose.vecPosition[2] - last_pose.vecPosition[2]) / delta_time;
-
-                // Angular velocity from quaternion delta (roll/pitch/yaw all included)
-                const vr::HmdQuaternion_t stable_rotation =
-                    HmdQuaternion_EnsureSignContinuity(pose.qRotation, last_rotation);
-                const std::array<float, 3> angular_velocity =
-                    HmdQuaternion_AngularVelocity(stable_rotation, last_rotation, delta_time, kSmallAngleEpsilon);
-                pose.vecAngularVelocity[0] = angular_velocity[0];
-                pose.vecAngularVelocity[1] = angular_velocity[1];
-                pose.vecAngularVelocity[2] = angular_velocity[2];
-
-                // Linear acceleration
-                pose.vecAcceleration[0] = (pose.vecVelocity[0] - last_pose.vecVelocity[0]) / delta_time;
-                pose.vecAcceleration[1] = (pose.vecVelocity[1] - last_pose.vecVelocity[1]) / delta_time;
-                pose.vecAcceleration[2] = (pose.vecVelocity[2] - last_pose.vecVelocity[2]) / delta_time;
-
-                // Angular acceleration
-                pose.vecAngularAcceleration[0] = (angular_velocity[0] - last_angular_velocity[0]) / delta_time;
-                pose.vecAngularAcceleration[1] = (angular_velocity[1] - last_angular_velocity[1]) / delta_time;
-                pose.vecAngularAcceleration[2] = (angular_velocity[2] - last_angular_velocity[2]) / delta_time;
-
-                last_rotation = stable_rotation;
-                last_angular_velocity = angular_velocity;
-            }
-            else
-            {
-                pose.vecVelocity[0] = 0.0;
-                pose.vecVelocity[1] = 0.0;
-                pose.vecVelocity[2] = 0.0;
-                pose.vecAngularVelocity[0] = 0.0;
-                pose.vecAngularVelocity[1] = 0.0;
-                pose.vecAngularVelocity[2] = 0.0;
-                pose.vecAcceleration[0] = 0.0;
-                pose.vecAcceleration[1] = 0.0;
-                pose.vecAcceleration[2] = 0.0;
-                pose.vecAngularAcceleration[0] = 0.0;
-                pose.vecAngularAcceleration[1] = 0.0;
-                pose.vecAngularAcceleration[2] = 0.0;
-
-                last_rotation = pose.qRotation;
-                last_angular_velocity = { 0.0f, 0.0f, 0.0f };
-                has_previous_pose = true;
             }
 
             pose.poseIsValid = true;
@@ -614,16 +564,24 @@ void MockControllerDeviceDriver::PoseUpdateThread()
             pose.result = vr::TrackingResult_Running_OK;
             pose.shouldApplyHeadModel = false;
             pose.willDriftInYaw = false;
-            pose.poseTimeOffset = 0;
+        }
+
+        if (pose_sample_time > 0.0)
+        {
+            const double pose_publish_time_seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            pose.poseTimeOffset = pose_sample_time - pose_publish_time_seconds;
+        }
+        else
+        {
+            pose.poseTimeOffset = 0.0;
         }
 
         // Update the pose
-        pose_mutex_.lock();
-        curr_pose_ = pose;
-        pose_mutex_.unlock();
-
-        // Update for next iteration
-        last_pose = pose;
+        {
+            std::lock_guard<std::mutex> lock(pose_mutex_);
+            curr_pose_ = pose;
+        }
 
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, pose, sizeof(vr::DriverPose_t));
 
