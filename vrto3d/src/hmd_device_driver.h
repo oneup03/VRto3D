@@ -55,7 +55,7 @@ public:
 
     // UE3D Monitor Mode
     void SetMonitorMode(bool enabled);
-    bool IsMonitorMode() const { return monitor_mode_.load(); }
+    bool IsMonitorMode();
 
     std::string CheckUserSettings();
     std::string CheckPositionInput();
