@@ -32,15 +32,14 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Reload the profile settings (ones with a `"+"`) from `default_config.json` with `Ctrl + Shift + F10` A beep will indicate success
 - Toggle locking the SteamVR Headset Window to the foreground and focusing the game window with `Ctrl + F8`
 - Adjust HMD position and yaw origin with `Ctrl + Home/End` for Y, `Ctrl + Delete/PageDown` for X, `Ctrl + Insert/PageUp` for Yaw, and `Ctrl + Shift + PageUp/PageDown` for Height
-    - Save `hmd_height, hmd_x, hmd_y, hmd_yaw` using `Ctrl + F9`
     - This is useful if you want to align the HMD to a lighthouse tracked position
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed)
 - Check the [User Presets](#user-presets) section for instructions on setting up your own Depth/Separation and Convergence presets and also reference the Configuration table below
-- `Ctrl -` / `Ctrl +` and `Ctrl [` / `Ctrl ]` are context-sensitive:
-    - If `use_track_filter` is `false`, they adjust `ctrl_sensitivity` and `pitch_radius` (legacy behavior)
-    - If `use_track_filter` is `true`, they adjust track filter rotation/translation sensitivity
-    - While `use_track_filter` is `true`, hold `Shift` with those same hotkeys to adjust track filter rotation/translation deadzones
-    - While `use_track_filter` is `true`, use `Ctrl + ;` / `Ctrl + '` to adjust track filter zoom smoothing, and hold `Shift` with those keys to adjust track filter max zoom range
+When Pitch/Yaw emulation is enabled (and use_track_filter is disabled), you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
+When `use_track_filter` is `true`:
+    - `Ctrl -` / `Ctrl +` and `Ctrl [` / `Ctrl ]` adjust track filter rotation/translation sensitivity, and also hold `Shift` to adjust track filter rotation/translation deadzones
+    - `Ctrl + ;` / `Ctrl + '` adjust track filter zoom smoothing, and also hold `Shift` to adjust track filter max zoom range
+- Save `hmd_height, hmd_x, hmd_y, hmd_yaw`, and all 6 Track Filter parameters using `Ctrl + F9`
 - Attempt to take a SbS Screenshot with `Ctrl + F12` (doesn't always work)
 
 
@@ -79,15 +78,15 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 | `display_frequency` | `float` | The display refresh rate per-eye, in Hz                                                     | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
-| `use_track_filter` +| `bool`  | Enables or disables Accela-Hamilton style pose filtering for tracking rotation and position | `false`        |
-| `track_filter_rotation_sensitivity` + | `float` | Rotation smoothing threshold for track filter (lower = more smoothing)       | `1.5`          |
-| `track_filter_translation_sensitivity` + | `float` | Position smoothing threshold for track filter (lower = more smoothing) | `1.0`          |
-| `track_filter_rotation_deadzone` + | `float` | Rotation deadzone used by track filter                                           | `0.03`         |
-| `track_filter_translation_deadzone` + | `float` | Position deadzone used by track filter                                           | `0.10`         |
-| `track_filter_zoom_smoothing` + | `float` | Additional rotation smoothing when moving toward the display (negative Z)          | `0.0`          |
-| `track_filter_max_zoom` + | `float` | Max Z distance used for scaling zoom smoothing                                          | `10.0`         |
 | `use_open_track`    | `bool`  | Enables or disables OpenTrack 3DoF HMD Control                                              | `false`        |
 | `open_track_port`   | `int`   | UDP Port for OpenTrack                                                                      | `4242`         |
+| `use_track_filter`  | `bool`  | Enables or disables Accela-Hamilton style pose filtering for tracking rotation and position | `false`        |
+| `trk_flt_rot_sens`  | `float` | Rotation smoothing threshold for track filter (lower = more smoothing)                      | `0.5`          |
+| `trk_flt_pos_sens`  | `float` | Position smoothing threshold for track filter (lower = more smoothing)                      | `0.25`          |
+| `trk_flt_rot_dz`    | `float` | Rotation deadzone used by track filter                                                      | `0.03`         |
+| `trk_flt_pos_dz`    | `float` | Position deadzone used by track filter                                                      | `0.02`         |
+| `trk_flt_zoom_smooth`| `float` | Additional rotation smoothing when moving toward the display                               | `0.0`          |
+| `trk_flt_max_zoom`  | `float` | Max Z distance used for scaling zoom smoothing                                              | `10.0`         |
 | `launch_script`     | `string`| Command executed once when VRto3D driver activates (`"start vertoxr://steamvr"`)            | `""`           |
 | `pose_reset_key` +  | `string`| The Virtual-Key Code to reset the HMD position and orientation                              | `"VK_NUMPAD7"` |
 | `ctrl_toggle_key` + | `string`| The Virtual-Key Code to toggle Pitch and Yaw emulation on/off when they are enabled         | `"XINPUT_GAMEPAD_RIGHT_THUMB"` |
@@ -245,8 +244,9 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Presets - Load Keys below
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place. Use the [Hotkeys](#hotkeys) to adjust this in-game
 - OpenTrack 3DoF support is available over UDP loopback at the configured `open_track_port` when `use_open_track` is true. It can be used in combination with Pitch/Yaw emulation
-- Track filtering can be enabled with `use_track_filter` and works on final `qRotation` and `vecPosition` pose data after control/OpenTrack composition
-    - This filter is useful for reducing jitter in 3DoF and emulated control paths while preserving responsiveness through sensitivity/deadzone tuning
+- Track filtering can be enabled with `use_track_filter` and works on final 6dof/3dof data.
+    - This filter is useful for reducing jitter while preserving responsiveness through sensitivity/deadzone tuning
+    - See the [Hotkeys](#hotkeys) section for how to adjust the filter
 
 #### User Presets
 - If you swap between different convergence settings in-game, sometimes you will end up with black bars on the sides of the screen or you may not see a change immediately. If you reload/restart/reinitialize the VR mod, you should see the change
