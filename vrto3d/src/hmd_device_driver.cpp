@@ -133,6 +133,10 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 
     stereo_display_component_->Init(device_index_);
 
+    if (!SetOpenXRRuntimeToSteamVR()) {
+        LOG() << "OpenXR ActiveRuntime switch to SteamVR failed. Continuing activation.";
+    }
+
     // A list of properties available is contained in vr::ETrackedDeviceProperty.
     auto* vrp = vr::VRProperties();
     auto* vrs = vr::VRSettings();

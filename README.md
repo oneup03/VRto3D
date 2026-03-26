@@ -107,7 +107,6 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - Install <a href="https://store.steampowered.com/app/250820/SteamVR/" target="_blank" rel="noopener noreferrer">SteamVR</a>
 - Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder from inside the VRto3D.zip to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window` upscaled to fullscreen
-- <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>
 - Close SteamVR
 - Edit the `Steam\config\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
     - Set `display_index` to your 3D display using display enumeration order (`1` = first enumerated display, `2` = second, etc). Leave it as `0` to auto-use the current primary display. Sometimes this glitches back to the wrong screen and you may have to restart SteamVR
