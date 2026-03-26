@@ -955,31 +955,29 @@ void MockControllerDeviceDriver::FocusUpdateThread()
 
         // Place the Headset Window - Has to be done twice to fix render issues
         if (vr_window != NULL && !window_bounds_applied) {
+            // Use per-monitor DPI awareness for accurate cross-monitor placement
+            auto prev_dpi_ctx = SetThreadDpiAwarenessContext(
+                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
             auto cfg = stereo_display_component_->GetConfig();
             ApplyDisplaySelectionToWindowConfig(cfg);
 
-            LOG()
-                << "Applying Headset Window placement to ("
+            LOG() << "Applying Headset Window placement to ("
                 << cfg.window_x << "," << cfg.window_y << " "
                 << cfg.window_width << "x" << cfg.window_height << ")";
 
-            SetWindowPos(
-                vr_window,
-                nullptr,
-                cfg.window_x,
-                cfg.window_y,
-                cfg.window_width / 2,
-                cfg.window_height,
-                SWP_NOACTIVATE | SWP_NOZORDER);
+            SetWindowPos(vr_window, HWND_TOP,
+                        cfg.window_x, cfg.window_y,
+                        cfg.window_width / 2, cfg.window_height,
+                        SWP_NOACTIVATE);
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            SetWindowPos(
-                vr_window,
-                nullptr,
-                cfg.window_x,
-                cfg.window_y,
-                cfg.window_width,
-                cfg.window_height,
-                SWP_NOACTIVATE | SWP_NOZORDER);
+            SetWindowPos(vr_window, HWND_TOP,
+                        cfg.window_x, cfg.window_y,
+                        cfg.window_width, cfg.window_height,
+                        SWP_NOACTIVATE);
+
+            // Restore thread DPI context
+            SetThreadDpiAwarenessContext(prev_dpi_ctx);
 
             window_bounds_applied = true;
         }
