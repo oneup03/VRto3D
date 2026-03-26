@@ -502,6 +502,12 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         // Monitor mode: static pose, skip VR tracking logic.
         if (stereo_display_component_->IsMonitorMode())
         {
+            if (track_filter_was_enabled_)
+            {
+                track_filter_.Reset();
+                track_filter_was_enabled_ = false;
+            }
+
             pose.qWorldFromDriverRotation = HmdQuaternion_Identity;
             pose.qDriverFromHeadRotation = HmdQuaternion_Identity;
             pose.qRotation = HmdQuaternion_Identity;
@@ -543,6 +549,28 @@ void MockControllerDeviceDriver::PoseUpdateThread()
                 pose.vecPosition[0] += open_track_pos_[0];
                 pose.vecPosition[1] += open_track_pos_[1];
                 pose.vecPosition[2] += open_track_pos_[2];
+
+                if (config.use_track_filter)
+                {
+                    double filtered_position[3] = {
+                        pose.vecPosition[0],
+                        pose.vecPosition[1],
+                        pose.vecPosition[2]
+                    };
+                    vr::HmdQuaternion_t filtered_rotation = pose.qRotation;
+                    track_filter_.FilterPose(filtered_rotation, filtered_position, config);
+                    pose.qRotation = filtered_rotation;
+                    pose.vecPosition[0] = filtered_position[0];
+                    pose.vecPosition[1] = filtered_position[1];
+                    pose.vecPosition[2] = filtered_position[2];
+                    track_filter_was_enabled_ = true;
+                }
+                else if (track_filter_was_enabled_)
+                {
+                    track_filter_.Reset();
+                    track_filter_was_enabled_ = false;
+                }
+
                 pose_sample_time = open_track_pose_sample_time_seconds_.load(std::memory_order_relaxed);
             }
             else
@@ -551,12 +579,34 @@ void MockControllerDeviceDriver::PoseUpdateThread()
                 pose.vecPosition[0] += controller_pos_offset[0];
                 pose.vecPosition[1] += controller_pos_offset[1];
                 pose.vecPosition[2] += controller_pos_offset[2];
-                pose_sample_time = xinput_pose_sample_time_seconds_.load(std::memory_order_relaxed);
+
+                if (config.use_track_filter)
+                {
+                    double filtered_position[3] = {
+                        pose.vecPosition[0],
+                        pose.vecPosition[1],
+                        pose.vecPosition[2]
+                    };
+                    vr::HmdQuaternion_t filtered_rotation = pose.qRotation;
+                    track_filter_.FilterPose(filtered_rotation, filtered_position, config);
+                    pose.qRotation = filtered_rotation;
+                    pose.vecPosition[0] = filtered_position[0];
+                    pose.vecPosition[1] = filtered_position[1];
+                    pose.vecPosition[2] = filtered_position[2];
+                    track_filter_was_enabled_ = true;
+                }
+                else if (track_filter_was_enabled_)
+                {
+                    track_filter_.Reset();
+                    track_filter_was_enabled_ = false;
+                }
 
                 if (pose.vecPosition[1] < config.hmd_height - 1.0)
                 {
                     pose.vecPosition[1] = config.hmd_height - 1.0;
                 }
+
+                pose_sample_time = xinput_pose_sample_time_seconds_.load(std::memory_order_relaxed);
             }
 
             pose.poseIsValid = true;
@@ -742,25 +792,122 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         else if (sleep.shot > 0) {
             --sleep.shot;
         }
-        // Ctrl+- Decrease Sensitivity
+        // Ctrl+- Decrease Sensitivity / Shift+Ctrl+- Decrease Filter Deadzone
         if (isCtrlDown() && isDown(VK_OEM_MINUS)) {
-            stereo_display_component_->AdjustSensitivity(-0.01f);
-            setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
+            const bool shift = isDown(VK_SHIFT);
+            if (cfg.use_track_filter) {
+                if (shift) {
+                    stereo_display_component_->AdjustTrackFilterRotationDeadzone(-0.001f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Rot DZ: ", cfg.track_filter_rotation_deadzone, 3));
+                }
+                else {
+                    stereo_display_component_->AdjustTrackFilterRotation(-0.01f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Filter Rot: ", cfg.track_filter_rotation_sensitivity, 2));
+                }
+            }
+            else {
+                stereo_display_component_->AdjustSensitivity(-0.01f);
+                cfg = stereo_display_component_->GetConfig();
+                setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
+            }
         }
-        // Ctrl++ Increase Sensitivity
+        // Ctrl++ Increase Sensitivity / Shift+Ctrl++ Increase Filter Deadzone
         else if (isCtrlDown() && isDown(VK_OEM_PLUS)) {
-            stereo_display_component_->AdjustSensitivity(0.01f);
-            setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
+            const bool shift = isDown(VK_SHIFT);
+            if (cfg.use_track_filter) {
+                if (shift) {
+                    stereo_display_component_->AdjustTrackFilterRotationDeadzone(0.001f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Rot DZ: ", cfg.track_filter_rotation_deadzone, 3));
+                }
+                else {
+                    stereo_display_component_->AdjustTrackFilterRotation(0.01f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Filter Rot: ", cfg.track_filter_rotation_sensitivity, 2));
+                }
+            }
+            else {
+                stereo_display_component_->AdjustSensitivity(0.01f);
+                cfg = stereo_display_component_->GetConfig();
+                setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
+            }
         }
-        // Ctrl+[ Decrease Pitch Radius
+        // Ctrl+[ Decrease Pitch Radius / Shift+Ctrl+[ Decrease Filter Position Deadzone
         if (isCtrlDown() && isDown(VK_OEM_4)) {
-            stereo_display_component_->AdjustRadius(-0.01f);
-            setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
+            const bool shift = isDown(VK_SHIFT);
+            if (cfg.use_track_filter) {
+                if (shift) {
+                    stereo_display_component_->AdjustTrackFilterTranslationDeadzone(-0.001f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Pos DZ: ", cfg.track_filter_translation_deadzone, 3));
+                }
+                else {
+                    stereo_display_component_->AdjustTrackFilterTranslation(-0.01f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Filter Pos: ", cfg.track_filter_translation_sensitivity, 2));
+                }
+            }
+            else {
+                stereo_display_component_->AdjustRadius(-0.01f);
+                cfg = stereo_display_component_->GetConfig();
+                setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
+            }
         }
-        // Ctrl+] Increase Pitch Radius
+        // Ctrl+] Increase Pitch Radius / Shift+Ctrl+] Increase Filter Position Deadzone
         else if (isCtrlDown() && isDown(VK_OEM_6)) {
-            stereo_display_component_->AdjustRadius(0.01f);
-            setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
+            const bool shift = isDown(VK_SHIFT);
+            if (cfg.use_track_filter) {
+                if (shift) {
+                    stereo_display_component_->AdjustTrackFilterTranslationDeadzone(0.001f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Pos DZ: ", cfg.track_filter_translation_deadzone, 3));
+                }
+                else {
+                    stereo_display_component_->AdjustTrackFilterTranslation(0.01f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Filter Pos: ", cfg.track_filter_translation_sensitivity, 2));
+                }
+            }
+            else {
+                stereo_display_component_->AdjustRadius(0.01f);
+                cfg = stereo_display_component_->GetConfig();
+                setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
+            }
+        }
+
+        // Ctrl+; Decrease Filter Zoom Smoothing / Shift+Ctrl+; Decrease Filter Max Zoom
+        if (isCtrlDown() && isDown(VK_OEM_1)) {
+            const bool shift = isDown(VK_SHIFT);
+            if (cfg.use_track_filter) {
+                if (shift) {
+                    stereo_display_component_->AdjustTrackFilterMaxZoom(-0.1f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Max Zoom: ", cfg.track_filter_max_zoom, 2));
+                }
+                else {
+                    stereo_display_component_->AdjustTrackFilterZoomSmoothing(-0.05f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Zoom Smooth: ", cfg.track_filter_zoom_smoothing, 2));
+                }
+            }
+        }
+        // Ctrl+' Increase Filter Zoom Smoothing / Shift+Ctrl+' Increase Filter Max Zoom
+        else if (isCtrlDown() && isDown(VK_OEM_7)) {
+            const bool shift = isDown(VK_SHIFT);
+            if (cfg.use_track_filter) {
+                if (shift) {
+                    stereo_display_component_->AdjustTrackFilterMaxZoom(0.1f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Max Zoom: ", cfg.track_filter_max_zoom, 2));
+                }
+                else {
+                    stereo_display_component_->AdjustTrackFilterZoomSmoothing(0.05f);
+                    cfg = stereo_display_component_->GetConfig();
+                    setOverlay(fmt("Track Zoom Smooth: ", cfg.track_filter_zoom_smoothing, 2));
+                }
+            }
         }
 
         // Check User binds
@@ -1529,6 +1676,108 @@ void StereoDisplayComponent::AdjustRadius(float delta)
         config_.pitch_radius += delta;
         if (config_.pitch_radius < 0.0f)
             config_.pitch_radius = 0.0f;
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust Track Filter rotation sensitivity
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustTrackFilterRotation(float delta)
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    if (config_.use_track_filter)
+    {
+        config_.track_filter_rotation_sensitivity += delta;
+        config_.track_filter_rotation_sensitivity = std::clamp(
+            config_.track_filter_rotation_sensitivity,
+            0.05f,
+            2.5f);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust Track Filter translation sensitivity
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustTrackFilterTranslation(float delta)
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    if (config_.use_track_filter)
+    {
+        config_.track_filter_translation_sensitivity += delta;
+        config_.track_filter_translation_sensitivity = std::clamp(
+            config_.track_filter_translation_sensitivity,
+            0.05f,
+            1.5f);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust Track Filter rotation deadzone
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustTrackFilterRotationDeadzone(float delta)
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    if (config_.use_track_filter)
+    {
+        config_.track_filter_rotation_deadzone += delta;
+        config_.track_filter_rotation_deadzone = std::clamp(
+            config_.track_filter_rotation_deadzone,
+            0.0f,
+            0.2f);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust Track Filter translation deadzone
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustTrackFilterTranslationDeadzone(float delta)
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    if (config_.use_track_filter)
+    {
+        config_.track_filter_translation_deadzone += delta;
+        config_.track_filter_translation_deadzone = std::clamp(
+            config_.track_filter_translation_deadzone,
+            0.0f,
+            1.0f);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust Track Filter zoom smoothing
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustTrackFilterZoomSmoothing(float delta)
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    if (config_.use_track_filter)
+    {
+        config_.track_filter_zoom_smoothing += delta;
+        config_.track_filter_zoom_smoothing = std::clamp(
+            config_.track_filter_zoom_smoothing,
+            0.0f,
+            10.0f);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Adjust Track Filter max zoom range
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::AdjustTrackFilterMaxZoom(float delta)
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    if (config_.use_track_filter)
+    {
+        config_.track_filter_max_zoom += delta;
+        config_.track_filter_max_zoom = std::clamp(
+            config_.track_filter_max_zoom,
+            0.1f,
+            30.0f);
     }
 }
 

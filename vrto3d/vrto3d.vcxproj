@@ -200,6 +200,7 @@
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
     <ClInclude Include="src\device_provider.h" />
+    <ClInclude Include="..\utils\filter-accela-hamilton\accela_hamilton_runtime.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">

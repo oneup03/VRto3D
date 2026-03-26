@@ -22,6 +22,7 @@
 #include <shared_mutex>
 #include <string>
 
+#include "../../utils/filter-accela-hamilton/accela_hamilton_runtime.h"
 #include "vrto3dlib/json_manager.h"
 #include "vrto3dlib/uevr_receiver.hpp"
 
@@ -60,6 +61,12 @@ public:
     std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
     void AdjustRadius(float delta);
+    void AdjustTrackFilterRotation(float delta);
+    void AdjustTrackFilterTranslation(float delta);
+    void AdjustTrackFilterRotationDeadzone(float delta);
+    void AdjustTrackFilterTranslationDeadzone(float delta);
+    void AdjustTrackFilterZoomSmoothing(float delta);
+    void AdjustTrackFilterMaxZoom(float delta);
     void SetReset();
     void LoadSettings(StereoDisplayDriverConfiguration& config);
     void ResetProjection();
@@ -144,4 +151,7 @@ private:
     std::array<double, 3> open_track_pos_;
     std::atomic< double > open_track_pose_sample_time_seconds_ = 0.0;
     std::mutex trk_mutex_;
+
+    AccelaHamiltonRuntimeFilter track_filter_;
+    bool track_filter_was_enabled_ = false;
 };
