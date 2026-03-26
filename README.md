@@ -35,8 +35,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - This is useful if you want to align the HMD to a lighthouse tracked position
 - Check the [Controls](#controls) section and the Configuration table below to setup HMD camera controls for VR games (check the compatibility list to see if they are needed)
 - Check the [User Presets](#user-presets) section for instructions on setting up your own Depth/Separation and Convergence presets and also reference the Configuration table below
-When Pitch/Yaw emulation is enabled (and use_track_filter is disabled), you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
-When `use_track_filter` is `true`:
+- When Pitch/Yaw emulation is enabled (and use_track_filter is disabled), you can adjust the ctrl_sensitivity with `Ctrl -` and `Ctrl +` and the pitch_radius with `Ctrl [` and `Ctrl ]`
+- When `use_track_filter` is `true`:
     - `Ctrl -` / `Ctrl +` and `Ctrl [` / `Ctrl ]` adjust track filter rotation/translation sensitivity, and also hold `Shift` to adjust track filter rotation/translation deadzones
     - `Ctrl + ;` / `Ctrl + '` adjust track filter zoom smoothing, and also hold `Shift` to adjust track filter max zoom range
 - Save `hmd_height, hmd_x, hmd_y, hmd_yaw`, and all 6 Track Filter parameters using `Ctrl + F9`
