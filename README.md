@@ -12,9 +12,9 @@
 ## Compatible 3D Displays
 - 3D TVs & Projectors - work great, use [Base Installation](#base-installation) in SbS/TaB mode or potentially [Frame Packing](#framepacking-hdmi-3d-only-if-you-need-this-output-format) instructions
 - Passive/Interlaced 3D displays - work great, use [Interlaced](#interlaced-checkerboard-and-anaglyph-installation-only-if-you-need-this-output-format) instructions
-- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, use [Base Installation](#base-installation) instructions. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended. VertoXR can be used for 3DoF Head Tracking
+- AR Glasses (Rokid, Xreal, Viture, RayNeo) - work great, use [AR Glasses](#ar-glasses-only-if-you-need-this-output-format) instructions. If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended. VertoXR can be used for 6DoF or 3DoF Head Tracking
 - Lume Pad - works great, use [Base Installation](#base-installation) instructions, requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a>
-- SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, use [SR Displays](#sr-simulated-reality-displays-only-if-you-need-this-output-format) instructions
+- SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - work great, use [SR Displays](#sr-simulated-reality-displays-only-if-you-need-this-output-format) instructions. SR-OpenTrack-Bridge can be used for 6DoF or 3DoF Head Tracking
 - 3D Vision/Frame Sequential - use [WibbleWobbleVR](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0) instead
 - Virtual Desktop with a VR headset - works with [additional setup](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop)
  
@@ -78,7 +78,7 @@ When `use_track_filter` is `true`:
 | `display_frequency` | `float` | The display refresh rate per-eye, in Hz                                                     | `60.0`         |
 | `pitch_enable` +    | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                       | `false`        |
 | `yaw_enable` +      | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                         | `false`        |
-| `use_open_track`    | `bool`  | Enables or disables OpenTrack 3DoF HMD Control                                              | `false`        |
+| `use_open_track`    | `bool`  | Enables or disables OpenTrack 6DoF HMD Control                                              | `false`        |
 | `open_track_port`   | `int`   | UDP Port for OpenTrack                                                                      | `4242`         |
 | `use_track_filter`  | `bool`  | Enables or disables Accela-Hamilton style pose filtering for tracking rotation and position | `false`        |
 | `trk_flt_rot_sens`  | `float` | Rotation smoothing threshold for track filter (lower = more smoothing)                      | `0.5`          |
@@ -151,7 +151,7 @@ When `use_track_filter` is `true`:
     - Don't touch `Perspective Slider`
 - Enable ReShade's `Performance Mode` checkbox
 - Once configuration is complete, you can run everything the same way as the Base Installation
-- If settings don't save, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
+- If ReShade settings don't save and you keep getting prompted for the tutorial, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
 
 
 ## FramePacking, HDMI 3D (only if you need this output format)
@@ -200,8 +200,31 @@ When `use_track_filter` is `true`:
 - Click on the `Home` tab
     - Enable ReShade's `Performance Mode` checkbox
 - Once configuration is complete, you can run everything the same way as the Base Installation
-- If settings don't save, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
+- If ReShade settings don't save and you keep getting prompted for the tutorial, you may have to manually edit `Steam\steamapps\common\SteamVR\bin\win64\ReShade.ini` and disable Tutorial with `TutorialProgress=4`
 - If you experience a super dark screen, try enabling a random ReShade shader
+- Optional: Setup 6DoF or 3DoF Head Tracking
+    - Download <a href="https://github.com/effcol/Simulated-Reality-OpenTrack-Bridge/releases/latest" target="_blank" rel="noopener noreferrer">SR-OpenTrack-Bridge</a> for 6DoF or 3DoF Head Tracking
+    - Save it to somewhere with a short path without spaces like `C:/Apps/SRTrack/`
+    - In `Steam\config\vrto3d\default_config.json` set these settings
+        - Set `use_open_track` to `true` and ensure `open_track_port` is set to `4242`
+        - Set `use_track_filter` to `true`
+        - Set `launch_script` to `"start C:/Apps/SRTrack/Simulated_Reality_OpenTrack_Bridge.exe"` and tracking will be auto started every time you start SteamVR
+    - Start SteamVR and SR-OpenTrack-Bridge should start also
+    - Configure the settings in the SR-OpenTrack-Bridge window to tune the tracker alongside adjusting the VRto3D track filter using the [Hotkeys](#hotkeys)
+    - Either the `Yaw/Pitch only` or `XYZ + Yaw/Pitch` modes are recommended
+
+
+## AR Glasses (only if you need this output format)
+- Connect AR glasses, switch to Full-SbS mode
+- Complete the [Base Installation](#base-installation) section
+- Optional: install <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> to provide 6DoF or 3DoF Head Tracking for popular AR glasses
+    - Open VertoXR, connect to the AR glasses
+    - Select `Game Mode`, place glasses on a flat surface looking straight ahead, and click `Start Calibrate`. Calibration may need to be redone if misalignment occurs
+    - Edit `OpenTrack Configuration` and disable `Enable Roll` if needed
+    - `Start` the OpenTrack VertoXR plugin
+    - In `Steam\config\vrto3d\default_config.json` set these settings:
+        - Set `use_open_track` to `true` and ensure `open_track_port` matches the VertoXR OpenTrack port
+        - Set `launch_script` to `"start vertoxr://steamvr"` and VertoXR will be auto started with Open Track active every time you start SteamVR
 
 
 ## Frame Sequential (3DVision)
@@ -226,14 +249,6 @@ When `use_track_filter` is `true`:
     - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
 - This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is only HMD pitch & yaw emulation and no VR controller emulation
-- <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> can be paired with VRto3D to provide 3DoF Head Tracking for popular AR glasses
-    - Connect AR glasses, switch to Full-SbS mode, and set `display_index` to the glasses' display enumeration order
-    - Open VertoXR, connect to the AR glasses
-    - Select `Game Mode`, place glasses on a flat surface looking straight ahead, and click `Start Calibrate`. Calibration may need to be redone if misalignment occurs
-    - Edit `OpenTrack Configuration` and disable `Enable Roll` if needed
-    - `Start` the OpenTrack VertoXR plugin
-    - Set `use_open_track` to true and ensure `open_track_port` matches the VertoXR OpenTrack port in `default_config.json`
-    - Once everything is setup, you can set `launch_script` to `"start vertoxr://steamvr"` and VertoXR will be auto started with Open Track active every time you start SteamVR
 - You can setup a Lighthouse + Vive Tracker + tracked controllers with VRto3D for a seated play area. See [this guide](https://oneup03.github.io/VRto3D/wiki/Motion-Controls-&-Tracking) for details
 - Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
 - Optional HMD `pitch_enable` and `yaw_enable` emulation can be turned on to help with games or mods that need it (maps to XInput right stick)
@@ -243,8 +258,11 @@ When `use_track_filter` is `true`:
     - The `pose_reset_key` can be set to allow resetting the view to the original position and orientation
     - Both of these keys can be set to XInput buttons & combinations or single keyboard/mouse keys as outlined in User Presets - Load Keys below
     - The `pitch_radius` can be set to make the pitch emulation move along a semicircle instead of just tilting up/down in place. Use the [Hotkeys](#hotkeys) to adjust this in-game
-- OpenTrack 3DoF support is available over UDP loopback at the configured `open_track_port` when `use_open_track` is true. It can be used in combination with Pitch/Yaw emulation
-- Track filtering can be enabled with `use_track_filter` and works on final 6dof/3dof data.
+- OpenTrack 6DoF or 3DoF support is available over UDP loopback at the configured `open_track_port` when `use_open_track` is true
+    - It can be used in combination with Pitch/Yaw emulation and HMD offsets
+    - Both AR glasses and SR displays are compatible via 3rd party apps mentioned above
+    - You can also use the <a href="https://github.com/opentrack/opentrack" target="_blank" rel="noopener noreferrer">OpenTrack</a> app to do tracking with cameras, IMUs, phone apps, etc
+- Track filtering of 6DoF/3DoF input can be enabled with `use_track_filter`
     - This filter is useful for reducing jitter while preserving responsiveness through sensitivity/deadzone tuning
     - See the [Hotkeys](#hotkeys) section for how to adjust the filter
 
