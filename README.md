@@ -110,7 +110,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 - <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>
 - Close SteamVR
 - Edit the `Steam\config\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
-    - Set `display_index` to your 3D display using display enumeration order (`1` = first enumerated display, `2` = second, etc). Leave it as `0` to auto-use the current primary display
+    - Set `display_index` to your 3D display using display enumeration order (`1` = first enumerated display, `2` = second, etc). Leave it as `0` to auto-use the current primary display. Sometimes this glitches back to the wrong screen and you may have to restart SteamVR
     - Set your render resolution per eye to what you want - can save some performance by reducing this. If your display is half-SbS or half-TaB, then you can try setting this to that half-resolution
     - Configure any `Virtual-Key Code` settings to use keys that you want (especially `user_load_keys` settings as these load a defined depth+convergence preset)
 - Download the latest [VRto3D profiles](https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip) for games and extract them to your `Steam\config\vrto3d\` folder
