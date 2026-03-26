@@ -1077,20 +1077,6 @@ void MockControllerDeviceDriver::AutoDepthThread() {
                 ue3d_on_top_ = true;
             }
 
-            // Overlay IPD from UEVR stereo depth hint
-            const float hint = rx.get_stereo_depth_hint();
-            if (std::isfinite(hint) && hint > 0.001f && hint < 2.0f)
-            {
-                if (std::abs(hint - last_hint_ipd) > 0.0001f)
-                {
-                    vr::PropertyContainerHandle_t container =
-                        vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
-                    vr::VRProperties()->SetFloatProperty(
-                        container, vr::Prop_UserIpdMeters_Float, hint);
-                    last_hint_ipd = hint;
-                }
-            }
-
             // Depth commands from UEVR (Calibrate, VRto3D++/+/-/--)
             uint8_t depth_cmd = rx.get_depth_request();
             if (depth_cmd >= 2 && depth_cmd <= 6) {
