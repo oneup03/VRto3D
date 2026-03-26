@@ -22,7 +22,7 @@
 #include <shared_mutex>
 #include <string>
 
-#include "../../utils/filter-accela-hamilton/accela_hamilton_runtime.h"
+#include "accela_hamilton_runtime.h"
 #include "vrto3dlib/json_manager.h"
 #include "vrto3dlib/uevr_receiver.hpp"
 
