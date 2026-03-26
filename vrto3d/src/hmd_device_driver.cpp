@@ -1223,36 +1223,27 @@ void MockControllerDeviceDriver::Deactivate()
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
     : config_( config ), depth_(config.depth), convergence_(config.convergence), fov_(config.fov)
-{
-}
+{}
 
 
 //-----------------------------------------------------------------------------
 // Purpose: Initialize the Stereo Display Component
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::Init(uint32_t device_index) {
+void StereoDisplayComponent::Init(uint32_t device_index) 
+{
     device_index_ = device_index;
-
-
-
 }
 
 
 //-----------------------------------------------------------------------------
 // Purpose: To inform vrcompositor if this display is considered an on-desktop display.
 //-----------------------------------------------------------------------------
-bool StereoDisplayComponent::IsDisplayOnDesktop()
-{
-    return false;
-}
+bool StereoDisplayComponent::IsDisplayOnDesktop() { return false; }
 
 //-----------------------------------------------------------------------------
 // Purpose: To as vrcompositor to search for this display.
 //-----------------------------------------------------------------------------
-bool StereoDisplayComponent::IsDisplayRealDisplay()
-{
-    return false;
-}
+bool StereoDisplayComponent::IsDisplayRealDisplay() { return false; }
 
 //-----------------------------------------------------------------------------
 // Purpose: To inform the rest of the vr system what the recommended target size should be
@@ -1374,9 +1365,7 @@ vr::DistortionCoordinates_t StereoDisplayComponent::ComputeDistortion( vr::EVREy
     return coordinates;
 }
 bool StereoDisplayComponent::ComputeInverseDistortion(vr::HmdVector2_t* pResult, vr::EVREye eEye, uint32_t unChannel, float fU, float fV)
-{
-    return false;
-}
+{ return false; }
 
 //-----------------------------------------------------------------------------
 // Purpose: To inform vrcompositor what the window bounds for this virtual HMD are.
@@ -1777,4 +1766,13 @@ void StereoDisplayComponent::SetMonitorMode(bool enabled) {
     if (enabled && !was_monitor) {
         ResetProjection();
     }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Get Monitor Mode Status
+//-----------------------------------------------------------------------------
+bool StereoDisplayComponent::IsMonitorMode()
+{
+    return monitor_mode_.load();
 }
