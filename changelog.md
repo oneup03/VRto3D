@@ -3,7 +3,7 @@
 ## V4.0.2 (V4.0.2) - 2026-02-27T17:15:07Z
 
 - ***VRto3D PROFILES LOCATION HAS MOVED to `Steam/config/vrto3d/` due to Windows restrictions***
-- [VertoXR](https://vertoxr.com/) integration for 3DoF tracking on AR glasses
+- [VertoXR](https://vertoxr.com/) integration for 3DoF tracking on AR glasses - Thanks Rohit Sangwan!
 - [WibbleWobbleVR](https://github.com/oneup03/VRto3D/wiki/WibbleWobbleVR3.0) now has all the essential VRto3D features integrated and should be used instead of VRto3D + WibbleWobbleReshade. 3DVision hardware is natively supported on any driver
 - Settings changes:
     - `display_index` added to specify a display number that matches Windows' display setting numbering or `0` to use the primary. This will automatically move VRto3D to any display and set the window size to match that desktop resolution. ***If you set this to a secondary display and your primary display is lower resolution than the 3D display, you may need to select the Headset Window and then press `Win + Shift + Left` followed by `Win + Shift + Right` to fix the 3D display***
