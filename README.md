@@ -211,7 +211,7 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
     - Start SteamVR and SR-OpenTrack-Bridge should start also
     - Configure the settings in the SR-OpenTrack-Bridge window to tune the tracker alongside adjusting the VRto3D track filter using the [Hotkeys](#hotkeys)
     - Either the `Yaw/Pitch only` or `XYZ + Yaw/Pitch` modes are recommended
-    - Lock the SR-OpenTrack-Bridge with `Ctrl + L` to avoid unwanted changes later
+    - Lock the SR-OpenTrack-Bridge settings with `Ctrl + L` to avoid unwanted changes later
     - Alt + Tab to the SR-OpenTrack-Bridge window and press `Ctrl + X` to recenter tracking
 
 

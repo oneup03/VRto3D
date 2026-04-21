@@ -4,12 +4,13 @@
     {
       "label": "Init git submodules",
       "type": "shell",
-      "command": "git",
+      "command": "powershell",
       "args": [
-        "submodule",
-        "update",
-        "--init",
-        "--recursive"
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\init-submodules.ps1"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
