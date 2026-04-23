@@ -18,18 +18,17 @@ jobs:
     runs-on: windows-2022
     steps:
 
-    - name: Clone repo and submodule
-      run: |
-        git clone https://github.com/${{github.repository}}.git .
-        git checkout $env:GITHUB_REF_NAME
-        git submodule update --init --recursive
-
+    - name: Checkout repo and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
 
     - name: Get current date, commit hash and count
       run: |
         echo "CurrentDate=$(date +'%Y-%m-%d')" >> $env:GITHUB_ENV
         echo "CommitHashShort=$(git rev-parse --short=7 HEAD)" >> $env:GITHUB_ENV
-        echo "CommitCount=$(git rev-list --count $env:GITHUB_REF_NAME)" >> $env:GITHUB_ENV
+        echo "CommitCount=$(git rev-list --count HEAD)" >> $env:GITHUB_ENV
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
