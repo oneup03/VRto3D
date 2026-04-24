@@ -65,6 +65,7 @@ jobs:
         done
 
     - name: Commit changelog.md if changed
+      id: commit
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -73,6 +74,14 @@ jobs:
           git add changelog.md
           git commit -m "Auto-update changelog.md from GitHub releases"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
         else
           echo "No changes in changelog.md. Skipping commit."
+          echo "changed=false" >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Trigger Build workflow
+      if: steps.commit.outputs.changed == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: gh workflow run Build.yml --ref "${{ github.ref_name }}"
