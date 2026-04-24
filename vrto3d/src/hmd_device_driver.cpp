@@ -970,11 +970,19 @@ void MockControllerDeviceDriver::FocusUpdateThread()
                 << cfg.window_x << "," << cfg.window_y << " "
                 << cfg.window_width << "x" << cfg.window_height << ")";
 
-            SetWindowPos(vr_window, HWND_TOP,
-                        cfg.window_x, cfg.window_y,
-                        cfg.window_width / 2, cfg.window_height,
-                        SWP_NOACTIVATE);
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            // Half-width first pass nudges DWM to commit to the target monitor
+            // but creates an intermediate swapchain size that ReShade latches
+            // onto. Only run it when the target isn't the primary display at
+            // (0,0) — that's when the nudge is actually needed.
+            const bool needs_nudge = cfg.multi_display
+                || cfg.window_x != 0 || cfg.window_y != 0;
+            if (needs_nudge) {
+                SetWindowPos(vr_window, HWND_TOP,
+                            cfg.window_x, cfg.window_y,
+                            cfg.window_width / 2, cfg.window_height,
+                            SWP_NOACTIVATE);
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
             SetWindowPos(vr_window, HWND_TOP,
                         cfg.window_x, cfg.window_y,
                         cfg.window_width, cfg.window_height,
