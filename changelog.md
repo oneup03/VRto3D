@@ -1,5 +1,31 @@
 # Changelog
 
+## V4.1.0 (V4.1.0) - 2026-04-23T23:59:45Z
+
+- Fix display_index initialization issues
+- Rewrite pose tracking for OpenTrack 6DoF
+- Integrate [UE3D](https://github.com/evilkermitreturns/UEVR/tree/ue3d-monitor-mode), including auto_focus - thanks Midlife Crisis!
+- 6DoF tracking on SR Displays via [SR-OpenTrack-Bridge](https://github.com/effcol/Simulated-Reality-OpenTrack-Bridge/releases/latest) - thanks Midlife Crisis & Eff!
+- 6DoF tracking on AR Glasses via [VertoXR](https://vertoxr.com/) - thanks Rohit Sangwan!
+- Moved logging to `Steam/logs/vrto3d.txt`
+- Add Accela-Hamilton filter for pose updates
+- New `Steam\config\vrto3d\default_config.json` settings:
+    - `multi_display` - used to extend the SbS 3D window across multiple displays
+    - `use_track_filter` - enable/disable track filtering using Accela-Hamilton
+    - `trk_flt_rot_sens` - Rotation smoothing threshold for track filter (lower = more smoothing)
+    - `trk_flt_pos_sens` - Position smoothing threshold for track filter (lower = more smoothing)
+    - `trk_flt_rot_dz` - Rotation deadzone used by track filter
+    - `trk_flt_pos_dz` - Position deadzone used by track filter
+    - `trk_flt_zoom_smooth` - Additional rotation smoothing when moving toward the display
+    - `trk_flt_max_zoom` - Max Z distance used for scaling zoom smoothing
+- New Hotkeys when `use_track_filter` is `true`:
+    - `Ctrl -` / `Ctrl +` and `Ctrl [` / `Ctrl ]` adjust track filter rotation/translation sensitivity, and also hold `Shift` to adjust track filter rotation/translation deadzones
+    - `Ctrl + ;` / `Ctrl + '` adjust track filter zoom smoothing, and also hold `Shift` to adjust track filter max zoom range
+    - Save `hmd_height, hmd_x, hmd_y, hmd_yaw`, and all 6 Track Filter parameters using `Ctrl + F9`
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V4.0.2...V4.1.0
+
+
 ## V4.0.2 (V4.0.2) - 2026-02-27T17:15:07Z
 
 - ***VRto3D PROFILES LOCATION HAS MOVED to `Steam/config/vrto3d/` due to Windows restrictions***
