@@ -1,6 +1,6 @@
 # Changelog
 
-## V4.1.0 (V4.1.0) - 2026-04-23T23:59:45Z
+## V4.1.0 (V4.1.0) - 2026-04-24T01:00:10Z
 
 - Fix display_index initialization issues
 - Rewrite pose tracking for OpenTrack 6DoF
