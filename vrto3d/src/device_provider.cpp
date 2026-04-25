@@ -39,12 +39,28 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
     // First, initialize our hmd, which we'll later pass OpenVR a pointer to.
     my_hmd_device_ = std::make_unique< MockControllerDeviceDriver >();
 
+    static const char kSerialNumber[] = "VRto3D-1234";
+
     // TrackedDeviceAdded returning true means we have had our device added to SteamVR.
-    if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3D-1234", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
+    if (!vr::VRServerDriverHost()->TrackedDeviceAdded(kSerialNumber, vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
     {
         LOG() << "Failed to create hmd device!";
         return vr::VRInitError_Driver_Unknown;
     }
+
+    // Register the SAME object with the SAME serial number as a DisplayRedirect
+    // device too. This is how SteamVR wires IVRVirtualDisplay::Present — the
+    // compositor only routes composited frames through the DR class when it
+    // finds a DR sibling that shares the active HMD's serial. Two separate
+    // objects with different serials do not work (see WibbleWobbleVR for the
+    // working reference pattern).
+    // SteamVR returns false here because the serial is already registered,
+    // but the DisplayRedirect class binding still takes effect — frames will
+    // route through IVRVirtualDisplay::Present. Don't treat the false return
+    // as an error.
+    vr::VRServerDriverHost()->TrackedDeviceAdded(kSerialNumber,
+                                                 vr::TrackedDeviceClass_DisplayRedirect,
+                                                 my_hmd_device_.get());
 
     return vr::VRInitError_None;
 }

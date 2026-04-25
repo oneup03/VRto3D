@@ -98,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -106,7 +106,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>openvr_api.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>
@@ -123,7 +123,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -133,7 +133,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>openvr_api.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>
@@ -148,14 +148,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>openvr_api.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -173,7 +173,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -182,7 +182,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>openvr_api.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -196,10 +196,23 @@
     <ClCompile Include="src\hmd_device_driver.cpp" />
     <ClCompile Include="src\device_provider.cpp" />
     <ClCompile Include="src\hmd_driver_factory.cpp" />
+    <ClCompile Include="src\dx11_renderer.cpp" />
+    <ClCompile Include="src\platform\platform_win32.cpp" />
+    <ClCompile Include="src\presenter\presenter_factory.cpp" />
+    <ClCompile Include="src\presenter\window_presenter.cpp" />
+    <ClCompile Include="src\presenter\leiasr_presenter.cpp" />
+    <ClCompile Include="src\presenter\nvstereo_dx9_presenter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
     <ClInclude Include="src\device_provider.h" />
+    <ClInclude Include="src\focus_context.h" />
+    <ClInclude Include="src\dx11_renderer.h" />
+    <ClInclude Include="src\platform\platform.h" />
+    <ClInclude Include="src\presenter\output_presenter.h" />
+    <ClInclude Include="src\presenter\window_presenter.h" />
+    <ClInclude Include="src\presenter\leiasr_presenter.h" />
+    <ClInclude Include="src\presenter\nvstereo_dx9_presenter.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">

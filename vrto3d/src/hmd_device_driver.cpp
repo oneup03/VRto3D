@@ -17,6 +17,8 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
+#include "dx11_renderer.h"
+#include "platform/platform.h"
 #include "vrto3dlib/key_mappings.h"
 #include "vrto3dlib/json_manager.h"
 #include "vrto3dlib/app_id_mgr.h"
@@ -122,8 +124,22 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 //-----------------------------------------------------------------------------
 vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 {
+    // SteamVR calls Activate twice — once for TrackedDeviceClass_HMD and once
+    // for TrackedDeviceClass_DisplayRedirect (same object, same serial). On the
+    // second call we only need to stash the index and set the minimal property
+    // the compositor reads on the DR device.
+    if (is_active_.exchange(true)) {
+        display_redirect_index_ = unObjectId;
+        auto* vrp = vr::VRProperties();
+        vr::PropertyContainerHandle_t dr_container = vrp->TrackedDeviceToPropertyContainer(unObjectId);
+        LUID luid = platform::PrimaryAdapterLuid();
+        uint64_t luid_u64 = (static_cast<uint64_t>(luid.HighPart) << 32) | luid.LowPart;
+        vrp->SetUint64Property(dr_container, vr::Prop_GraphicsAdapterLuid_Uint64, luid_u64);
+        LOG() << "MockControllerDeviceDriver::Activate (DisplayRedirect) object_id=" << unObjectId;
+        return vr::VRInitError_None;
+    }
+
     device_index_ = unObjectId;
-    is_active_ = true;
     is_on_top_ = false;
     man_on_top_ = false;
     ue3d_on_top_ = false;
@@ -146,6 +162,27 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetStringProperty( container, vr::Prop_TrackingFirmwareVersion_String, "1.0");
     vrp->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
 
+    // Query the target output monitor (resolved by display_index) for
+    // display frequency + approximate vsync-to-photons latency, then write
+    // the computed values back into the config so downstream consumers
+    // (pose thread cadence, hotkey sleep counts) pick them up.
+    {
+        auto cfg = stereo_display_component_->GetConfig();
+        platform::MonitorInfo primary{}, secondary{};
+        if (platform::ResolveTargetMonitors(cfg.display_index, cfg.multi_display, primary, secondary)) {
+            cfg.display_frequency = platform::QueryRefreshHz(primary, 60.0f);
+        } else {
+            cfg.display_frequency = 60.0f;
+        }
+        cfg.display_latency   = (cfg.display_frequency > 1.0f)
+            ? (0.5f / cfg.display_frequency) : 0.011f;
+        cfg.sleep_count_max   = (int)(floor(1600.0 / (1000.0 / cfg.display_frequency)));
+        stereo_display_component_->LoadSettings(cfg);
+        LOG() << "Display: target=" << primary.device_name
+              << " freq=" << cfg.display_frequency << "Hz"
+              << " latency=" << cfg.display_latency << "s";
+    }
+
     // Display settings
     vrp->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
     vrp->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
@@ -156,6 +193,16 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
     vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
     vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
+
+    // Direct-mode virtual-display integration: advertise our adapter LUID so
+    // the compositor composites on the same GPU the renderer will use, and
+    // signal that we fire VsyncEvent ourselves from the renderer thread.
+    {
+        LUID luid = platform::PrimaryAdapterLuid();
+        uint64_t luid_u64 = (static_cast<uint64_t>(luid.HighPart) << 32) | luid.LowPart;
+        vrp->SetUint64Property(container, vr::Prop_GraphicsAdapterLuid_Uint64, luid_u64);
+        vrp->SetBoolProperty  (container, vr::Prop_DriverDirectModeSendsVsyncEvents_Bool, true);
+    }
     if (stereo_display_component_->GetConfig().dash_enable)
     {
         vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
@@ -279,11 +326,13 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         }).detach();
     }
     
-    // Thread setup
+    // Thread setup. FocusUpdateThread is gone — its responsibilities (window
+    // placement + always-on-top) now live inside WindowPresenter, which is
+    // owned by VirtualDisplayDevice and observes the focus atomics below via
+    // GetFocusContext().
     xinput_thread_ = std::thread(&MockControllerDeviceDriver::XInputUpdateThread, this);
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
-    focus_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
     depth_thread_ = std::thread(&MockControllerDeviceDriver::AutoDepthThread, this);
     if (stereo_display_component_->GetConfig().use_open_track) {
         open_track_att_ = HmdQuaternion_Identity;
@@ -297,6 +346,19 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     if (!SetThreadPriority(thread_handle, THREAD_PRIORITY_HIGHEST)) {
         // Handle error if setting priority fails
         LOG() << "Failed to set thread priority: " << GetLastError();
+    }
+
+    // Direct-mode virtual-display: build the DX11 renderer + selected presenter
+    // on the same adapter LUID we advertised on the HMD's property container.
+    // The compositor will hand composited frames to our Present() override once
+    // it has the matching DisplayRedirect registration (same serial, class 5).
+    {
+        LUID luid = platform::PrimaryAdapterLuid();
+        renderer_ = std::make_unique<Dx11Renderer>();
+        if (!renderer_->Init(luid, stereo_display_component_->GetConfig(), GetFocusContext())) {
+            LOG() << "Dx11Renderer::Init failed; IVRVirtualDisplay path will be inactive";
+            renderer_.reset();
+        }
     }
 
     LOG() << "Activation Complete";
@@ -313,8 +375,50 @@ void *MockControllerDeviceDriver::GetComponent( const char *pchComponentNameAndV
     {
         return stereo_display_component_.get();
     }
+    if ( strcmp( pchComponentNameAndVersion, vr::IVRVirtualDisplay_Version ) == 0 )
+    {
+        return static_cast<vr::IVRVirtualDisplay*>(this);
+    }
 
     return nullptr;
+}
+
+//-----------------------------------------------------------------------------
+// IVRVirtualDisplay — compositor hands us the composited SBS backbuffer each
+// frame. We forward to Dx11Renderer which copies to our internal texture and
+// invokes the selected presenter.
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::Present( const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize )
+{
+    if ( !pPresentInfo || unPresentInfoSize < sizeof(vr::PresentInfo_t) || !renderer_ ) return;
+
+    static std::atomic<bool> first_present{ true };
+    bool expected = true;
+    if ( first_present.compare_exchange_strong(expected, false) ) {
+        LOG() << "IVRVirtualDisplay::Present first call, handle=0x"
+              << std::hex << pPresentInfo->backbufferTextureHandle
+              << " frameId=" << std::dec << pPresentInfo->nFrameId;
+    }
+    renderer_->OnPresent(*pPresentInfo);
+}
+
+void MockControllerDeviceDriver::WaitForPresent()
+{
+    // v1: return immediately. Pacing comes from VsyncEvent fired by Dx11Renderer
+    // after the presenter returns.
+}
+
+bool MockControllerDeviceDriver::GetTimeSinceLastVsync( float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter )
+{
+    if ( !renderer_ ) return false;
+
+    LARGE_INTEGER f{}, q{};
+    if ( !QueryPerformanceFrequency(&f) || !QueryPerformanceCounter(&q) ) return false;
+    const double now  = static_cast<double>(q.QuadPart) / static_cast<double>(f.QuadPart);
+    const double last = renderer_->LastVsyncQpcSec();
+    if ( pfSecondsSinceLastVsync ) *pfSecondsSinceLastVsync = static_cast<float>(now - last);
+    if ( pulFrameCounter ) *pulFrameCounter = renderer_->FrameCounter();
+    return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -932,124 +1036,20 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Keep Headset Window on top if set
+// Purpose: Expose focus/top atomics to the virtual-display presenter.
+//
+// The presenter owns the 3D output window and runs its own focus thread
+// that observes these flags. The hotkey handler + UE3D auto-focus path
+// continue to toggle them here.
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::FocusUpdateThread()
+vrto3d::FocusContext MockControllerDeviceDriver::GetFocusContext()
 {
-    static int sleep_time = 1000;
-    static HWND vr_window = NULL;
-    static HWND top_window = NULL;
-    static HWND game_window = NULL;
-    static LONG ex_style = 0;
-    static DWORD vr_pid = GetCurrentThreadId();
-    static DWORD last_pid = 0;
-    static bool was_on_top = false;
-    static bool was_focused = false;
-    static bool window_bounds_applied = false;
-
-    while (is_active_)
-    {
-        // Get handle for the VR window
-        if (vr_window == NULL) {
-            vr_window = FindWindow(NULL, L"Headset Window");
-            if (vr_window != NULL) {
-                ex_style = GetWindowLong(vr_window, GWL_EXSTYLE);
-            }
-        }
-
-        // Place the Headset Window - Has to be done twice to fix render issues
-        if (vr_window != NULL && !window_bounds_applied) {
-            // Use per-monitor DPI awareness for accurate cross-monitor placement
-            auto prev_dpi_ctx = SetThreadDpiAwarenessContext(
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-
-            auto cfg = stereo_display_component_->GetConfig();
-            ApplyDisplaySelectionToWindowConfig(cfg);
-
-            LOG() << "Applying Headset Window placement to ("
-                << cfg.window_x << "," << cfg.window_y << " "
-                << cfg.window_width << "x" << cfg.window_height << ")";
-
-            // Half-width first pass nudges DWM to commit to the target monitor
-            // but creates an intermediate swapchain size that ReShade latches
-            // onto. Only run it when the target isn't the primary display at
-            // (0,0) — that's when the nudge is actually needed.
-            const bool needs_nudge = cfg.multi_display
-                || cfg.window_x != 0 || cfg.window_y != 0;
-            if (needs_nudge) {
-                SetWindowPos(vr_window, HWND_TOP,
-                            cfg.window_x, cfg.window_y,
-                            cfg.window_width / 2, cfg.window_height,
-                            SWP_NOACTIVATE);
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            }
-            SetWindowPos(vr_window, HWND_TOP,
-                        cfg.window_x, cfg.window_y,
-                        cfg.window_width, cfg.window_height,
-                        SWP_NOACTIVATE);
-
-            // Restore thread DPI context
-            SetThreadDpiAwarenessContext(prev_dpi_ctx);
-
-            window_bounds_applied = true;
-        }
-
-        // Keep VR display always on top for 3D rendering
-        if (is_on_top_ && IsProcessRunning(app_pid_)) {
-            top_window = GetTopWindow(GetDesktopWindow());
-            if (vr_window != NULL && vr_window != top_window) {
-                SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                SetWindowLong(vr_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-                // Recenter VR
-                if (last_pid != app_pid_) {
-                    PostMessage(vr_window, WM_KEYDOWN, 'Z', 0);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    PostMessage(vr_window, WM_KEYUP, 'Z', 0);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                    last_pid = app_pid_;
-                }
-            }
-            was_on_top = true;
-        }
-        // Unfocus and check to see if the game is still running to re-enable focus
-        else if (vr_window != NULL && was_on_top) {
-            SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-            SetWindowLong(vr_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
-            if (man_on_top_)
-            {
-                std::this_thread::sleep_for(std::chrono::seconds(15));
-                is_on_top_ = IsProcessRunning(app_pid_);
-            }
-            was_on_top = is_on_top_;
-            was_focused = false;
-        }
-
-        // Focus the Game Window
-        if (is_on_top_ && !was_focused)
-        {
-            game_window = GetHWNDFromPID(app_pid_);
-            ForceFocus(game_window, vr_pid, app_pid_);
-            was_focused = true;
-        }
-
-        // Take Screenshot
-        if (vr_window != NULL && take_screenshot_) {
-            ForceFocus(vr_window, vr_pid, vr_pid);
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            PostMessage(vr_window, WM_KEYDOWN, 'S', 0);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            PostMessage(vr_window, WM_KEYUP, 'S', 0);
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            ForceFocus(game_window, vr_pid, app_pid_);
-            take_screenshot_ = false;
-            BeepSuccess();
-        }
-
-        // Sleep for 1s
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
-    }
+    vrto3d::FocusContext fc;
+    fc.is_on_top   = &is_on_top_;
+    fc.man_on_top  = &man_on_top_;
+    fc.ue3d_on_top = &ue3d_on_top_;
+    fc.app_pid     = &app_pid_;
+    return fc;
 }
 
 
@@ -1070,7 +1070,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
             stereo_display_component_->GetConvergence(),
             stereo_display_component_->GetFoV(),
             0.0f,   // fov_adj (unused in monitor mode)
-            config.tab_enable ? 0 : 1,
+            (config.output_mode == OutputMode::TaB) ? 0 : 1,
             !no_profile_.load()
         );
 
@@ -1200,6 +1200,7 @@ void MockControllerDeviceDriver::EnterStandby()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::Deactivate()
 {
+    LOG() << "MockControllerDeviceDriver::Deactivate";
     if ( is_active_.exchange( false ) )
     {
         if (xinput_thread_.joinable()) {
@@ -1211,20 +1212,24 @@ void MockControllerDeviceDriver::Deactivate()
         if (hotkey_thread_.joinable()) {
             hotkey_thread_.join();
         }
-        if (focus_thread_.joinable()) {
-            focus_thread_.join();
-        }
         if (depth_thread_.joinable()) {
             depth_thread_.join();
         }
         if (track_thread_.joinable()) {
             track_thread_.join();
         }
+        if (renderer_) {
+            renderer_->Shutdown();
+            renderer_.reset();
+        }
     }
 
     // unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
     device_index_ = vr::k_unTrackedDeviceIndexInvalid;
+    display_redirect_index_ = vr::k_unTrackedDeviceIndexInvalid;
 }
+
+MockControllerDeviceDriver::~MockControllerDeviceDriver() = default;
 
 
 //-----------------------------------------------------------------------------
@@ -1266,63 +1271,20 @@ void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, 
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Render in SbS or TaB Stereo3D
+// Purpose: Canonical SbS output for the compositor. Each eye occupies half
+// the horizontal extent of the 2W x H backbuffer; the presenter repacks into
+// TaB / interlaced / anaglyph / etc. downstream based on cfg.output_mode.
+// eye_swap is applied in the presenter, not here.
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pnX, uint32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    if (config_.reverse_enable)
-    {
-        eEye = static_cast<vr::EVREye>(!static_cast<bool> (eEye));
-    }
-    // Use Top and Bottom Rendering
-    if (config_.tab_enable)
-    {
-        *pnX = 0;
-        // Each eye will have full width
-        *pnWidth = config_.window_width;
-        // Each eye will have half height
-        *pnHeight = (config_.window_height - config_.framepack_offset) / 2;
-        if (eEye == vr::Eye_Left)
-        {
-            // Left eye viewport on the top half of the window
-            *pnY = 0;
-        }
-        else
-        {
-            // Right eye viewport on the bottom half of the window
-            *pnY = *pnHeight + config_.framepack_offset;
-        }
-    }
-
-    // Use Side by Side Rendering
-    else
-    {
-        // Each eye will have half height for virtual desktop
-        if (config_.vd_fsbs_hack)
-        {
-            *pnY = config_.window_height / 4;
-            *pnHeight = config_.window_height / 2;
-        }
-        // Each eye will have full height
-        else
-        {
-            *pnY = 0;
-            *pnHeight = config_.window_height;
-        }
-        // Each eye will have half width
-        *pnWidth = config_.window_width / 2;
-        if (eEye == vr::Eye_Left)
-        {
-            // Left eye viewport on the left half of the window
-            *pnX = 0;
-        }
-        else
-        {
-            // Right eye viewport on the right half of the window
-            *pnX = config_.window_width / 2;
-        }
-    }
+    const uint32_t eye_w = static_cast<uint32_t>(config_.render_width);
+    const uint32_t eye_h = static_cast<uint32_t>(config_.render_height);
+    *pnWidth  = eye_w;
+    *pnHeight = eye_h;
+    *pnY      = 0;
+    *pnX      = (eEye == vr::Eye_Left) ? 0u : eye_w;
 }
 
 //-----------------------------------------------------------------------------
@@ -1383,10 +1345,11 @@ bool StereoDisplayComponent::ComputeInverseDistortion(vr::HmdVector2_t* pResult,
 void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
+    // Backbuffer is canonical 2W x H SbS. Presenter repacks downstream.
     *pnX = 0;
     *pnY = 0;
-    *pnWidth = config_.window_width;
-    *pnHeight = config_.window_height;
+    *pnWidth  = static_cast<uint32_t>(config_.render_width)  * 2u;
+    *pnHeight = static_cast<uint32_t>(config_.render_height);
 }
 
 //-----------------------------------------------------------------------------
