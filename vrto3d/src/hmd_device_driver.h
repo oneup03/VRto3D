@@ -23,12 +23,15 @@
 #include <string>
 
 #include "accela_hamilton_runtime.h"
+#include "focus_context.h"
 #include "vrto3dlib/json_manager.h"
 #include "vrto3dlib/uevr_receiver.hpp"
 
  // Forward declare XINPUT_STATE
 struct _XINPUT_STATE;
 typedef _XINPUT_STATE XINPUT_STATE;
+
+class Dx11Renderer;
 
 
 class StereoDisplayComponent : public vr::IVRDisplayComponent
@@ -88,12 +91,20 @@ private:
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Represents a Mock HMD in the system
+// Purpose: Represents a Mock HMD in the system. Also implements
+// IVRVirtualDisplay so the same object can be registered twice with the
+// same serial — once as TrackedDeviceClass_HMD and once as
+// TrackedDeviceClass_DisplayRedirect. This matches the working WibbleWobbleVR
+// pattern; registering two separate objects does not route composited frames.
 //-----------------------------------------------------------------------------
-class MockControllerDeviceDriver : public vr::ITrackedDeviceServerDriver
+class MockControllerDeviceDriver : public vr::ITrackedDeviceServerDriver,
+                                    public vr::IVRVirtualDisplay
 {
 public:
     MockControllerDeviceDriver();
+    ~MockControllerDeviceDriver();
+
+    // ITrackedDeviceServerDriver
     vr::EVRInitError Activate( uint32_t unObjectId ) override;
     void EnterStandby() override;
     void *GetComponent( const char *pchComponentNameAndVersion ) override;
@@ -101,15 +112,25 @@ public:
     vr::DriverPose_t GetPose() override;
     void Deactivate() override;
 
+    // IVRVirtualDisplay
+    void Present( const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize ) override;
+    void WaitForPresent() override;
+    bool GetTimeSinceLastVsync( float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter ) override;
+
     void OpenTrackThread();
     void XInputUpdateThread();
     void PoseUpdateThread();
     void PollHotkeysThread();
-    void FocusUpdateThread();
     void AutoDepthThread();
 
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
     void SetAsync(bool enable);
+
+    // Accessors used by VirtualDisplayDevice to reach shared config / focus
+    // state without duplicating it.
+    const StereoDisplayComponent* GetStereoComponent() const { return stereo_display_component_.get(); }
+    StereoDisplayComponent*       GetStereoComponent()       { return stereo_display_component_.get(); }
+    vrto3d::FocusContext          GetFocusContext();
 
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;
@@ -125,7 +146,9 @@ private:
     std::atomic< bool > no_profile_;
 
     std::atomic< bool > is_active_;
-    std::atomic< uint32_t > device_index_;
+    std::atomic< uint32_t > device_index_;         // HMD class object id (first Activate)
+    std::atomic< uint32_t > display_redirect_index_{ vr::k_unTrackedDeviceIndexInvalid };
+    std::unique_ptr< Dx11Renderer > renderer_;
     std::atomic< bool > is_on_top_;
     std::atomic< bool > man_on_top_;
     std::atomic< bool > ue3d_on_top_;
@@ -143,7 +166,6 @@ private:
     std::thread xinput_thread_;
     std::thread pose_thread_;
     std::thread hotkey_thread_;
-    std::thread focus_thread_;
     std::thread depth_thread_;
     std::thread track_thread_;
 

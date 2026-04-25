@@ -3,6 +3,7 @@
 	"name" : "vrto3d",
 	"directory" : "",
 	"resourceOnly" : false,
+	"redirectsDisplay" : true,
 	"hmd_presence" :
 	[
 		"*.*"
