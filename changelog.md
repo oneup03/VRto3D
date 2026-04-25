@@ -4,7 +4,7 @@
 
 - Fix display_index initialization issues
 - Rewrite pose tracking for OpenTrack 6DoF
-- Integrate [UE3D](https://github.com/evilkermitreturns/UEVR/tree/ue3d-monitor-mode), including auto_focus - thanks Midlife Crisis!
+- Integrate [UE3D](https://github.com/evilkermitreturns/UEVR/releases), including auto_focus - thanks Midlife Crisis!
 - 6DoF tracking on SR Displays via [SR-OpenTrack-Bridge](https://github.com/effcol/Simulated-Reality-OpenTrack-Bridge/releases/latest) - thanks Midlife Crisis & Eff!
 - 6DoF tracking on AR Glasses via [VertoXR](https://vertoxr.com/) - thanks Rohit Sangwan!
 - Moved logging to `Steam/logs/vrto3d.txt`
