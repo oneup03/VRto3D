@@ -34,6 +34,9 @@ target_include_directories(driver_vrto3d PRIVATE
     ${ROOT}/external/VRto3DLib/include
     ${ROOT}/external/json/include
     ${ROOT}/external/openvr/headers
+    ${ROOT}/external/LeiaSR/include
+    ${ROOT}/external/LeiaSR/third_party/OpenCV/include
+    ${ROOT}/external/nvapi
     ${ROOT}/utils/vrmath
 )
 
@@ -51,14 +54,34 @@ if(WIN32)
     endif()
     target_link_libraries(driver_vrto3d PRIVATE
         "${OPENVR_LIB_DIR}/openvr_api.lib"
+        "${ROOT}/external/LeiaSR/lib/simulatedreality.lib"
+        "${ROOT}/external/LeiaSR/lib/SimulatedRealityCore.lib"
+        "${ROOT}/external/LeiaSR/lib/SimulatedRealityDirectX.lib"
+        "${ROOT}/external/LeiaSR/lib/DimencoWeaving.lib"
+        "${ROOT}/external/LeiaSR/third_party/OpenCV/lib/x64/opencv_core343.lib"
+        "${ROOT}/external/nvapi/amd64/nvapi64.lib"
+        delayimp
         d3d11
         dxgi
         dxguid
         d3dcompiler
+        d3d9
         xinput9_1_0
         ws2_32
         user32
         gdi32
+    )
+    # Delay-load LeiaSR + OpenCV + NVAPI DLLs so the driver still loads when
+    # those runtimes aren't installed. The DLLs are only resolved when their
+    # first symbol is actually called (i.e., when LeiaSrPresenter::Init or
+    # NvStereoDx9Presenter::Init runs).
+    target_link_options(driver_vrto3d PRIVATE
+        "/DELAYLOAD:simulatedreality.dll"
+        "/DELAYLOAD:SimulatedRealityCore.dll"
+        "/DELAYLOAD:SimulatedRealityDirectX.dll"
+        "/DELAYLOAD:DimencoWeaving.dll"
+        "/DELAYLOAD:opencv_core343.dll"
+        "/DELAYLOAD:nvapi64.dll"
     )
     target_compile_definitions(driver_vrto3d PRIVATE
         WIN32_LEAN_AND_MEAN
