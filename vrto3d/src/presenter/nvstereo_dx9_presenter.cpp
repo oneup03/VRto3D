@@ -89,6 +89,81 @@ NvAPI_Status TryNvAPIInitializeSEH(bool* dll_failure)
 }  // namespace
 
 
+// ---------------------------------------------------------------------------
+// FSE WndProc subclass — swallows WM_ACTIVATE(WA_INACTIVE),
+// WM_ACTIVATEAPP(FALSE), and WM_KILLFOCUS so that DefWindowProc never
+// triggers the minimize-on-deactivate behavior for our FSE D3D9Ex window.
+// This mirrors the XR3DV GameWndSubclassProc approach.
+// ---------------------------------------------------------------------------
+LRESULT CALLBACK NvStereoDx9Presenter::FseSubclassProc(HWND hw, UINT msg, WPARAM wp, LPARAM lp)
+{
+    auto* self = reinterpret_cast<NvStereoDx9Presenter*>(
+        GetWindowLongPtrW(hw, GWLP_USERDATA));
+    WNDPROC orig = self ? self->orig_wndproc_ : DefWindowProcW;
+
+    switch (msg) {
+    case WM_ACTIVATE:
+        if (LOWORD(wp) == WA_INACTIVE) {
+            // Swallow deactivation — prevents FSE window from minimizing.
+            return 0;
+        }
+        break;
+    case WM_ACTIVATEAPP:
+        if (!wp) {
+            // Swallow app-deactivation.
+            return 0;
+        }
+        break;
+    case WM_KILLFOCUS:
+        // Swallow focus loss.
+        return 0;
+    case WM_SYSCOMMAND:
+        // Block SC_MINIMIZE and screensaver/monitor-off while FSE is active.
+        if ((wp & 0xFFF0) == SC_MINIMIZE ||
+            (wp & 0xFFF0) == SC_SCREENSAVE ||
+            (wp & 0xFFF0) == SC_MONITORPOWER) {
+            return 0;
+        }
+        break;
+    }
+    return CallWindowProcW(orig, hw, msg, wp, lp);
+}
+
+
+void NvStereoDx9Presenter::InstallFseSubclass(HWND hwnd)
+{
+    if (!hwnd || subclassed_hwnd_) return;
+
+    // Store our this pointer in the window's GWLP_USERDATA so the static
+    // callback can retrieve it.
+    SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+
+    orig_wndproc_ = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC,
+                          reinterpret_cast<LONG_PTR>(FseSubclassProc)));
+    if (orig_wndproc_) {
+        subclassed_hwnd_ = hwnd;
+        LOG() << "NvStereoDx9Presenter: FSE WndProc subclass installed";
+    } else {
+        LOG() << "NvStereoDx9Presenter: SetWindowLongPtrW failed GLE="
+              << GetLastError() << " — FSE may minimize on focus loss";
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+    }
+}
+
+
+void NvStereoDx9Presenter::RemoveFseSubclass()
+{
+    if (!subclassed_hwnd_ || !orig_wndproc_) return;
+    SetWindowLongPtrW(subclassed_hwnd_, GWLP_WNDPROC,
+                      reinterpret_cast<LONG_PTR>(orig_wndproc_));
+    SetWindowLongPtrW(subclassed_hwnd_, GWLP_USERDATA, 0);
+    LOG() << "NvStereoDx9Presenter: FSE WndProc subclass removed";
+    orig_wndproc_    = nullptr;
+    subclassed_hwnd_ = nullptr;
+}
+
+
 bool NvStereoDx9Presenter::Init(Dx11Renderer& renderer,
                                  const StereoDisplayDriverConfiguration& cfg,
                                  const FocusContext& focus)
@@ -226,6 +301,9 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     //  6) Skip NvAPI_Unload — NVAPI is a process singleton and unloading
     //     it while other GPU consumers are still draining races; let it
     //     persist until vrserver exit.
+    LOG() << "NvStereoDx9Presenter: teardown step 0 — remove FSE WndProc subclass";
+    RemoveFseSubclass();
+
     LOG() << "NvStereoDx9Presenter: teardown step 1 — drain in-flight PresentEx";
     Sleep(100);
 
@@ -380,9 +458,14 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
             return false;
         }
         LOG() << "NvStereoDx9Presenter: D3D9Ex device created (windowed fallback)";
+        is_fse_ = false;
     } else {
         LOG() << "NvStereoDx9Presenter: D3D9Ex device created (FSE) adapter=" << adapter
               << " " << dm.Width << "x" << dm.Height << "@" << dm.RefreshRate << "Hz";
+        is_fse_ = true;
+        // Install WndProc subclass to swallow deactivation messages so the
+        // FSE window never minimizes when the user interacts with another display.
+        InstallFseSubclass(hwnd);
     }
 
     // Globally make sure stereo is enabled (idempotent — no-op if already on).
@@ -634,6 +717,46 @@ void NvStereoDx9Presenter::FocusThreadLoop()
             last_ue3d_focused_pid = 0;
         }
 
+        // In FSE mode the window must *always* stay on top — the WndProc
+        // subclass already swallows deactivation messages so Windows won't
+        // minimize it, but we still need to periodically reassert TOPMOST
+        // and foreground status in case the OS Z-order drifts (e.g. after
+        // a task-switch to another monitor).
+        if (is_fse_) {
+            bool want_on_top = false;
+            if (man_on_top || is_on_top || ue3d_on_top) {
+                want_on_top = true;
+            } else if (auto_focus_ && app_running && pid != 0
+                       && pid != last_auto_focused_pid) {
+                if (focus_.is_on_top)  focus_.is_on_top->store(true);
+                if (focus_.man_on_top) focus_.man_on_top->store(true);
+                last_auto_focused_pid = pid;
+                want_on_top = true;
+            }
+
+            // Always reassert periodically in FSE to keep the 3D Vision
+            // window visible even when interacting with another display.
+            if (want_on_top || ++reassert_counter >= 10) {
+                reassert_counter = 0;
+                HWND hwnd = static_cast<HWND>(window_->NativeHandle());
+                if (hwnd) {
+                    // Re-apply TOPMOST without moving/resizing.
+                    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    // Only do the full foreground grab when explicitly requested,
+                    // to avoid stealing input focus from the game on the other display.
+                    if (want_on_top && !was_on_top) {
+                        ForceForeground(hwnd);
+                        was_on_top = true;
+                    }
+                }
+            }
+
+            std::this_thread::sleep_for(50ms);
+            continue;
+        }
+
+        // Windowed fallback: standard focus logic (same as other presenters).
         bool want_on_top = false;
         if (man_on_top) {
             want_on_top = true;
