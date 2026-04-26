@@ -62,7 +62,7 @@ private:
     bool          vd_fsbs_hack_ = false;
     uint32_t      framepack_offset_ = 0;
     float         aspect_ratio_ = 1.7777f;
-    bool          multi_display_ = false;
+    bool          spans_two_monitors_ = false;   // true for DualDisplay / DualDisplayFlip
     bool          auto_focus_ = true;
 
     FocusContext                                  focus_{};

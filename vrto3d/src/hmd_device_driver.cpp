@@ -93,7 +93,6 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     // Display settings
     StereoDisplayDriverConfiguration display_configuration{};
     display_configuration.display_index = 0;
-    display_configuration.multi_display = false;
     display_configuration.window_x = 0;
     display_configuration.window_y = 0;
     display_configuration.window_width = 1920;
@@ -169,7 +168,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     {
         auto cfg = stereo_display_component_->GetConfig();
         platform::MonitorInfo primary{}, secondary{};
-        if (platform::ResolveTargetMonitors(cfg.display_index, cfg.multi_display, primary, secondary)) {
+        if (platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary)) {
             cfg.display_frequency = platform::QueryRefreshHz(primary, 60.0f);
         } else {
             cfg.display_frequency = 60.0f;

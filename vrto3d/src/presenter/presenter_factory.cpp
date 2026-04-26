@@ -23,27 +23,34 @@ std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode)
 {
     switch (mode) {
         case OutputMode::SbS:
+        case OutputMode::DualDisplay:
+        case OutputMode::DualDisplayFlip:
         case OutputMode::TaB:
         case OutputMode::RowInterlaced:
         case OutputMode::ColInterlaced:
         case OutputMode::Checkerboard:
         case OutputMode::AnaglyphRedCyan:
+        case OutputMode::AnaglyphRedCyanDubois:
+        case OutputMode::AnaglyphRedCyanDeghosted:
         case OutputMode::AnaglyphGreenMagenta:
+        case OutputMode::AnaglyphGreenMagentaDubois:
+        case OutputMode::AnaglyphGreenMagentaDeghosted:
+        case OutputMode::AnaglyphBlueAmber:
             return std::make_unique<WindowPresenter>();
 
-        case OutputMode::LeiaSrWeaver:
+        case OutputMode::LeiaSR:
 #ifdef _WIN32
             return std::make_unique<LeiaSrPresenter>();
 #else
-            LOG() << "MakePresenter: LeiaSrWeaver not available on this platform; falling back to SbS";
+            LOG() << "MakePresenter: LeiaSR not available on this platform; falling back to SbS";
             return std::make_unique<WindowPresenter>();
 #endif
 
-        case OutputMode::NvStereoDX9:
+        case OutputMode::NvidiaDX9:
 #ifdef _WIN32
             return std::make_unique<NvStereoDx9Presenter>();
 #else
-            LOG() << "MakePresenter: NvStereoDX9 not available on this platform; falling back to SbS";
+            LOG() << "MakePresenter: NvidiaDX9 not available on this platform; falling back to SbS";
             return std::make_unique<WindowPresenter>();
 #endif
     }
