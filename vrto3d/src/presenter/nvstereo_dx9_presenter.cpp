@@ -149,14 +149,51 @@ void NvStereoDx9Presenter::InstallFseSubclass(HWND hwnd)
               << GetLastError() << " — FSE may minimize on focus loss";
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
     }
+
+    // Make the FSE window transparent to mouse input (click-through).
+    // WS_EX_TRANSPARENT tells the window manager's input routing to skip
+    // this window and deliver mouse events to whatever is behind it.
+    // WS_EX_LAYERED is required for WS_EX_TRANSPARENT to be effective on
+    // top-level windows.
+    LONG_PTR ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE,
+                      ex_style | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+    // SetLayeredWindowAttributes is required after adding WS_EX_LAYERED.
+    // Alpha=255 means fully opaque — the visual output is unchanged but
+    // the window now participates in the layered-window input routing.
+    SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    LOG() << "NvStereoDx9Presenter: WS_EX_TRANSPARENT + WS_EX_LAYERED set for click-through";
 }
 
 
 void NvStereoDx9Presenter::RemoveFseSubclass()
 {
     if (!subclassed_hwnd_ || !orig_wndproc_) return;
+
+    // Remove WS_EX_TRANSPARENT + WS_EX_LAYERED FIRST, then pump messages
+    // so the DWM processes the style change before any D3D9 teardown.
+    // Without this settle step the DWM's internal compositing state for this
+    // window can race with the D3D9 device release and freeze the display.
+    LONG_PTR ex_style = GetWindowLongPtrW(subclassed_hwnd_, GWL_EXSTYLE);
+    if (ex_style & (WS_EX_LAYERED | WS_EX_TRANSPARENT)) {
+        SetWindowLongPtrW(subclassed_hwnd_, GWL_EXSTYLE,
+                          ex_style & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT));
+        LOG() << "NvStereoDx9Presenter: WS_EX_LAYERED | WS_EX_TRANSPARENT removed";
+        // Pump pending messages so the DWM/compositor sees the style change.
+        MSG msg;
+        for (int i = 0; i < 5; ++i) {
+            while (PeekMessageW(&msg, subclassed_hwnd_, 0, 0, PM_REMOVE)) {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+            Sleep(500);
+        }
+        LOG() << "NvStereoDx9Presenter: DWM settle complete after style removal";
+    }
+
     SetWindowLongPtrW(subclassed_hwnd_, GWLP_WNDPROC,
                       reinterpret_cast<LONG_PTR>(orig_wndproc_));
+    Sleep(1000);  
     SetWindowLongPtrW(subclassed_hwnd_, GWLP_USERDATA, 0);
     LOG() << "NvStereoDx9Presenter: FSE WndProc subclass removed";
     orig_wndproc_    = nullptr;
@@ -305,7 +342,7 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     RemoveFseSubclass();
 
     LOG() << "NvStereoDx9Presenter: teardown step 1 — drain in-flight PresentEx";
-    Sleep(100);
+    Sleep(1000);
 
     LOG() << "NvStereoDx9Presenter: teardown step 2 — release DEFAULT-pool surfaces";
     back_buffer_.Reset();
@@ -317,14 +354,41 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
         stereo_handle_   = nullptr;
         stereo_activated_ = false;
     }
-    Sleep(50);
+    Sleep(1000);
 
     LOG() << "NvStereoDx9Presenter: teardown step 4 — release SYSMEM + device + factory";
     packed_sysmem_.Reset();
+    Sleep(1000);
     staging_.Reset();
-    device9_.Reset();
+    Sleep(1000);
+    device9_.Reset();   // <-- FSE→desktop mode transition happens here
+    Sleep(1000);
     d3d9_.Reset();
-    Sleep(50);
+
+    // The device release above exits FSE, triggering a display mode transition.
+    // The DWM must recompose the desktop before the window is destroyed. Pump
+    // messages and give it plenty of time to settle, otherwise the DWM's
+    // internal state for this window can race with the destruction and freeze.
+    LOG() << "NvStereoDx9Presenter: teardown step 4b — settle after FSE exit";
+    {
+        HWND hwnd = window_ ? static_cast<HWND>(window_->NativeHandle()) : nullptr;
+        MSG msg;
+        for (int i = 0; i < 10; ++i) {
+            if (hwnd) {
+                while (PeekMessageW(&msg, hwnd, 0, 0, PM_REMOVE)) {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
+            // Also pump thread messages (display-change notifications, etc.)
+            while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+            Sleep(500);
+        }
+    }
+    LOG() << "NvStereoDx9Presenter: teardown step 4b — settle complete (500ms)";
 
     LOG() << "NvStereoDx9Presenter: teardown step 5 — destroy window";
     window_.reset();
