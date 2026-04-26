@@ -10,3 +10,6 @@
 [submodule "external/VRto3DLib"]
 	path = external/VRto3DLib
 	url = https://github.com/oneup03/VRto3DLib.git
+[submodule "external/nvapi"]
+	path = external/nvapi
+	url = https://github.com/NVIDIA/nvapi.git

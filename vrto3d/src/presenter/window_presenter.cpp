@@ -24,29 +24,44 @@ namespace vrto3d {
 
 namespace {
 
-// Mode constants matching OutputMode values the shader handles (LeiaSR / NvStereoDX9
+// Mode constants matching OutputMode values the shader handles (LeiaSR / NvidiaDX9
 // are handled by their own presenters — not this one).
-constexpr uint32_t kModeSbS            = 0;
-constexpr uint32_t kModeTaB            = 1;
-constexpr uint32_t kModeRowInterlaced  = 2;
-constexpr uint32_t kModeColInterlaced  = 3;
-constexpr uint32_t kModeCheckerboard   = 4;
-constexpr uint32_t kModeAnaglyphRC     = 5;
-constexpr uint32_t kModeAnaglyphGM     = 6;
-constexpr uint32_t kModeSbSLeftFlip    = 7;
+//
+// DualDisplay / DualDisplayFlip share the SbS shader path; their distinction is
+// the window spans two contiguous monitors (handled at window-creation time).
+// DualDisplayFlip flips the left half vertically.
+constexpr uint32_t kModeSbS                        = 0;
+constexpr uint32_t kModeTaB                        = 1;
+constexpr uint32_t kModeRowInterlaced              = 2;
+constexpr uint32_t kModeColInterlaced              = 3;
+constexpr uint32_t kModeCheckerboard               = 4;
+constexpr uint32_t kModeAnaglyphRedCyan            = 5;
+constexpr uint32_t kModeAnaglyphRedCyanDubois      = 6;
+constexpr uint32_t kModeAnaglyphRedCyanDeghosted   = 7;
+constexpr uint32_t kModeAnaglyphGreenMagenta       = 8;
+constexpr uint32_t kModeAnaglyphGreenMagentaDubois = 9;
+constexpr uint32_t kModeAnaglyphGreenMagentaDeghosted = 10;
+constexpr uint32_t kModeAnaglyphBlueAmber          = 11;
+constexpr uint32_t kModeDualDisplayFlip            = 12;
 
 uint32_t ModeToShaderEnum(OutputMode m)
 {
     switch (m) {
-        case OutputMode::SbS:                  return kModeSbS;
-        case OutputMode::SbSLeftFlip:          return kModeSbSLeftFlip;
-        case OutputMode::TaB:                  return kModeTaB;
-        case OutputMode::RowInterlaced:        return kModeRowInterlaced;
-        case OutputMode::ColInterlaced:        return kModeColInterlaced;
-        case OutputMode::Checkerboard:         return kModeCheckerboard;
-        case OutputMode::AnaglyphRedCyan:      return kModeAnaglyphRC;
-        case OutputMode::AnaglyphGreenMagenta: return kModeAnaglyphGM;
-        default:                               return kModeSbS;
+        case OutputMode::SbS:                            return kModeSbS;
+        case OutputMode::DualDisplay:                    return kModeSbS;
+        case OutputMode::DualDisplayFlip:                return kModeDualDisplayFlip;
+        case OutputMode::TaB:                            return kModeTaB;
+        case OutputMode::RowInterlaced:                  return kModeRowInterlaced;
+        case OutputMode::ColInterlaced:                  return kModeColInterlaced;
+        case OutputMode::Checkerboard:                   return kModeCheckerboard;
+        case OutputMode::AnaglyphRedCyan:                return kModeAnaglyphRedCyan;
+        case OutputMode::AnaglyphRedCyanDubois:          return kModeAnaglyphRedCyanDubois;
+        case OutputMode::AnaglyphRedCyanDeghosted:       return kModeAnaglyphRedCyanDeghosted;
+        case OutputMode::AnaglyphGreenMagenta:           return kModeAnaglyphGreenMagenta;
+        case OutputMode::AnaglyphGreenMagentaDubois:     return kModeAnaglyphGreenMagentaDubois;
+        case OutputMode::AnaglyphGreenMagentaDeghosted:  return kModeAnaglyphGreenMagentaDeghosted;
+        case OutputMode::AnaglyphBlueAmber:              return kModeAnaglyphBlueAmber;
+        default:                                         return kModeSbS;
     }
 }
 
@@ -141,23 +156,123 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         return SampleEye(half_idx, uv.x, uv.y);
     }
 
-    // Anaglyph red-cyan: R from left, GB from right.
+    // ----- Anaglyph variants (3DToElse / iaian7+vectorform formulas) -----
+    // Sample full image of each eye; cA = left, cB = right.
+    float4 cA = SampleEye(0u, uv.x, uv.y);
+    float4 cB = SampleEye(1u, uv.x, uv.y);
+
+    // Anaglyph red-cyan (simple)
     if (mode == 5) {
-        float4 l = SampleEye(0u, uv.x, uv.y);
-        float4 r = SampleEye(1u, uv.x, uv.y);
-        return float4(l.r, r.g, r.b, 1.0);
+        return float4(cA.r, cB.g, cB.b, 1.0);
     }
 
-    // Anaglyph green-magenta: G from left, RB from right.
+    // Anaglyph red-cyan Dubois
     if (mode == 6) {
-        float4 l = SampleEye(0u, uv.x, uv.y);
-        float4 r = SampleEye(1u, uv.x, uv.y);
-        return float4(r.r, l.g, r.b, 1.0);
+        float r = saturate( 0.437 * cA.r + 0.449 * cA.g + 0.164 * cA.b
+                           - 0.011 * cB.r - 0.032 * cB.g - 0.007 * cB.b );
+        float g = saturate(-0.062 * cA.r - 0.062 * cA.g - 0.024 * cA.b
+                           + 0.377 * cB.r + 0.761 * cB.g + 0.009 * cB.b );
+        float b = saturate(-0.048 * cA.r - 0.050 * cA.g - 0.017 * cA.b
+                           - 0.026 * cB.r - 0.093 * cB.g + 1.234 * cB.b );
+        return float4(r, g, b, 1.0);
     }
 
-    // SbSLeftFlip: same horizontal split as SbS, but the LEFT half's content
-    // is sampled with v inverted (vertical flip).
+    // Anaglyph red-cyan deghosted (iaian7 / vectorform)
     if (mode == 7) {
+        float Contrast = 1.0;
+        float DeGhost  = 0.06 * 0.1;
+        float contrast = (Contrast * 0.5) + 0.5;
+        float LOne = contrast * 0.45;
+        float ROne = contrast;
+
+        float4 image = float4(0,0,0,1);
+        float4 accum;
+        accum = saturate(cA * float4(LOne, (1.0-LOne)*0.5, (1.0-LOne)*0.5, 1.0));
+        image.r = pow(accum.r + accum.g + accum.b, 1.00);
+        accum = saturate(cB * float4(1.0-ROne, ROne, 0.0, 1.0));
+        image.g = pow(accum.r + accum.g + accum.b, 1.15);
+        accum = saturate(cB * float4(1.0-ROne, 0.0, ROne, 1.0));
+        image.b = pow(accum.r + accum.g + accum.b, 1.15);
+
+        accum = image;
+        image.r = accum.r + (accum.r * DeGhost) + (accum.g * (DeGhost * -0.5)) + (accum.b * (DeGhost * -0.5));
+        image.g = accum.g + (accum.r * (DeGhost * -0.25)) + (accum.g * (DeGhost * 0.5)) + (accum.b * (DeGhost * -0.25));
+        image.b = accum.b + (accum.r * (DeGhost * -0.25)) + (accum.g * (DeGhost * -0.25)) + (accum.b * (DeGhost * 0.5));
+        image.a = 1.0;
+        return image;
+    }
+
+    // Anaglyph green-magenta (simple)
+    if (mode == 8) {
+        return float4(cB.r, cA.g, cB.b, 1.0);
+    }
+
+    // Anaglyph green-magenta Dubois
+    if (mode == 9) {
+        float r = saturate(-0.062 * cA.r - 0.158 * cA.g - 0.039 * cA.b
+                           + 0.529 * cB.r + 0.705 * cB.g + 0.024 * cB.b );
+        float g = saturate( 0.284 * cA.r + 0.668 * cA.g + 0.143 * cA.b
+                           - 0.016 * cB.r - 0.015 * cB.g + 0.065 * cB.b );
+        float b = saturate(-0.015 * cA.r - 0.027 * cA.g + 0.021 * cA.b
+                           + 0.009 * cB.r + 0.075 * cB.g + 0.937 * cB.b );
+        return float4(r, g, b, 1.0);
+    }
+
+    // Anaglyph green-magenta deghosted
+    if (mode == 10) {
+        float Contrast = 1.0;
+        float DeGhost  = 0.06 * 0.275;
+        float contrast = (Contrast * 0.5) + 0.5;
+        float LOne = contrast * 0.45;
+        float ROne = contrast * 0.8;
+
+        float4 image = float4(0,0,0,1);
+        float4 accum;
+        accum = saturate(cB * float4(ROne, 1.0-ROne, 0.0, 1.0));
+        image.r = pow(accum.r + accum.g + accum.b, 1.15);
+        accum = saturate(cA * float4((1.0-LOne)*0.5, LOne, (1.0-LOne)*0.5, 1.0));
+        image.g = pow(accum.r + accum.g + accum.b, 1.05);
+        accum = saturate(cB * float4(0.0, 1.0-ROne, ROne, 1.0));
+        image.b = pow(accum.r + accum.g + accum.b, 1.15);
+
+        accum = image;
+        image.r = accum.r + (accum.r * (DeGhost * 0.5))  + (accum.g * (DeGhost * -0.25)) + (accum.b * (DeGhost * -0.25));
+        image.g = accum.g + (accum.r * (DeGhost * -0.5)) + (accum.g * (DeGhost * 0.25))  + (accum.b * (DeGhost * -0.5));
+        image.b = accum.b + (accum.r * (DeGhost * -0.25))+ (accum.g * (DeGhost * -0.25)) + (accum.b * (DeGhost * 0.5));
+        image.a = 1.0;
+        return image;
+    }
+
+    // Anaglyph blue-amber (ColorCode style)
+    if (mode == 11) {
+        float Contrast = 1.0;
+        float DeGhost  = 0.06 * 0.275;
+        float contrast = (Contrast * 0.5) + 0.5;
+        float LOne = contrast * 0.45;
+        float ROne = contrast;
+
+        float4 image = float4(0,0,0,1);
+        float4 accum;
+        accum = saturate(cA * float4(ROne, 0.0, 1.0-ROne, 1.0));
+        image.r = pow(accum.r + accum.g + accum.b, 1.05);
+        accum = saturate(cA * float4(0.0, ROne, 1.0-ROne, 1.0));
+        image.g = pow(accum.r + accum.g + accum.b, 1.10);
+        accum = saturate(cB * float4((1.0-LOne)*0.5, (1.0-LOne)*0.5, LOne, 1.0));
+        image.b = pow(accum.r + accum.g + accum.b, 1.0);
+        image.b = lerp(pow(image.b, (DeGhost * 0.15) + 1.0),
+                       1.0 - pow(abs(1.0 - image.b), (DeGhost * 0.15) + 1.0),
+                       image.b);
+
+        accum = image;
+        image.r = accum.r + (accum.r * (DeGhost * 1.5))  + (accum.g * (DeGhost * -0.75)) + (accum.b * (DeGhost * -0.75));
+        image.g = accum.g + (accum.r * (DeGhost * -0.75)) + (accum.g * (DeGhost * 1.5))   + (accum.b * (DeGhost * -0.75));
+        image.b = accum.b + (accum.r * (DeGhost * -1.5)) + (accum.g * (DeGhost * -1.5))  + (accum.b * (DeGhost * 3.0));
+        return saturate(image);
+    }
+
+    // DualDisplayFlip: same horizontal split as SbS/DualDisplay, but the LEFT
+    // half is sampled with v inverted (vertical flip).
+    if (mode == 12) {
         uint half_idx = (uv.x < 0.5) ? 0u : 1u;
         float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
         float v_src   = (half_idx == 0u) ? (1.0 - uv.y) : uv.y;
@@ -299,13 +414,15 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
     vd_fsbs_hack_     = cfg.vd_fsbs_hack;
     framepack_offset_ = static_cast<uint32_t>(cfg.framepack_offset);
     aspect_ratio_     = cfg.aspect_ratio;
-    multi_display_    = cfg.multi_display;
+    spans_two_monitors_ = (mode_ == OutputMode::DualDisplay
+                           || mode_ == OutputMode::DualDisplayFlip);
     auto_focus_       = cfg.auto_focus;
     focus_            = focus;
 
-    // Resolve target monitor(s) — reuses cfg.display_index.
+    // Resolve target monitor(s) — reuses cfg.display_index. The dual-display
+    // modes ask for a contiguous-right secondary so the window spans both.
     platform::MonitorInfo primary{}, secondary{};
-    if (!platform::ResolveTargetMonitors(cfg.display_index, cfg.multi_display, primary, secondary)) {
+    if (!platform::ResolveTargetMonitors(cfg.display_index, spans_two_monitors_, primary, secondary)) {
         LOG() << "WindowPresenter::Init: ResolveTargetMonitors failed";
         return false;
     }
@@ -338,7 +455,7 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
     LOG() << "WindowPresenter: window " << (window_ ? window_->Width() : 0) << "x"
           << (window_ ? window_->Height() : 0)
           << " on display_index=" << cfg.display_index
-          << " multi_display=" << (cfg.multi_display ? "yes" : "no")
+          << " spans_two=" << (spans_two_monitors_ ? "yes" : "no")
           << " mode=" << OutputModeToString(mode_);
 
     // Kick focus thread (z-order asserts; window thread already pumps messages).
@@ -547,6 +664,8 @@ void WindowPresenter::FocusThreadLoop()
     bool was_on_top = false;
     bool nudged     = false;
     int  reassert_counter = 0;
+    uint32_t last_auto_focused_pid = 0;   // tracks which pid we already auto-raised for (auto_focus path)
+    uint32_t last_ue3d_focused_pid = 0;   // tracks which pid we already raised for via UE3D IPC
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
@@ -560,24 +679,39 @@ void WindowPresenter::FocusThreadLoop()
         const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
 
         // Multi-display placement nudge, once after first show.
-        if (multi_display_ && !nudged) {
+        if (spans_two_monitors_ && !nudged) {
             window_->MultiDisplayNudge();
             nudged = true;
         }
 
         const bool app_running = platform::IsProcessRunning(pid);
 
+        // Reset auto-focus + UE3D latches when the tracked app is gone so a
+        // future launch of a (possibly same-pid-recycled) app can re-trigger.
+        if (pid == 0 || !app_running) {
+            last_auto_focused_pid = 0;
+            last_ue3d_focused_pid = 0;
+        }
+
         bool want_on_top = false;
         if (man_on_top) {
             want_on_top = true;
         } else if (is_on_top && app_running) {
             want_on_top = true;
-        } else if (auto_focus_ && !is_on_top && !ue3d_on_top && app_running && pid != 0) {
-            // Matches the old FocusUpdateThread auto-raise trigger on new app launch.
+        } else if (auto_focus_ && !is_on_top && !ue3d_on_top
+                   && app_running && pid != 0
+                   && pid != last_auto_focused_pid) {
+            // Auto-raise once per new tracked app PID. Without the pid latch
+            // the user could never disable topmost via Ctrl+F8 while an app
+            // is running — this branch would re-enable it on the next tick.
             if (focus_.is_on_top)  focus_.is_on_top->store(true);
             if (focus_.man_on_top) focus_.man_on_top->store(true);
+            last_auto_focused_pid = pid;
             want_on_top = true;
-        } else if (ue3d_on_top) {
+        } else if (ue3d_on_top && pid != 0 && pid != last_ue3d_focused_pid) {
+            // UE3D IPC set ue3d_on_top_; raise once per new pid. Same latch
+            // pattern as auto-focus so Ctrl+F8 can subsequently disable it.
+            last_ue3d_focused_pid = pid;
             want_on_top = true;
         }
 
