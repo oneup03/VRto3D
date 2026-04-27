@@ -196,6 +196,7 @@ void NvStereoDx9Presenter::RemoveFseSubclass()
                       reinterpret_cast<LONG_PTR>(orig_wndproc_));
     Sleep(1000);  
     SetWindowLongPtrW(subclassed_hwnd_, GWLP_USERDATA, 0);
+    Sleep(1000);  
     LOG() << "NvStereoDx9Presenter: FSE WndProc subclass removed";
     orig_wndproc_    = nullptr;
     subclassed_hwnd_ = nullptr;
@@ -319,81 +320,10 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     }
 
     // Tear down on this thread.
-    //
-    // FSE D3D9 + 3D Vision needs a careful exit sequence or the GPU/display
-    // wedges. The approach that works (matching XR3DV) is:
-    //
-    //  1) Let in-flight PresentEx drain (small sleep).
-    //  2) Release DEFAULT-pool surfaces (back_buffer_, packed_default_).
-    //  3) Destroy the NVAPI stereo handle FIRST — this shuts down the 3D
-    //     Vision pipeline (IR emitter, stereo DDI hooks) while the device
-    //     is still in FSE, which is the state the driver expects.
-    //     Do NOT call NvAPI_Stereo_Deactivate — DestroyHandle is sufficient
-    //     and Deactivate during teardown has been observed to wedge the GPU.
-    //  4) Release SYSMEM surfaces, staging texture, device, d3d9 factory.
-    //     The device's final Release exits FSE atomically — no separate
-    //     ResetEx(windowed) needed. ResetEx forces a display mode transition
-    //     that races with the still-draining stereo pipeline and can deadlock
-    //     the GPU (this was the root cause of the shutdown freeze).
-    //  5) Destroy the window (no D3D9 object holds it any more).
-    //  6) Skip NvAPI_Unload — NVAPI is a process singleton and unloading
-    //     it while other GPU consumers are still draining races; let it
-    //     persist until vrserver exit.
-    LOG() << "NvStereoDx9Presenter: teardown step 0 — remove FSE WndProc subclass";
+    LOG() << "NvStereoDx9Presenter: teardown step 1 — remove FSE WndProc subclass";
     RemoveFseSubclass();
-
-    LOG() << "NvStereoDx9Presenter: teardown step 1 — drain in-flight PresentEx";
-    Sleep(1000);
-
-    LOG() << "NvStereoDx9Presenter: teardown step 2 — release DEFAULT-pool surfaces";
-    back_buffer_.Reset();
-    packed_default_.Reset();
-
-    LOG() << "NvStereoDx9Presenter: teardown step 3 — destroy stereo handle";
-    if (stereo_handle_) {
-        NvAPI_Stereo_DestroyHandle(stereo_handle_);
-        stereo_handle_   = nullptr;
-        stereo_activated_ = false;
-    }
-    Sleep(1000);
-
-    LOG() << "NvStereoDx9Presenter: teardown step 4 — release SYSMEM + device + factory";
-    packed_sysmem_.Reset();
-    Sleep(1000);
-    staging_.Reset();
-    Sleep(1000);
-    device9_.Reset();   // <-- FSE→desktop mode transition happens here
-    Sleep(1000);
-    d3d9_.Reset();
-
-    // The device release above exits FSE, triggering a display mode transition.
-    // The DWM must recompose the desktop before the window is destroyed. Pump
-    // messages and give it plenty of time to settle, otherwise the DWM's
-    // internal state for this window can race with the destruction and freeze.
-    LOG() << "NvStereoDx9Presenter: teardown step 4b — settle after FSE exit";
-    {
-        HWND hwnd = window_ ? static_cast<HWND>(window_->NativeHandle()) : nullptr;
-        MSG msg;
-        for (int i = 0; i < 10; ++i) {
-            if (hwnd) {
-                while (PeekMessageW(&msg, hwnd, 0, 0, PM_REMOVE)) {
-                    TranslateMessage(&msg);
-                    DispatchMessageW(&msg);
-                }
-            }
-            // Also pump thread messages (display-change notifications, etc.)
-            while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
-            Sleep(500);
-        }
-    }
-    LOG() << "NvStereoDx9Presenter: teardown step 4b — settle complete (500ms)";
-
-    LOG() << "NvStereoDx9Presenter: teardown step 5 — destroy window";
-    window_.reset();
-    // NvAPI_Unload intentionally skipped — let it persist for process lifetime.
+    LOG() << "NvStereoDx9Presenter: teardown step 2 — TerminateProcess (hard exit)";
+    TerminateProcess(GetCurrentProcess(), 0);
     LOG() << "NvStereoDx9Presenter: window thread exited";
 }
 
