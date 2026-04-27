@@ -70,9 +70,13 @@ private:
     std::unique_ptr<platform::PresentWindow>      window_;
 
     // WndProc subclass to suppress minimize-on-deactivate in FSE mode.
+    // suppress_minimize_ is toggled by FocusThreadLoop; when false the
+    // subclass passes deactivation messages through so the FSE window
+    // can minimize normally (e.g. when the user turns off "on-top").
     static LRESULT CALLBACK FseSubclassProc(HWND hw, UINT msg, WPARAM wp, LPARAM lp);
-    HWND    subclassed_hwnd_ = nullptr;
-    WNDPROC orig_wndproc_    = nullptr;
+    HWND               subclassed_hwnd_   = nullptr;
+    WNDPROC            orig_wndproc_      = nullptr;
+    std::atomic<bool>  suppress_minimize_{true};
 
     // D3D9Ex objects — owned and used only by the window thread.
     Microsoft::WRL::ComPtr<IDirect3D9Ex>           d3d9_;

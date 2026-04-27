@@ -1168,6 +1168,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
     else if (status == vr::VREvent_ProcessDisconnected)
     {
         is_on_top_ = false;
+        man_on_top_ = false;
         ue3d_on_top_ = false;
     }
 }
