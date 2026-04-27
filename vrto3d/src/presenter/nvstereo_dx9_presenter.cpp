@@ -11,12 +11,20 @@
 
 #include "nvstereo_dx9_presenter.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <delayimp.h>
+
+#include <nlohmann/json.hpp>
+#include <openvr_driver.h>
 
 #include "dx11_renderer.h"
 #include "vrto3dlib/debug_log.hpp"
@@ -87,6 +95,305 @@ NvAPI_Status TryNvAPIInitializeSEH(bool* dll_failure)
 }
 
 }  // namespace
+
+
+// ===========================================================================
+// NvTimingsDb implementation
+// ===========================================================================
+
+namespace {
+
+uint16_t json_u16(const nlohmann::json& j, const char* name) {
+    if (!j.contains(name)) throw std::runtime_error(std::string("Missing field: ") + name);
+    auto x = j.at(name).get<int64_t>();
+    if (x < 0 || x > 0xFFFF) throw std::runtime_error(std::string("Field out of range u16: ") + name);
+    return static_cast<uint16_t>(x);
+}
+
+uint32_t json_u32(const nlohmann::json& j, const char* name) {
+    if (!j.contains(name)) throw std::runtime_error(std::string("Missing field: ") + name);
+    auto x = j.at(name).get<int64_t>();
+    if (x < 0 || x > 0xFFFFFFFF) throw std::runtime_error(std::string("Field out of range u32: ") + name);
+    return static_cast<uint32_t>(x);
+}
+
+double json_double(const nlohmann::json& j, const char* name) {
+    if (!j.contains(name)) throw std::runtime_error(std::string("Missing field: ") + name);
+    const auto& v = j.at(name);
+    if (v.is_number_float()) return v.get<double>();
+    if (v.is_number_integer()) return static_cast<double>(v.get<int64_t>());
+    throw std::runtime_error(std::string("Field not numeric: ") + name);
+}
+
+const nlohmann::json& json_must(const nlohmann::json& j, const char* name) {
+    if (!j.contains(name)) throw std::runtime_error(std::string("Missing object: ") + name);
+    return j.at(name);
+}
+
+NV_TIMING parseMonitorToNvTiming(const nlohmann::json& jmon) {
+    NV_TIMING t{};
+    std::memset(&t, 0, sizeof(t));
+
+    t.pclk = json_u32(jmon, "frequency_10khz");
+
+    const auto& jh = json_must(jmon, "hor");
+    t.HTotal      = json_u16(jh, "total");
+    t.HVisible    = json_u16(jh, "visible");
+    t.HBorder     = json_u16(jh, "border");
+    t.HFrontPorch = json_u16(jh, "frontPorch");
+    t.HSyncWidth  = json_u16(jh, "numSync");
+    t.HSyncPol    = 0;
+
+    const auto& jv = json_must(jmon, "ver");
+    t.VTotal      = json_u16(jv, "total");
+    t.VVisible    = json_u16(jv, "visible");
+    t.VBorder     = json_u16(jv, "border");
+    t.VFrontPorch = json_u16(jv, "frontPorch");
+    t.VSyncWidth  = json_u16(jv, "numSync");
+    t.VSyncPol    = 0;
+
+    t.interlaced = 0;
+    std::memset(&t.etc, 0, sizeof(t.etc));
+
+    double refresh_hz = json_double(jmon, "refresh_hz");
+    t.etc.rr    = static_cast<NvU16>(std::lround(refresh_hz));
+    t.etc.rrx1k = static_cast<NvU32>(std::lround(refresh_hz * 1000.0));
+
+    return t;
+}
+
+vrto3d::GlassesTimings parseGlasses(const nlohmann::json& jg) {
+    vrto3d::GlassesTimings g;
+    g.z = static_cast<float>(json_double(jg, "z"));
+    g.w = static_cast<float>(json_double(jg, "w"));
+    g.x = static_cast<float>(json_double(jg, "x"));
+    g.y = static_cast<float>(json_double(jg, "y"));
+    return g;
+}
+
+vrto3d::NvTimingsEntry parseEntry(const nlohmann::json& jentry) {
+    if (!jentry.contains("monitor_timings") || !jentry.contains("glasses_timings"))
+        throw std::runtime_error("Entry missing 'monitor_timings' or 'glasses_timings'");
+    vrto3d::NvTimingsEntry e;
+    const auto& jmon = jentry.at("monitor_timings");
+    e.timing     = parseMonitorToNvTiming(jmon);
+    e.refresh_hz = static_cast<float>(json_double(jmon, "refresh_hz"));
+    e.glasses    = parseGlasses(jentry.at("glasses_timings"));
+    return e;
+}
+
+
+// Parse the EDID from the display to get the vendor+product key (e.g. "ACI_23F7").
+std::wstring parse_monitor_EDID(NvU32 displayId)
+{
+    NV_EDID_DATA edidData = {};
+    edidData.version = NV_EDID_DATA_VER;
+
+    NvU8 edidBuffer[NV_EDID_DATA_SIZE_MAX] = {};
+    edidData.pEDID = edidBuffer;
+    edidData.sizeOfEDID = NV_EDID_DATA_SIZE_MAX;
+
+    NV_EDID_FLAG edidFlag = NV_EDID_FLAG_RAW;
+    NvAPI_Status status = NvAPI_DISP_GetEdidData(displayId, &edidData, &edidFlag);
+    if (status != NVAPI_OK) {
+        LOG() << "parse_monitor_EDID: NvAPI_DISP_GetEdidData failed status=" << status;
+        return L"";
+    }
+    if (edidData.sizeOfEDID < 128) {
+        LOG() << "parse_monitor_EDID: Bad EDID size: " << edidData.sizeOfEDID;
+        return L"";
+    }
+
+    const NvU8* edid = edidData.pEDID;
+
+    // Manufacturer ID (bytes 8-9)
+    uint16_t vendor_id = (static_cast<uint16_t>(edid[8]) << 8) | static_cast<uint16_t>(edid[9]);
+    char vendor_code[4] = {};
+    vendor_code[0] = ((vendor_id >> 10) & 0x1F) + 'A' - 1;
+    vendor_code[1] = ((vendor_id >> 5)  & 0x1F) + 'A' - 1;
+    vendor_code[2] = (vendor_id         & 0x1F) + 'A' - 1;
+    std::wstring vendor_string(vendor_code, vendor_code + 3);
+
+    // Product / model ID (bytes 10-11), little-endian
+    uint16_t product_id = (static_cast<uint16_t>(edid[11]) << 8) | static_cast<uint16_t>(edid[10]);
+    std::wstringstream product_stream;
+    product_stream << std::uppercase << std::hex
+                   << std::setw(4) << std::setfill(L'0')
+                   << product_id;
+
+    return vendor_string + L"_" + product_stream.str();
+}
+
+
+// Display-arrangement helpers to preserve monitor positions across mode switches.
+struct DisplayPositionSnapshot {
+    std::wstring deviceName;
+    POINTL       position;
+};
+
+struct WindowSnapshot {
+    HWND hwnd;
+    RECT rect;
+};
+
+std::vector<DisplayPositionSnapshot> SnapshotDisplayPositions()
+{
+    std::vector<DisplayPositionSnapshot> snapshots;
+    DISPLAY_DEVICEW dd = {};
+    dd.cb = sizeof(dd);
+    for (DWORD i = 0; EnumDisplayDevicesW(nullptr, i, &dd, 0); ++i) {
+        if (!(dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)) {
+            dd = {}; dd.cb = sizeof(dd); continue;
+        }
+        DEVMODE dm = {};
+        dm.dmSize = sizeof(dm);
+        if (EnumDisplaySettingsExW(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm, 0)) {
+            DisplayPositionSnapshot snap;
+            snap.deviceName = dd.DeviceName;
+            snap.position   = dm.dmPosition;
+            snapshots.push_back(snap);
+        }
+        dd = {}; dd.cb = sizeof(dd);
+    }
+    return snapshots;
+}
+
+void RestoreDisplayPositions(const std::vector<DisplayPositionSnapshot>& snapshots)
+{
+    if (snapshots.empty()) return;
+
+    UINT32 numPaths = 0, numModes = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &numPaths, &numModes) != ERROR_SUCCESS)
+        return;
+
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths(numPaths);
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes(numModes);
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &numPaths, paths.data(),
+                           &numModes, modes.data(), nullptr) != ERROR_SUCCESS)
+        return;
+    paths.resize(numPaths);
+    modes.resize(numModes);
+
+    std::unordered_map<std::wstring, POINTL> posMap;
+    for (const auto& snap : snapshots) posMap[snap.deviceName] = snap.position;
+
+    for (auto& mode : modes) {
+        if (mode.infoType != DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE) continue;
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME srcName = {};
+        srcName.header.type      = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        srcName.header.size      = sizeof(srcName);
+        srcName.header.adapterId = mode.adapterId;
+        srcName.header.id        = mode.id;
+        if (DisplayConfigGetDeviceInfo(&srcName.header) != ERROR_SUCCESS) continue;
+        auto it = posMap.find(srcName.viewGdiDeviceName);
+        if (it == posMap.end()) continue;
+        mode.sourceMode.position.x = it->second.x;
+        mode.sourceMode.position.y = it->second.y;
+    }
+
+    SetDisplayConfig(numPaths, paths.data(), numModes, modes.data(),
+                     SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE | SDC_NO_OPTIMIZATION);
+}
+
+std::vector<WindowSnapshot> SnapshotProcessWindows()
+{
+    struct Ctx { DWORD pid; std::vector<WindowSnapshot> windows; };
+    Ctx ctx{ GetCurrentProcessId(), {} };
+    EnumWindows([](HWND hwnd, LPARAM lp) -> BOOL {
+        auto& c = *reinterpret_cast<Ctx*>(lp);
+        DWORD wndPid = 0;
+        GetWindowThreadProcessId(hwnd, &wndPid);
+        if (wndPid != c.pid || !IsWindowVisible(hwnd)) return TRUE;
+        RECT r{};
+        if (GetWindowRect(hwnd, &r)) c.windows.push_back({ hwnd, r });
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&ctx));
+    return ctx.windows;
+}
+
+void RestoreProcessWindows(const std::vector<WindowSnapshot>& snapshots)
+{
+    for (const auto& snap : snapshots) {
+        if (!IsWindow(snap.hwnd)) continue;
+        int w = snap.rect.right  - snap.rect.left;
+        int h = snap.rect.bottom - snap.rect.top;
+        SetWindowPos(snap.hwnd, nullptr, snap.rect.left, snap.rect.top, w, h,
+                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
+    }
+}
+
+// Pump messages and sleep to let a modeset settle.
+void WaitForModesetSettle(DWORD timeoutMs)
+{
+    DWORD start = GetTickCount();
+    while (GetTickCount() - start < timeoutMs) {
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        Sleep(10);
+    }
+}
+
+}  // namespace
+
+
+// ---------------------------------------------------------------------------
+// NvTimingsDb public methods
+// ---------------------------------------------------------------------------
+
+NvTimingsDb NvTimingsDb::Load(const std::string& jsonPath) {
+    std::ifstream ifs(jsonPath);
+    if (!ifs) throw std::runtime_error("NvTimingsDb: failed to open: " + jsonPath);
+    nlohmann::json j;
+    ifs >> j;
+    NvTimingsDb db;
+    db.data_.reserve(j.size());
+    for (auto it = j.begin(); it != j.end(); ++it)
+        db.data_.emplace(it.key(), parseEntry(it.value()));
+    return db;
+}
+
+std::optional<NvTimingsEntry> NvTimingsDb::findExact(const std::string& key) const {
+    auto it = data_.find(key);
+    if (it == data_.end()) return std::nullopt;
+    return it->second;
+}
+
+std::optional<NvTimingsEntry> NvTimingsDb::findByBaseAndRefresh(const std::string& baseKey, int refreshNearestInt) const {
+    return findExact(baseKey + "_" + std::to_string(refreshNearestInt));
+}
+
+std::optional<NvTimingsEntry> NvTimingsDb::findHighestRefreshForBase(const std::string& baseKey) const {
+    const std::string prefix = baseKey + "_";
+    int bestRefresh = -1;
+    const NvTimingsEntry* best = nullptr;
+    for (const auto& kv : data_) {
+        if (kv.first.size() <= prefix.size()) continue;
+        if (kv.first.compare(0, prefix.size(), prefix) != 0) continue;
+        const std::string suffix = kv.first.substr(prefix.size());
+        if (suffix.empty() || !std::all_of(suffix.begin(), suffix.end(), ::isdigit)) continue;
+        int rr = std::stoi(suffix);
+        if (rr > bestRefresh) { bestRefresh = rr; best = &kv.second; }
+    }
+    if (best) {
+        NvTimingsEntry result = *best;
+        result.refresh_int = static_cast<NvU16>(bestRefresh);
+        return result;
+    }
+    return std::nullopt;
+}
+
+std::string NvTimingsDb::to_utf8(const std::wstring& ws) {
+    if (ws.empty()) return {};
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, ws.data(), static_cast<int>(ws.size()),
+                                          nullptr, 0, nullptr, nullptr);
+    std::string out(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, ws.data(), static_cast<int>(ws.size()),
+                        out.data(), size_needed, nullptr, nullptr);
+    return out;
+}
 
 
 // ---------------------------------------------------------------------------
@@ -224,7 +531,9 @@ bool NvStereoDx9Presenter::Init(Dx11Renderer& renderer,
     window_failed_.store(false);
     window_thread_ = std::thread(&NvStereoDx9Presenter::WindowThreadLoop, this, &renderer, primary);
 
-    for (int i = 0; i < 500; ++i) {
+    // 30-second timeout (3000 × 10ms) to account for LightBoost modeset
+    // which can take several seconds (WaitForModesetSettle + driver time).
+    for (int i = 0; i < 3000; ++i) {
         if (window_ready_.load() || window_failed_.load()) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -248,15 +557,8 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     monitor_w_ = primary.width;
     monitor_h_ = primary.height;
 
-    window_ = platform::CreatePresentWindow(primary, nullptr, 0, "VRto3D-3DVision");
-    if (!window_) {
-        LOG() << "NvStereoDx9Presenter: CreatePresentWindow failed";
-        window_failed_.store(true);
-        return;
-    }
-    HWND hwnd = static_cast<HWND>(window_->NativeHandle());
-
-    // 1. NvAPI_Initialize — guarded by SEH so missing nvapi64.dll = clean fail
+    // 1. NvAPI_Initialize — guarded by SEH so missing nvapi64.dll = clean fail.
+    //    Must happen before anything NVAPI-related (LightBoost, stereo, etc.).
     {
         bool dll_missing = false;
         NvAPI_Status s = TryNvAPIInitializeSEH(&dll_missing);
@@ -264,13 +566,11 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
             LOG() << "NvStereoDx9Presenter: nvapi64.dll not resolvable. "
                   << "Install NVIDIA drivers, or pick a different output_mode.";
             window_failed_.store(true);
-            window_.reset();
             return;
         }
         if (s != NVAPI_OK) {
             LOG() << "NvStereoDx9Presenter: NvAPI_Initialize failed code=" << static_cast<int>(s);
             window_failed_.store(true);
-            window_.reset();
             return;
         }
     }
@@ -284,16 +584,33 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
                   << "Enable it in NVIDIA Control Panel under 'Set up stereoscopic 3D'.";
             NvAPI_Unload();
             window_failed_.store(true);
-            window_.reset();
             return;
         }
     }
 
+    // 3. LightBoost: check the current resolution/timings against the
+    //    nvtimings.json database. If the monitor's current timing doesn't
+    //    match a known entry, apply a LightBoost custom resolution.
+    //    This must happen BEFORE creating the window so the modeset is
+    //    settled and the D3D9 FSE device sees the correct timing.
+    //    Non-fatal — failures are logged but never abort init.
+    CheckAndApplyLightBoost();
+
     // (driver-version check removed — patched drivers expose 3D Vision again)
 
-    // 3-10. Build D3D9Ex device + packed surfaces + activate stereo
+    window_ = platform::CreatePresentWindow(primary, nullptr, 0, "VRto3D-3DVision");
+    if (!window_) {
+        LOG() << "NvStereoDx9Presenter: CreatePresentWindow failed";
+        DisableLightBoost();
+        window_failed_.store(true);
+        return;
+    }
+    HWND hwnd = static_cast<HWND>(window_->NativeHandle());
+
+    // 4-10. Build D3D9Ex device + packed surfaces + activate stereo
     if (!BuildD3D9Stack(hwnd, primary.width, primary.height, primary.refresh_hz)) {
         LOG() << "NvStereoDx9Presenter: BuildD3D9Stack failed";
+        DisableLightBoost();
         NvAPI_Unload();
         window_failed_.store(true);
         window_.reset();
@@ -320,9 +637,11 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     }
 
     // Tear down on this thread.
-    LOG() << "NvStereoDx9Presenter: teardown step 1 — remove FSE WndProc subclass";
+    LOG() << "NvStereoDx9Presenter: teardown step 1 — disable LightBoost";
+    DisableLightBoost();
+    LOG() << "NvStereoDx9Presenter: teardown step 2 — remove FSE WndProc subclass";
     RemoveFseSubclass();
-    LOG() << "NvStereoDx9Presenter: teardown step 2 — TerminateProcess (hard exit)";
+    LOG() << "NvStereoDx9Presenter: teardown step 3 — TerminateProcess (hard exit)";
     TerminateProcess(GetCurrentProcess(), 0);
     LOG() << "NvStereoDx9Presenter: window thread exited";
 }
@@ -621,7 +940,7 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
         hdr.width     = per_eye_w;
         hdr.height    = td.Height;
         hdr.bpp       = 32;
-        hdr.flags     = eye_swap_ ? 0u : 1u;
+        hdr.flags     = eye_swap_ ? 1u : 0u;
         uint8_t* hdr_row = static_cast<uint8_t*>(lr.pBits) + td.Height * lr.Pitch;
         std::memcpy(hdr_row, &hdr, sizeof(hdr));
 
@@ -802,6 +1121,281 @@ void NvStereoDx9Presenter::FocusThreadLoop()
 
         std::this_thread::sleep_for(50ms);
     }
+}
+
+
+// ===========================================================================
+// LightBoost — check current resolution/timings against the nvtimings.json
+// database. If a match is found, apply the LightBoost custom resolution via
+// NvAPI_DISP_TryCustomDisplay so the monitor enters low-persistence mode.
+// ===========================================================================
+
+void NvStereoDx9Presenter::CheckAndApplyLightBoost()
+{
+    LOG() << "NvStereoDx9Presenter::CheckAndApplyLightBoost";
+
+    NvAPI_Status  status;
+
+    NvPhysicalGpuHandle gpu_handles[NVAPI_MAX_PHYSICAL_GPUS] = {};
+    NvU32               gpu_count = 0;
+
+    status = NvAPI_EnumPhysicalGPUs(gpu_handles, &gpu_count);
+    if (status != NVAPI_OK || gpu_count == 0) {
+        LOG() << "CheckAndApplyLightBoost: Failed to enumerate NVIDIA GPUs. Status=" << status;
+        return;
+    }
+
+    // Load the nvtimings.json database via VRResources.
+    NvTimingsDb db;
+    try {
+        char path[512] = {};
+        vr::VRResources()->GetResourceFullPath(
+            "{vrto3d}/nvtimings.json", "", path, sizeof(path));
+        LOG() << "CheckAndApplyLightBoost: loading nvtimings.json from: " << path;
+        db = NvTimingsDb::Load(path);
+    } catch (const std::exception& ex) {
+        LOG() << "CheckAndApplyLightBoost: Error loading nvtimings.json: " << ex.what();
+        return;
+    }
+
+    primary_display_ids_.clear();
+    bool haveAnyMatch = false;
+    bool timingsInitialized = false;
+
+    for (NvU32 gpuIndex = 0; gpuIndex < gpu_count; ++gpuIndex) {
+        NvPhysicalGpuHandle gpu = gpu_handles[gpuIndex];
+
+        NV_GPU_DISPLAYIDS display_ids[NVAPI_MAX_DISPLAYS] = {};
+        NvU32 display_count = NVAPI_MAX_DISPLAYS;
+        for (NvU32 i = 0; i < display_count; ++i)
+            display_ids[i].version = NV_GPU_DISPLAYIDS_VER;
+
+        status = NvAPI_GPU_GetConnectedDisplayIds(gpu, display_ids, &display_count, 0);
+        if (status != NVAPI_OK || display_count == 0) continue;
+
+        for (NvU32 d = 0; d < display_count; ++d) {
+            const NvU32 displayId = display_ids[d].displayId;
+
+            std::wstring monitor_edid = parse_monitor_EDID(displayId);
+            if (monitor_edid.empty()) continue;
+
+            // Query the current timing for this display.
+            NV_TIMING       timing  = {};
+            NV_TIMING_INPUT current = {};
+            current.version = NV_TIMING_INPUT_VER;
+
+            status = NvAPI_DISP_GetTiming(displayId, &current, &timing);
+            if (status != NVAPI_OK) {
+                LOG() << "CheckAndApplyLightBoost: NvAPI_DISP_GetTiming failed for display "
+                      << displayId << " status=" << status;
+                continue;
+            }
+
+            LOG() << "CheckAndApplyLightBoost: GPU " << gpuIndex
+                  << " Display[" << d << "] EDID=" << NvTimingsDb::to_utf8(monitor_edid)
+                  << " rr=" << timing.etc.rr
+                  << " VTotal=" << timing.VTotal << " HTotal=" << timing.HTotal;
+
+            std::string baseKey = NvTimingsDb::to_utf8(monitor_edid);
+
+            // Look up: exact base+refresh first, then highest available refresh.
+            std::optional<NvTimingsEntry> e = db.findByBaseAndRefresh(baseKey, timing.etc.rr);
+            bool usedFallback = false;
+            if (!e) {
+                e = db.findHighestRefreshForBase(baseKey);
+                usedFallback = e.has_value();
+                if (usedFallback) {
+                    LOG() << "CheckAndApplyLightBoost: " << baseKey
+                          << " no exact match for refresh=" << timing.etc.rr
+                          << " — falling back to highest available: " << (int)e->refresh_int << " Hz";
+                }
+            }
+
+            if (!e) continue;
+
+            haveAnyMatch = true;
+            primary_display_ids_.push_back(displayId);
+
+            if (!timingsInitialized) {
+                monitor_timings_ = *e;
+                monitor_timings_.refresh_int  = usedFallback ? e->refresh_int : timing.etc.rr;
+                monitor_timings_.monitor_EDID = baseKey;
+
+                // Check if the current VTotal matches the DB entry.
+                // If it matches, LightBoost is already active or not needed.
+                if (timing.VTotal == e->timing.VTotal &&
+                    timing.HTotal == e->timing.HTotal &&
+                    timing.pclk   == e->timing.pclk) {
+                    LOG() << "CheckAndApplyLightBoost: timings already match DB entry — "
+                          << "LightBoost resolution not needed.";
+                } else {
+                    LOG() << "CheckAndApplyLightBoost: timings MISMATCH. "
+                          << "Current VTotal=" << timing.VTotal << " DB VTotal=" << e->timing.VTotal
+                          << " Current HTotal=" << timing.HTotal << " DB HTotal=" << e->timing.HTotal
+                          << " Current pclk=" << timing.pclk << " DB pclk=" << e->timing.pclk
+                          << " — will apply LightBoost resolution.";
+                }
+
+                timingsInitialized = true;
+            }
+        }
+    }
+
+    if (!haveAnyMatch) {
+        LOG() << "CheckAndApplyLightBoost: no displays matched in nvtimings.json.";
+        return;
+    }
+
+    LOG() << "CheckAndApplyLightBoost: primary_display_ids count=" << primary_display_ids_.size();
+
+    // Attempt to enable LightBoost with the matched timings.
+    EnableLightBoost();
+}
+
+
+void NvStereoDx9Presenter::EnableLightBoost()
+{
+    NvAPI_Status status = NVAPI_OK;
+
+    if (lightboost_enabled_) return;
+
+    LOG() << "NvStereoDx9Presenter::EnableLightBoost";
+
+    if (primary_display_ids_.empty()) {
+        LOG() << "EnableLightBoost: primary_display_ids_ is empty.";
+        return;
+    }
+
+    std::vector<NvU32>             idArray;
+    std::vector<NV_CUSTOM_DISPLAY> displayArray;
+
+    for (NvU32 displayId : primary_display_ids_) {
+        // Fetch live timing to pick up HSyncPol, VSyncPol, interlaced, and etc fields.
+        NV_TIMING       liveTiming = {};
+        NV_TIMING_INPUT current    = {};
+        current.version = NV_TIMING_INPUT_VER;
+
+        status = NvAPI_DISP_GetTiming(displayId, &current, &liveTiming);
+        if (status != NVAPI_OK) {
+            LOG() << "EnableLightBoost: Failed to get live timing for displayId=" << displayId
+                  << " Status=" << status << " — skipping.";
+            continue;
+        }
+
+        // Merge DB-sourced core timing with live polarity/interlaced/etc fields.
+        NV_TIMING merged  = monitor_timings_.timing;
+        merged.HSyncPol   = liveTiming.HSyncPol;
+        merged.VSyncPol   = liveTiming.VSyncPol;
+        merged.interlaced = liveTiming.interlaced;
+        merged.etc        = liveTiming.etc;
+        merged.etc.rr     = monitor_timings_.timing.etc.rr;
+        merged.etc.rrx1k  = monitor_timings_.timing.etc.rrx1k;
+
+        LOG() << "EnableLightBoost: display=" << displayId
+              << " pclk=" << merged.pclk
+              << " HTotal=" << merged.HTotal << " VTotal=" << merged.VTotal
+              << " rr=" << merged.etc.rr << " rrx1k=" << merged.etc.rrx1k;
+
+        NV_CUSTOM_DISPLAY cd = {};
+        cd.version       = NV_CUSTOM_DISPLAY_VER;
+        cd.timing        = merged;
+        cd.srcPartition  = { 0.0f, 0.0f, 1.0f, 1.0f };
+        cd.width         = merged.HVisible;
+        cd.height        = merged.VVisible;
+        cd.colorFormat   = NV_FORMAT_A8R8G8B8;
+        cd.xRatio        = 1.0f;
+        cd.yRatio        = 1.0f;
+        cd.depth         = 32;
+
+        idArray.push_back(displayId);
+        displayArray.push_back(cd);
+    }
+
+    if (idArray.empty()) {
+        LOG() << "EnableLightBoost: No displays could be prepared.";
+        return;
+    }
+
+    // Check for active NVIDIA Surround/Mosaic topology — TryCustomDisplay
+    // cannot modify individual displays when they are grouped.
+    {
+        NV_MOSAIC_TOPO_BRIEF      topoBrief   = {};
+        NV_MOSAIC_DISPLAY_SETTING dispSetting = {};
+        NvS32 overlapX = 0, overlapY = 0;
+        topoBrief.version   = NVAPI_MOSAIC_TOPO_BRIEF_VER;
+        dispSetting.version = NVAPI_MOSAIC_DISPLAY_SETTING_VER;
+
+        NvAPI_Status ms = NvAPI_Mosaic_GetCurrentTopo(&topoBrief, &dispSetting, &overlapX, &overlapY);
+        if (ms == NVAPI_OK && topoBrief.enabled) {
+            LOG() << "EnableLightBoost: Surround/Mosaic active — skipping TryCustomDisplay.";
+            return;
+        }
+    }
+
+    LOG() << "EnableLightBoost: Calling NvAPI_DISP_TryCustomDisplay for "
+          << idArray.size() << " display(s).";
+
+    auto posSnapshot = SnapshotDisplayPositions();
+    auto wndSnapshot = SnapshotProcessWindows();
+    WaitForModesetSettle(100);
+
+    status = NvAPI_DISP_TryCustomDisplay(idArray.data(),
+                                          static_cast<NvU32>(idArray.size()),
+                                          displayArray.data());
+    if (status != NVAPI_OK) {
+        LOG() << "EnableLightBoost: NvAPI_DISP_TryCustomDisplay failed Status=" << status
+              << " — reverting.";
+        NvAPI_DISP_RevertCustomDisplayTrial(idArray.data(), static_cast<NvU32>(idArray.size()));
+        WaitForModesetSettle(500);
+        RestoreDisplayPositions(posSnapshot);
+        RestoreProcessWindows(wndSnapshot);
+        return;
+    }
+
+    WaitForModesetSettle(500);
+    RestoreDisplayPositions(posSnapshot);
+    RestoreProcessWindows(wndSnapshot);
+
+    lightboost_enabled_ = true;
+    LOG() << "EnableLightBoost: NvAPI_DISP_TryCustomDisplay succeeded for "
+          << idArray.size() << " display(s).";
+}
+
+
+void NvStereoDx9Presenter::DisableLightBoost()
+{
+    if (!lightboost_enabled_) return;
+
+    LOG() << "NvStereoDx9Presenter::DisableLightBoost";
+
+    if (primary_display_ids_.empty()) {
+        LOG() << "DisableLightBoost: primary_display_ids_ is empty.";
+        lightboost_enabled_ = false;
+        return;
+    }
+
+    std::vector<NvU32> idArray(primary_display_ids_.begin(), primary_display_ids_.end());
+
+    LOG() << "DisableLightBoost: Calling NvAPI_DISP_RevertCustomDisplayTrial for "
+          << idArray.size() << " display(s).";
+
+    auto posSnapshot = SnapshotDisplayPositions();
+    auto wndSnapshot = SnapshotProcessWindows();
+
+    NvAPI_Status status = NvAPI_DISP_RevertCustomDisplayTrial(
+        idArray.data(), static_cast<NvU32>(idArray.size()));
+
+    LOG() << "DisableLightBoost: NvAPI_DISP_RevertCustomDisplayTrial returned " << status;
+
+    WaitForModesetSettle(500);
+
+    if (status == NVAPI_OK) {
+        RestoreDisplayPositions(posSnapshot);
+        RestoreProcessWindows(wndSnapshot);
+        LOG() << "DisableLightBoost: revert succeeded.";
+    }
+
+    lightboost_enabled_ = false;
 }
 
 

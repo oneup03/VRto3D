@@ -12,7 +12,10 @@
 
 #include <atomic>
 #include <memory>
+#include <optional>
+#include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <wrl/client.h>
@@ -26,6 +29,38 @@
 #include "vrto3dlib/stereo_config.h"
 
 namespace vrto3d {
+
+// Glasses shutter-timing parameters (microseconds) from the nvtimings.json DB.
+struct GlassesTimings {
+    float z{};   // frame time
+    float w{};
+    float x{};   // open delay
+    float y{};   // open duration
+};
+
+// One entry in the nvtimings.json database, keyed by "VENDOR_PRODUCT_REFRESH".
+struct NvTimingsEntry {
+    std::string    monitor_EDID;
+    NV_TIMING      timing{};       // NVAPI monitor timing
+    float          refresh_hz{};   // convenience (from JSON)
+    NvU16          refresh_int{};
+    GlassesTimings glasses;
+};
+
+// Loads and queries the nvtimings.json file.
+class NvTimingsDb {
+public:
+    static NvTimingsDb Load(const std::string& jsonPath);
+
+    std::optional<NvTimingsEntry> findExact(const std::string& key) const;
+    std::optional<NvTimingsEntry> findByBaseAndRefresh(const std::string& baseKey, int refreshNearestInt) const;
+    std::optional<NvTimingsEntry> findHighestRefreshForBase(const std::string& baseKey) const;
+
+    static std::string to_utf8(const std::wstring& ws);
+
+private:
+    std::unordered_map<std::string, NvTimingsEntry> data_;
+};
 
 // NVIDIA 3D Vision via NVAPI + D3D9Ex.
 //
@@ -59,6 +94,14 @@ private:
     void FocusThreadLoop();
     void InstallFseSubclass(HWND hwnd);
     void RemoveFseSubclass();
+
+    // LightBoost: check current resolution/timings against the nvtimings.json
+    // database and apply a LightBoost custom resolution if the monitor's
+    // current timing doesn't match a known entry.
+    // All three are non-fatal — failures are logged but never abort init.
+    void CheckAndApplyLightBoost();
+    void EnableLightBoost();
+    void DisableLightBoost();
 
     Dx11Renderer* renderer_ = nullptr;
     bool          eye_swap_ = false;
@@ -108,6 +151,11 @@ private:
 
     std::thread       focus_thread_;
     std::atomic<bool> focus_stop_{false};
+
+    // LightBoost state
+    bool                   lightboost_enabled_ = false;
+    NvTimingsEntry         monitor_timings_{};
+    std::vector<NvU32>     primary_display_ids_;
 };
 
 }  // namespace vrto3d
