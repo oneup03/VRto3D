@@ -101,30 +101,31 @@ LRESULT CALLBACK NvStereoDx9Presenter::FseSubclassProc(HWND hw, UINT msg, WPARAM
         GetWindowLongPtrW(hw, GWLP_USERDATA));
     WNDPROC orig = self ? self->orig_wndproc_ : DefWindowProcW;
 
-    switch (msg) {
-    case WM_ACTIVATE:
-        if (LOWORD(wp) == WA_INACTIVE) {
-            // Swallow deactivation — prevents FSE window from minimizing.
+    // When suppress_minimize_ is true (default / "on-top" active), swallow
+    // deactivation messages so the FSE window never minimizes.  When false
+    // (user toggled on-top off), let everything through — the FSE window
+    // will minimize normally when it loses focus.
+    const bool suppress = self && self->suppress_minimize_.load(std::memory_order_relaxed);
+
+    if (suppress) {
+        switch (msg) {
+        case WM_ACTIVATE:
+            if (LOWORD(wp) == WA_INACTIVE)
+                return 0;
+            break;
+        case WM_ACTIVATEAPP:
+            if (!wp)
+                return 0;
+            break;
+        case WM_KILLFOCUS:
             return 0;
+        case WM_SYSCOMMAND:
+            if ((wp & 0xFFF0) == SC_MINIMIZE ||
+                (wp & 0xFFF0) == SC_SCREENSAVE ||
+                (wp & 0xFFF0) == SC_MONITORPOWER)
+                return 0;
+            break;
         }
-        break;
-    case WM_ACTIVATEAPP:
-        if (!wp) {
-            // Swallow app-deactivation.
-            return 0;
-        }
-        break;
-    case WM_KILLFOCUS:
-        // Swallow focus loss.
-        return 0;
-    case WM_SYSCOMMAND:
-        // Block SC_MINIMIZE and screensaver/monitor-off while FSE is active.
-        if ((wp & 0xFFF0) == SC_MINIMIZE ||
-            (wp & 0xFFF0) == SC_SCREENSAVE ||
-            (wp & 0xFFF0) == SC_MONITORPOWER) {
-            return 0;
-        }
-        break;
     }
     return CallWindowProcW(orig, hw, msg, wp, lp);
 }
@@ -781,11 +782,16 @@ void NvStereoDx9Presenter::FocusThreadLoop()
             last_ue3d_focused_pid = 0;
         }
 
-        // In FSE mode the window must *always* stay on top — the WndProc
-        // subclass already swallows deactivation messages so Windows won't
-        // minimize it, but we still need to periodically reassert TOPMOST
-        // and foreground status in case the OS Z-order drifts (e.g. after
-        // a task-switch to another monitor).
+        // FSE mode: D3D9 FSE bypasses the normal window Z-order, so
+        // HWND_TOPMOST / HWND_NOTOPMOST has no visible effect.  Instead
+        // we toggle suppress_minimize_: when true the WndProc subclass
+        // swallows WM_ACTIVATE(WA_INACTIVE) etc. so the FSE window stays
+        // put; when false those messages pass through and the window can
+        // minimize normally, letting the user interact with the desktop or
+        // another display.
+        //
+        // To bring the FSE window back after a minimize we call
+        // ShowWindow(SW_RESTORE) + ForceForeground.
         if (is_fse_) {
             bool want_on_top = false;
             if (man_on_top || is_on_top || ue3d_on_top) {
@@ -798,21 +804,37 @@ void NvStereoDx9Presenter::FocusThreadLoop()
                 want_on_top = true;
             }
 
-            // Always reassert periodically in FSE to keep the 3D Vision
-            // window visible even when interacting with another display.
-            if (want_on_top || ++reassert_counter >= 10) {
-                reassert_counter = 0;
-                HWND hwnd = static_cast<HWND>(window_->NativeHandle());
+            // Update the suppress flag so the WndProc knows what to do.
+            suppress_minimize_.store(want_on_top, std::memory_order_relaxed);
+
+            HWND hwnd = static_cast<HWND>(window_->NativeHandle());
+
+            if (want_on_top && !was_on_top) {
+                // Transition OFF → ON: restore and foreground the FSE window.
                 if (hwnd) {
-                    // Re-apply TOPMOST without moving/resizing.
+                    ShowWindow(hwnd, SW_RESTORE);
                     SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                    // Only do the full foreground grab when explicitly requested,
-                    // to avoid stealing input focus from the game on the other display.
-                    if (want_on_top && !was_on_top) {
-                        ForceForeground(hwnd);
-                        was_on_top = true;
-                    }
+                    ForceForeground(hwnd);
+                }
+                was_on_top = true;
+                reassert_counter = 0;
+            } else if (!want_on_top && was_on_top) {
+                // Transition ON → OFF: actively minimize the FSE window.
+                // Just clearing suppress_minimize_ isn't enough — D3D9 FSE
+                // won't spontaneously receive deactivation messages, so we
+                // must explicitly minimize it.
+                if (hwnd) {
+                    ShowWindow(hwnd, SW_MINIMIZE);
+                }
+                was_on_top = false;
+                reassert_counter = 0;
+            } else if (want_on_top && ++reassert_counter >= 10) {
+                // Periodically reassert foreground while on-top is active.
+                reassert_counter = 0;
+                if (hwnd) {
+                    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                 }
             }
 
