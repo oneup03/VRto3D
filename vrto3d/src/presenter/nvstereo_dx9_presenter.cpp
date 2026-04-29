@@ -162,23 +162,13 @@ NV_TIMING parseMonitorToNvTiming(const nlohmann::json& jmon) {
     return t;
 }
 
-vrto3d::GlassesTimings parseGlasses(const nlohmann::json& jg) {
-    vrto3d::GlassesTimings g;
-    g.z = static_cast<float>(json_double(jg, "z"));
-    g.w = static_cast<float>(json_double(jg, "w"));
-    g.x = static_cast<float>(json_double(jg, "x"));
-    g.y = static_cast<float>(json_double(jg, "y"));
-    return g;
-}
-
 vrto3d::NvTimingsEntry parseEntry(const nlohmann::json& jentry) {
-    if (!jentry.contains("monitor_timings") || !jentry.contains("glasses_timings"))
-        throw std::runtime_error("Entry missing 'monitor_timings' or 'glasses_timings'");
+    if (!jentry.contains("monitor_timings"))
+        throw std::runtime_error("Entry missing 'monitor_timings'");
     vrto3d::NvTimingsEntry e;
     const auto& jmon = jentry.at("monitor_timings");
     e.timing     = parseMonitorToNvTiming(jmon);
     e.refresh_hz = static_cast<float>(json_double(jmon, "refresh_hz"));
-    e.glasses    = parseGlasses(jentry.at("glasses_timings"));
     return e;
 }
 
@@ -400,7 +390,6 @@ std::string NvTimingsDb::to_utf8(const std::wstring& ws) {
 // FSE WndProc subclass — swallows WM_ACTIVATE(WA_INACTIVE),
 // WM_ACTIVATEAPP(FALSE), and WM_KILLFOCUS so that DefWindowProc never
 // triggers the minimize-on-deactivate behavior for our FSE D3D9Ex window.
-// This mirrors the XR3DV GameWndSubclassProc approach.
 // ---------------------------------------------------------------------------
 LRESULT CALLBACK NvStereoDx9Presenter::FseSubclassProc(HWND hw, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -519,7 +508,7 @@ bool NvStereoDx9Presenter::Init(Dx11Renderer& renderer,
     auto_focus_ = cfg.auto_focus;
     focus_      = focus;
 
-    // 3D Vision is single-monitor by definition.
+    // 3D Vision is single-monitor by default
     platform::MonitorInfo primary{}, secondary{};
     if (!platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary)) {
         LOG() << "NvStereoDx9Presenter::Init: ResolveTargetMonitors failed";
@@ -596,8 +585,6 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     //    Non-fatal — failures are logged but never abort init.
     CheckAndApplyLightBoost();
 
-    // (driver-version check removed — patched drivers expose 3D Vision again)
-
     window_ = platform::CreatePresentWindow(primary, nullptr, 0, "VRto3D-3DVision");
     if (!window_) {
         LOG() << "NvStereoDx9Presenter: CreatePresentWindow failed";
@@ -618,7 +605,7 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     }
 
     // Stereo activation retry: NvAPI_Stereo_Activate sometimes needs a dummy
-    // PresentEx cycle before it sticks (matches XR3DV behavior).
+    // PresentEx cycle before it sticks
     StereoActivationRetry();
 
     // If still not activated, arm a deferred-retry loop that fires inside
@@ -682,7 +669,7 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
         pp.BackBufferWidth        = dm.Width;
         pp.BackBufferHeight       = dm.Height;
         pp.BackBufferFormat       = dm.Format;
-        pp.BackBufferCount        = 2;        // matches XR3DV; D3D9 prefers 2 for FSE
+        pp.BackBufferCount        = 2;
         pp.MultiSampleType        = D3DMULTISAMPLE_NONE;
         pp.SwapEffect             = D3DSWAPEFFECT_DISCARD;
         pp.hDeviceWindow          = hwnd;
@@ -695,7 +682,7 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
 
     DWORD flags = D3DCREATE_HARDWARE_VERTEXPROCESSING
                 | D3DCREATE_MULTITHREADED
-                | D3DCREATE_FPU_PRESERVE;   // XR3DV uses this; avoids host FPU state surprises
+                | D3DCREATE_FPU_PRESERVE;
 
     // Validate the requested mode actually exists for this adapter — if not,
     // FSE CreateDeviceEx is guaranteed to fail with INVALIDCALL.
@@ -995,8 +982,7 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
             LOG() << "NvStereoDx9Presenter: 3D Vision did NOT engage after 60 "
                      "present cycles. Frames are being delivered as a mono SbS "
                      "image. Requirements:";
-            LOG() << "  1) NVIDIA 3D Vision driver installed (driver <= 425.31 - "
-                     "newer drivers dropped 3D Vision support on most SKUs).";
+            LOG() << "  1) NVIDIA 3D Vision driver installed (use 3D Fix Manager)";
             LOG() << "  2) NVIDIA Control Panel > 'Set up stereoscopic 3D' > "
                      "enabled, with a paired IR emitter + glasses.";
             LOG() << "  3) Target display is 3D Vision-certified (typically a "
@@ -1088,38 +1074,7 @@ void NvStereoDx9Presenter::FocusThreadLoop()
             }
 
             std::this_thread::sleep_for(50ms);
-            continue;
         }
-
-        // Windowed fallback: standard focus logic (same as other presenters).
-        bool want_on_top = false;
-        if (man_on_top) {
-            want_on_top = true;
-        } else if (is_on_top && app_running) {
-            want_on_top = true;
-        } else if (auto_focus_ && !is_on_top && !ue3d_on_top
-                   && app_running && pid != 0
-                   && pid != last_auto_focused_pid) {
-            if (focus_.is_on_top)  focus_.is_on_top->store(true);
-            if (focus_.man_on_top) focus_.man_on_top->store(true);
-            last_auto_focused_pid = pid;
-            want_on_top = true;
-        } else if (ue3d_on_top && pid != 0 && pid != last_ue3d_focused_pid) {
-            last_ue3d_focused_pid = pid;
-            want_on_top = true;
-        }
-
-        if (want_on_top != was_on_top) {
-            if (want_on_top) window_->BringToTop();
-            else             window_->ReleaseTopmost();
-            was_on_top = want_on_top;
-            reassert_counter = 0;
-        } else if (want_on_top && ++reassert_counter >= 20) {
-            reassert_counter = 0;
-            window_->BringToTop();
-        }
-
-        std::this_thread::sleep_for(50ms);
     }
 }
 
@@ -1221,18 +1176,16 @@ void NvStereoDx9Presenter::CheckAndApplyLightBoost()
                 monitor_timings_.refresh_int  = usedFallback ? e->refresh_int : timing.etc.rr;
                 monitor_timings_.monitor_EDID = baseKey;
 
-                // Check if the current VTotal matches the DB entry.
+                // Check if the current timing matches the DB entry.
                 // If it matches, LightBoost is already active or not needed.
                 if (timing.VTotal == e->timing.VTotal &&
-                    timing.HTotal == e->timing.HTotal &&
-                    timing.pclk   == e->timing.pclk) {
+                    timing.HTotal == e->timing.HTotal) {
                     LOG() << "CheckAndApplyLightBoost: timings already match DB entry — "
                           << "LightBoost resolution not needed.";
                 } else {
                     LOG() << "CheckAndApplyLightBoost: timings MISMATCH. "
                           << "Current VTotal=" << timing.VTotal << " DB VTotal=" << e->timing.VTotal
                           << " Current HTotal=" << timing.HTotal << " DB HTotal=" << e->timing.HTotal
-                          << " Current pclk=" << timing.pclk << " DB pclk=" << e->timing.pclk
                           << " — will apply LightBoost resolution.";
                 }
 

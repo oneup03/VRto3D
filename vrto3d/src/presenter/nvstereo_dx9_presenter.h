@@ -30,21 +30,12 @@
 
 namespace vrto3d {
 
-// Glasses shutter-timing parameters (microseconds) from the nvtimings.json DB.
-struct GlassesTimings {
-    float z{};   // frame time
-    float w{};
-    float x{};   // open delay
-    float y{};   // open duration
-};
-
 // One entry in the nvtimings.json database, keyed by "VENDOR_PRODUCT_REFRESH".
 struct NvTimingsEntry {
     std::string    monitor_EDID;
     NV_TIMING      timing{};       // NVAPI monitor timing
     float          refresh_hz{};   // convenience (from JSON)
     NvU16          refresh_int{};
-    GlassesTimings glasses;
 };
 
 // Loads and queries the nvtimings.json file.
@@ -64,7 +55,6 @@ private:
 
 // NVIDIA 3D Vision via NVAPI + D3D9Ex.
 //
-// Pattern mirrors XR3DV (../XR3DV/src/nvapi_stereo.cpp): a fullscreen-exclusive
 // D3D9Ex device is created on the user's chosen 3D-Vision-capable display, and
 // each frame the SBS DX11 texture from the compositor is copied into a packed-
 // stereo D3D9 surface (2W x (H+1)) carrying the NVSTEREOIMAGEHEADER signature
