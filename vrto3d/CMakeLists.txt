@@ -20,6 +20,7 @@ if(WIN32)
         src/platform/platform_win32.cpp
         src/presenter/leiasr_presenter.cpp
         src/presenter/nvstereo_dx9_presenter.cpp
+        src/presenter/display_timing_helper.cpp
     )
 else()
     list(APPEND DRIVER_SOURCES

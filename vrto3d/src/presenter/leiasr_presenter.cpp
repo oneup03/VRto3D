@@ -145,7 +145,6 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
     window_ = platform::CreatePresentWindow(
         primary,
         (secondary.width > 0 ? &secondary : nullptr),
-        0,                  // no vd_fsbs override for LeiaSR
         "VRto3D-LeiaSR");
     if (!window_) {
         LOG() << "LeiaSrPresenter: CreatePresentWindow failed";

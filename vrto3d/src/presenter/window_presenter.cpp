@@ -30,33 +30,41 @@ namespace {
 // DualDisplay / DualDisplayFlip share the SbS shader path; their distinction is
 // the window spans two contiguous monitors (handled at window-creation time).
 // DualDisplayFlip flips the left half vertically.
-constexpr uint32_t kModeSbS                        = 0;
-constexpr uint32_t kModeTaB                        = 1;
-constexpr uint32_t kModeRowInterlaced              = 2;
-constexpr uint32_t kModeColInterlaced              = 3;
-constexpr uint32_t kModeCheckerboard               = 4;
-constexpr uint32_t kModeAnaglyphRedCyan            = 5;
-constexpr uint32_t kModeAnaglyphRedCyanDubois      = 6;
-constexpr uint32_t kModeAnaglyphRedCyanDeghosted   = 7;
-constexpr uint32_t kModeAnaglyphGreenMagenta       = 8;
-constexpr uint32_t kModeAnaglyphGreenMagentaDubois = 9;
-constexpr uint32_t kModeAnaglyphGreenMagentaDeghosted = 10;
-constexpr uint32_t kModeAnaglyphBlueAmber          = 11;
-constexpr uint32_t kModeDualDisplayFlip            = 12;
+constexpr uint32_t kModeSbS                           = 0;
+constexpr uint32_t kModeTaB                           = 1;
+constexpr uint32_t kModeRowInterlaced                 = 2;
+constexpr uint32_t kModeColInterlaced                 = 3;
+constexpr uint32_t kModeCheckerboard                  = 4;
+constexpr uint32_t kModeVirtualDesktop                = 5;
+constexpr uint32_t kModeDualDisplayFlip               = 6;
+constexpr uint32_t kModeAnaglyphRedCyan               = 7;
+constexpr uint32_t kModeAnaglyphRedCyanDubois         = 8;
+constexpr uint32_t kModeAnaglyphRedCyanDeghosted      = 9;
+constexpr uint32_t kModeAnaglyphRedCyanCompromise     = 10;
+constexpr uint32_t kModeAnaglyphGreenMagenta          = 11;
+constexpr uint32_t kModeAnaglyphGreenMagentaDubois    = 12;
+constexpr uint32_t kModeAnaglyphGreenMagentaDeghosted = 13;
+constexpr uint32_t kModeAnaglyphBlueAmber             = 14;
 
 uint32_t ModeToShaderEnum(OutputMode m)
 {
     switch (m) {
         case OutputMode::SbS:                            return kModeSbS;
-        case OutputMode::DualDisplay:                    return kModeSbS;
-        case OutputMode::DualDisplayFlip:                return kModeDualDisplayFlip;
         case OutputMode::TaB:                            return kModeTaB;
         case OutputMode::RowInterlaced:                  return kModeRowInterlaced;
         case OutputMode::ColInterlaced:                  return kModeColInterlaced;
         case OutputMode::Checkerboard:                   return kModeCheckerboard;
+        case OutputMode::VirtualDesktop:                 return kModeVirtualDesktop;
+        case OutputMode::FramePacked720p60:              return kModeTaB;
+        case OutputMode::FramePacked1080p24:             return kModeTaB;
+        case OutputMode::FramePacked1080p60:             return kModeTaB;
+        case OutputMode::FramePacked1080p60CVT:          return kModeTaB;
+        case OutputMode::DualDisplay:                    return kModeSbS;
+        case OutputMode::DualDisplayFlip:                return kModeDualDisplayFlip;
         case OutputMode::AnaglyphRedCyan:                return kModeAnaglyphRedCyan;
         case OutputMode::AnaglyphRedCyanDubois:          return kModeAnaglyphRedCyanDubois;
         case OutputMode::AnaglyphRedCyanDeghosted:       return kModeAnaglyphRedCyanDeghosted;
+        case OutputMode::AnaglyphRedCyanCompromise:      return kModeAnaglyphRedCyanCompromise;
         case OutputMode::AnaglyphGreenMagenta:           return kModeAnaglyphGreenMagenta;
         case OutputMode::AnaglyphGreenMagentaDubois:     return kModeAnaglyphGreenMagentaDubois;
         case OutputMode::AnaglyphGreenMagentaDeghosted:  return kModeAnaglyphGreenMagentaDeghosted;
@@ -87,11 +95,9 @@ cbuffer Params : register(b0) {
     uint  mode;
     uint  framepack_offset;
     uint  eye_swap;
-    uint  vd_fsbs_hack;
     float out_width;
     float out_height;
     float aspect_ratio;
-    float _pad;
 };
 
 // Given a half (0=left, 1=right), sample the input SbS at the given (u_half, v).
@@ -106,16 +112,9 @@ float4 SampleEye(uint half_idx, float u_half, float v) {
 float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
     // SbS
     if (mode == 0) {
-        float2 in_uv = uv;
-        // vd_fsbs_hack: only draw rows [0.25, 0.75) (center band of a 2W x 2H window).
-        if (vd_fsbs_hack != 0) {
-            if (uv.y < 0.25 || uv.y >= 0.75) return float4(0,0,0,1);
-            in_uv.y = (uv.y - 0.25) * 2.0;
-        }
-        // Split output: left half samples left eye fully; right half samples right eye fully.
         uint half_idx = (uv.x < 0.5) ? 0u : 1u;
         float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
-        return SampleEye(half_idx, u_half, in_uv.y);
+        return SampleEye(half_idx, u_half, uv.y);
     }
 
     // TaB
@@ -156,18 +155,36 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         return SampleEye(half_idx, uv.x, uv.y);
     }
 
+    // VirtualDesktop: SbS in center band of a 2W x 2H window (rows [0.25, 0.75)).
+    if (mode == 5) {
+        if (uv.y < 0.25 || uv.y >= 0.75) return float4(0,0,0,1);
+        float v = (uv.y - 0.25) * 2.0;
+        uint half_idx = (uv.x < 0.5) ? 0u : 1u;
+        float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
+        return SampleEye(half_idx, u_half, v);
+    }
+
+    // DualDisplayFlip: same horizontal split as SbS/DualDisplay, but the LEFT
+    // half is sampled with v inverted (vertical flip).
+    if (mode == 6) {
+        uint half_idx = (uv.x < 0.5) ? 0u : 1u;
+        float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
+        float v_src   = (half_idx == 0u) ? (1.0 - uv.y) : uv.y;
+        return SampleEye(half_idx, u_half, v_src);
+    }
+
     // ----- Anaglyph variants (3DToElse / iaian7+vectorform formulas) -----
     // Sample full image of each eye; cA = left, cB = right.
     float4 cA = SampleEye(0u, uv.x, uv.y);
     float4 cB = SampleEye(1u, uv.x, uv.y);
 
     // Anaglyph red-cyan (simple)
-    if (mode == 5) {
+    if (mode == 7) {
         return float4(cA.r, cB.g, cB.b, 1.0);
     }
 
     // Anaglyph red-cyan Dubois
-    if (mode == 6) {
+    if (mode == 8) {
         float r = saturate( 0.437 * cA.r + 0.449 * cA.g + 0.164 * cA.b
                            - 0.011 * cB.r - 0.032 * cB.g - 0.007 * cB.b );
         float g = saturate(-0.062 * cA.r - 0.062 * cA.g - 0.024 * cA.b
@@ -178,7 +195,7 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
     }
 
     // Anaglyph red-cyan deghosted (iaian7 / vectorform)
-    if (mode == 7) {
+    if (mode == 9) {
         float Contrast = 1.0;
         float DeGhost  = 0.06 * 0.1;
         float contrast = (Contrast * 0.5) + 0.5;
@@ -202,13 +219,26 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         return image;
     }
 
+    // Anaglyph red-cyan compromise
+    if (mode == 10) {
+        float3x3 lf = float3x3(
+            float3(0.439,  0.447,  0.148),   // r_a = dot(left_rgb, this row)
+            float3(0.0,    0.0,    0.0  ),   // g_a
+            float3(0.0,    0.0,    0.0  ));  // b_a
+        float3x3 rf = float3x3(
+            float3(0.0,    0.0,    0.0  ),   // r_a
+            float3(0.095,  0.934, -0.005),   // g_a = dot(right_rgb, this row)
+            float3(-0.018, -0.028,  1.057)); // b_a = dot(right_rgb, this row)
+        return float4(saturate(mul(lf, cA.rgb) + mul(rf, cB.rgb)), 1.0);
+    }
+
     // Anaglyph green-magenta (simple)
-    if (mode == 8) {
+    if (mode == 11) {
         return float4(cB.r, cA.g, cB.b, 1.0);
     }
 
     // Anaglyph green-magenta Dubois
-    if (mode == 9) {
+    if (mode == 12) {
         float r = saturate(-0.062 * cA.r - 0.158 * cA.g - 0.039 * cA.b
                            + 0.529 * cB.r + 0.705 * cB.g + 0.024 * cB.b );
         float g = saturate( 0.284 * cA.r + 0.668 * cA.g + 0.143 * cA.b
@@ -219,7 +249,7 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
     }
 
     // Anaglyph green-magenta deghosted
-    if (mode == 10) {
+    if (mode == 13) {
         float Contrast = 1.0;
         float DeGhost  = 0.06 * 0.275;
         float contrast = (Contrast * 0.5) + 0.5;
@@ -244,7 +274,7 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
     }
 
     // Anaglyph blue-amber (ColorCode style)
-    if (mode == 11) {
+    if (mode == 14) {
         float Contrast = 1.0;
         float DeGhost  = 0.06 * 0.275;
         float contrast = (Contrast * 0.5) + 0.5;
@@ -268,15 +298,6 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         image.g = accum.g + (accum.r * (DeGhost * -0.75)) + (accum.g * (DeGhost * 1.5))   + (accum.b * (DeGhost * -0.75));
         image.b = accum.b + (accum.r * (DeGhost * -1.5)) + (accum.g * (DeGhost * -1.5))  + (accum.b * (DeGhost * 3.0));
         return saturate(image);
-    }
-
-    // DualDisplayFlip: same horizontal split as SbS/DualDisplay, but the LEFT
-    // half is sampled with v inverted (vertical flip).
-    if (mode == 12) {
-        uint half_idx = (uv.x < 0.5) ? 0u : 1u;
-        float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
-        float v_src   = (half_idx == 0u) ? (1.0 - uv.y) : uv.y;
-        return SampleEye(half_idx, u_half, v_src);
     }
 
     // Fallback
@@ -332,7 +353,7 @@ bool WindowPresenter::CreateShaders()
     if (FAILED(dev->CreateSamplerState(&sd, &sampler_))) return false;
 
     D3D11_BUFFER_DESC bd{};
-    bd.ByteWidth      = sizeof(CBParams);
+    bd.ByteWidth      = (sizeof(CBParams) + 15u) & ~15u;
     bd.Usage          = D3D11_USAGE_DYNAMIC;
     bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -411,24 +432,54 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
     renderer_         = &renderer;
     mode_             = cfg.output_mode;
     eye_swap_         = cfg.eye_swap;
-    vd_fsbs_hack_     = cfg.vd_fsbs_hack;
-    framepack_offset_ = static_cast<uint32_t>(cfg.framepack_offset);
     aspect_ratio_     = cfg.aspect_ratio;
     spans_two_monitors_ = (mode_ == OutputMode::DualDisplay
                            || mode_ == OutputMode::DualDisplayFlip);
     auto_focus_       = cfg.auto_focus;
     focus_            = focus;
 
+    // Derive framepack_offset from the timing spec for FramePacked modes.
+    const bool is_framepack = IsFramePackedMode(mode_);
+    const FramePackTimingSpec* fp_spec = is_framepack ? GetFramePackTimingSpec(mode_) : nullptr;
+    framepack_offset_ = fp_spec ? fp_spec->gap_pixels : 0;
+
+#ifdef _WIN32
+    // For FramePacked modes, attempt to switch the display to the custom timing.
+    // This is non-fatal — if the modeset fails, we still create the window and
+    // render TaB at the current desktop resolution (just without the HDMI 3D
+    // InfoFrame that triggers the TV's frame-packing decoder).
+    if (is_framepack && fp_spec) {
+        if (timing_helper_.Apply(*fp_spec, cfg.display_index)) {
+            LOG() << "WindowPresenter: display timing applied via "
+                  << (timing_helper_.GetBackend() == DisplayTimingHelper::Backend::Nvidia   ? "NVIDIA" :
+                      timing_helper_.GetBackend() == DisplayTimingHelper::Backend::Amd      ? "AMD"    :
+                      timing_helper_.GetBackend() == DisplayTimingHelper::Backend::CruFallback ? "CRU"  : "???");
+        } else {
+            LOG() << "WindowPresenter: display timing apply FAILED — rendering TaB at desktop res";
+        }
+    }
+#endif
+
     // Resolve target monitor(s) — reuses cfg.display_index. The dual-display
     // modes ask for a contiguous-right secondary so the window spans both.
     platform::MonitorInfo primary{}, secondary{};
     if (!platform::ResolveTargetMonitors(cfg.display_index, spans_two_monitors_, primary, secondary)) {
         LOG() << "WindowPresenter::Init: ResolveTargetMonitors failed";
+#ifdef _WIN32
+        timing_helper_.Revert();
+#endif
         return false;
     }
 
-    // vd_fsbs_hack needs a 2H window; shader centers content vertically.
-    uint32_t override_h = (mode_ == OutputMode::SbS && vd_fsbs_hack_) ? primary.height * 2 : 0;
+    // For FramePacked modes where the timing was successfully applied, override
+    // the monitor info to match the frame-pack active resolution so the window
+    // and swapchain are created at the correct size (e.g. 1920x2205).
+    if (is_framepack && timing_helper_.IsActive() && fp_spec) {
+        primary.width  = static_cast<int>(fp_spec->active_w);
+        primary.height = static_cast<int>(fp_spec->active_h);
+        LOG() << "WindowPresenter: overriding monitor dimensions to "
+              << primary.width << "x" << primary.height << " for frame packing";
+    }
 
     // Win32 windows are tied to their creating thread — only that thread can
     // pump them, and Windows tears them down if their owner thread doesn't
@@ -439,7 +490,7 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
     window_ready_.store(false);
     window_failed_.store(false);
     window_thread_ = std::thread(&WindowPresenter::WindowThreadLoop, this, &renderer,
-                                  primary, secondary, override_h);
+                                  primary, secondary);
 
     // Wait up to 5s for the window thread to finish setup.
     for (int i = 0; i < 500; ++i) {
@@ -469,13 +520,11 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
 
 void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
                                         platform::MonitorInfo primary,
-                                        platform::MonitorInfo secondary,
-                                        uint32_t override_h)
+                                        platform::MonitorInfo secondary)
 {
     window_ = platform::CreatePresentWindow(
         primary,
         (secondary.width > 0 ? &secondary : nullptr),
-        override_h,
         "VRto3D");
     if (!window_) {
         LOG() << "WindowThreadLoop: CreatePresentWindow failed";
@@ -574,8 +623,6 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
               << " fmt=" << td.Format << " bind=0x" << std::hex << td.BindFlags;
     }
 
-    // (magenta-clear short-circuit removed — confirmed Present-to-screen works)
-
     // Update constant buffer.
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (SUCCEEDED(ctx->Map(cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -583,7 +630,6 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
         p.mode             = ModeToShaderEnum(mode_);
         p.framepack_offset = framepack_offset_;
         p.eye_swap         = eye_swap_ ? 1u : 0u;
-        p.vd_fsbs_hack     = vd_fsbs_hack_ ? 1u : 0u;
         p.out_width        = static_cast<float>(swap_width_);
         p.out_height       = static_cast<float>(swap_height_);
         p.aspect_ratio     = aspect_ratio_;
@@ -652,6 +698,13 @@ void WindowPresenter::Shutdown()
     // Window thread owns the window + swapchain; signal it to exit and join.
     window_stop_.store(true);
     if (window_thread_.joinable()) window_thread_.join();
+
+#ifdef _WIN32
+    // Revert display timing after the window is torn down so the desktop
+    // returns to its original resolution. Safe to call even if Apply was
+    // never called or failed.
+    timing_helper_.Revert();
+#endif
 
     renderer_ = nullptr;
 }

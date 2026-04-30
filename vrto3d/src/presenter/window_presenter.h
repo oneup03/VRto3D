@@ -17,6 +17,7 @@
 #include <dxgi1_2.h>
 
 #include "platform/platform.h"
+#include "presenter/display_timing_helper.h"
 #include "presenter/output_presenter.h"
 #include "vrto3dlib/stereo_config.h"
 
@@ -41,11 +42,9 @@ private:
         uint32_t mode;
         uint32_t framepack_offset;
         uint32_t eye_swap;
-        uint32_t vd_fsbs_hack;
         float    out_width;
         float    out_height;
         float    aspect_ratio;
-        float    _pad;
     };
 
     bool CreateShaders();
@@ -53,13 +52,11 @@ private:
     void FocusThreadLoop();
     void WindowThreadLoop(Dx11Renderer* renderer,
                           platform::MonitorInfo primary,
-                          platform::MonitorInfo secondary,
-                          uint32_t override_h);
+                          platform::MonitorInfo secondary);
 
     Dx11Renderer* renderer_ = nullptr;
     OutputMode    mode_     = OutputMode::SbS;
     bool          eye_swap_ = false;
-    bool          vd_fsbs_hack_ = false;
     uint32_t      framepack_offset_ = 0;
     float         aspect_ratio_ = 1.7777f;
     bool          spans_two_monitors_ = false;   // true for DualDisplay / DualDisplayFlip
@@ -78,6 +75,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D11Buffer>          cb_;
     Microsoft::WRL::ComPtr<ID3D11RasterizerState> rasterizer_;
     Microsoft::WRL::ComPtr<ID3D11BlendState>      blend_;
+
+#ifdef _WIN32
+    DisplayTimingHelper                           timing_helper_;
+#endif
 
     std::thread                                   focus_thread_;
     std::atomic<bool>                             focus_stop_{false};
