@@ -23,15 +23,21 @@ std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode)
 {
     switch (mode) {
         case OutputMode::SbS:
-        case OutputMode::DualDisplay:
-        case OutputMode::DualDisplayFlip:
         case OutputMode::TaB:
         case OutputMode::RowInterlaced:
         case OutputMode::ColInterlaced:
         case OutputMode::Checkerboard:
+        case OutputMode::VirtualDesktop:
+        case OutputMode::FramePacked720p60:
+        case OutputMode::FramePacked1080p24:
+        case OutputMode::FramePacked1080p60:
+        case OutputMode::FramePacked1080p60CVT:
+        case OutputMode::DualDisplay:
+        case OutputMode::DualDisplayFlip:
         case OutputMode::AnaglyphRedCyan:
         case OutputMode::AnaglyphRedCyanDubois:
         case OutputMode::AnaglyphRedCyanDeghosted:
+        case OutputMode::AnaglyphRedCyanCompromise:
         case OutputMode::AnaglyphGreenMagenta:
         case OutputMode::AnaglyphGreenMagentaDubois:
         case OutputMode::AnaglyphGreenMagentaDeghosted:

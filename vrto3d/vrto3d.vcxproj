@@ -206,6 +206,7 @@
     <ClCompile Include="src\presenter\window_presenter.cpp" />
     <ClCompile Include="src\presenter\leiasr_presenter.cpp" />
     <ClCompile Include="src\presenter\nvstereo_dx9_presenter.cpp" />
+    <ClCompile Include="src\presenter\display_timing_helper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
@@ -217,6 +218,8 @@
     <ClInclude Include="src\presenter\window_presenter.h" />
     <ClInclude Include="src\presenter\leiasr_presenter.h" />
     <ClInclude Include="src\presenter\nvstereo_dx9_presenter.h" />
+    <ClInclude Include="src\presenter\display_timing_helper.h" />
+    <ClInclude Include="src\presenter\display_utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">

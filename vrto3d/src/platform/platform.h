@@ -92,7 +92,6 @@ public:
 
 std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
                                                    const MonitorInfo* secondary_for_multi_display,
-                                                   uint32_t override_height,   // 0 = use monitor height; non-zero for vd_fsbs_hack
                                                    const char* title);
 
 

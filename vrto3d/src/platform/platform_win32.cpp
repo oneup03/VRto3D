@@ -323,7 +323,6 @@ private:
 
 std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
                                                    const MonitorInfo* secondary_for_multi_display,
-                                                   uint32_t override_height,
                                                    const char* title)
 {
     EnsureClass();
@@ -331,7 +330,7 @@ std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
     int x = primary.x;
     int y = primary.y;
     uint32_t w = primary.width;
-    uint32_t h = override_height > 0 ? override_height : primary.height;
+    uint32_t h = primary.height;
 
     if (secondary_for_multi_display && secondary_for_multi_display->width > 0) {
         w = primary.width + secondary_for_multi_display->width;
