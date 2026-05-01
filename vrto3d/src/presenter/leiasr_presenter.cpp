@@ -24,6 +24,7 @@
 #include "sr/management/srcontext.h"
 #include "sr/utility/exception.h"
 #include "sr/weaver/dx11weaver.h"
+#include "sr/sense/display/switchablehint.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -217,6 +218,7 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 
         // Activate sense streams.
         sr_context_->initialize();
+        lens_hint_ = SR::SwitchableLensHint::create(*sr_context_);
         sr_initialized_ = true;
         LOG() << "LeiaSrPresenter: SRContext initialized; weaver ready";
     }
@@ -233,6 +235,7 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         sr_weaver_->destroy();
         sr_weaver_ = nullptr;
     }
+    lens_hint_ = nullptr;  // managed by SRContext; do not delete
     if (sr_context_) {
         delete sr_context_;
         sr_context_ = nullptr;
@@ -351,8 +354,13 @@ void LeiaSrPresenter::FocusThreadLoop()
         }
 
         if (want_on_top != was_on_top) {
-            if (want_on_top) window_->BringToTop();
-            else             window_->ReleaseTopmost();
+            if (want_on_top) {
+                window_->BringToTop();
+                if (lens_hint_) lens_hint_->enable();
+            } else {
+                window_->ReleaseTopmost();
+                if (lens_hint_) lens_hint_->disable();
+            }
             was_on_top = want_on_top;
             reassert_counter = 0;
         } else if (want_on_top && ++reassert_counter >= 20) {
