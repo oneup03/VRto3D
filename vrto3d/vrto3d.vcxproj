@@ -106,8 +106,8 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
       <Command>
@@ -134,8 +134,8 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
       <Command>
@@ -157,8 +157,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -185,8 +185,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
