@@ -24,7 +24,7 @@
 
 // Forward decls — full headers only included in the .cpp to keep the SDK
 // dependency contained.
-namespace SR { class SRContext; class IDX11Weaver1; }
+namespace SR { class SRContext; class IDX11Weaver1; class SwitchableLensHint; }
 
 namespace vrto3d {
 
@@ -58,9 +58,10 @@ private:
     uint32_t                                      swap_width_  = 0;
     uint32_t                                      swap_height_ = 0;
 
-    SR::SRContext*       sr_context_ = nullptr;
-    SR::IDX11Weaver1*    sr_weaver_  = nullptr;
-    bool                 sr_initialized_ = false;
+    SR::SRContext*          sr_context_  = nullptr;
+    SR::IDX11Weaver1*       sr_weaver_   = nullptr;
+    SR::SwitchableLensHint* lens_hint_   = nullptr;
+    bool                    sr_initialized_ = false;
 
     // Cache last input texture dims so we don't call setInputViewTexture
     // every frame when nothing changed.
