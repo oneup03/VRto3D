@@ -146,6 +146,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="accela_hamilton_runtime.h" />
+    <ClInclude Include="one_euro_filter.h" />
     <ClInclude Include="vrmath.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

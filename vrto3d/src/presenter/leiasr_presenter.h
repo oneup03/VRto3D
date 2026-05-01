@@ -24,14 +24,20 @@
 
 // Forward decls — full headers only included in the .cpp to keep the SDK
 // dependency contained.
-namespace SR { class SRContext; class IDX11Weaver1; class SwitchableLensHint; }
+namespace SR { class SRContext; class IDX11Weaver1; class SwitchableLensHint; class HeadPoseTracker; }
 
 namespace vrto3d {
 
+// Internal head-pose listener + UDP sender (defined in .cpp). Forward-declared
+// here so the impl can stash unique_ptrs without leaking SR/winsock headers.
+class LeiaSrHeadPoseListener;
+class LeiaSrOpenTrackSender;
+class LeiaSrTrackPipeline;
+
 class LeiaSrPresenter : public IOutputPresenter {
 public:
-    LeiaSrPresenter() = default;
-    ~LeiaSrPresenter() override { Shutdown(); }
+    LeiaSrPresenter();
+    ~LeiaSrPresenter() override;
 
     bool Init(Dx11Renderer& renderer,
               const StereoDisplayDriverConfiguration& cfg,
@@ -45,6 +51,7 @@ private:
                           platform::MonitorInfo primary,
                           platform::MonitorInfo secondary);
     void FocusThreadLoop();
+    void HeadTrackingThreadLoop();
 
     Dx11Renderer* renderer_ = nullptr;
     bool          eye_swap_ = false;
@@ -78,6 +85,21 @@ private:
 
     std::thread       focus_thread_;
     std::atomic<bool> focus_stop_{false};
+
+    // Head tracking — only spawned when use_open_track && output_mode==LeiaSR.
+    // Sends OpenTrack UDP packets to 127.0.0.1:open_track_port, received by
+    // MockControllerDeviceDriver::OpenTrackThread. Decouples SR types from the
+    // consumer side: this presenter is the only translation unit that touches
+    // SR head-tracking APIs.
+    bool                                          tracking_enabled_ = false;
+    int32_t                                       tracking_port_    = 4242;
+    StereoDisplayDriverConfiguration              tracking_cfg_{};
+    SR::HeadPoseTracker*                          sr_head_tracker_  = nullptr;
+    std::unique_ptr<LeiaSrHeadPoseListener>       head_listener_;
+    std::unique_ptr<LeiaSrOpenTrackSender>        ot_sender_;
+    std::unique_ptr<LeiaSrTrackPipeline>          track_pipeline_;
+    std::thread                                   tracking_thread_;
+    std::atomic<bool>                             tracking_stop_{false};
 };
 
 }  // namespace vrto3d

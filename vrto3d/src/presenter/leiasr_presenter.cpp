@@ -9,9 +9,16 @@
 
 #ifdef _WIN32
 
+#define NOMINMAX
+#include <winsock2.h>   // must precede windows.h
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+
 #include "leiasr_presenter.h"
 
+#include <algorithm>
 #include <chrono>
+#include <mutex>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -19,12 +26,15 @@
 
 #include "dx11_renderer.h"
 #include "vrto3dlib/debug_log.hpp"
+#include "one_euro_filter.h"
 
 // LeiaSR SDK headers
 #include "sr/management/srcontext.h"
 #include "sr/utility/exception.h"
 #include "sr/weaver/dx11weaver.h"
 #include "sr/sense/display/switchablehint.h"
+#include "sr/sense/headtracker/headposetracker.h"
+#include "sr/sense/core/inputstream.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -58,6 +68,233 @@ SR::SRContext* TryCreateSRContextSEH(bool* dll_failure)
 }  // namespace
 
 namespace vrto3d {
+
+// ---------------------------------------------------------------------------
+// Head-pose listener: receives SR_headPose frames on an SDK-owned thread,
+// stores the latest sample under a mutex for the tracking thread to consume.
+// ---------------------------------------------------------------------------
+class LeiaSrHeadPoseListener : public SR::HeadPoseListener {
+    std::mutex mutex_;
+    float pos_[3]    = { 0.0f, 0.0f, 600.0f };
+    float orient_[3] = { 0.0f, 0.0f, 0.0f };
+    uint64_t frame_time_ = 0;
+    bool has_data_ = false;
+
+public:
+    SR::InputStream<SR::HeadPoseStream> stream;
+
+    void accept(const SR_headPose& frame) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pos_[0] = static_cast<float>(frame.position.x);
+        pos_[1] = static_cast<float>(frame.position.y);
+        pos_[2] = static_cast<float>(frame.position.z);
+        orient_[0] = static_cast<float>(frame.orientation.x);
+        orient_[1] = static_cast<float>(frame.orientation.y);
+        orient_[2] = static_cast<float>(frame.orientation.z);
+        frame_time_ = frame.time;
+        has_data_ = true;
+    }
+
+    bool get(float pos[3], float orient[3], uint64_t& time_us) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!has_data_) return false;
+        pos[0] = pos_[0]; pos[1] = pos_[1]; pos[2] = pos_[2];
+        orient[0] = orient_[0]; orient[1] = orient_[1]; orient[2] = orient_[2];
+        time_us = frame_time_;
+        return true;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// OpenTrack UDP sender: 48-byte (6 doubles) little-endian XYZ + YPR packet
+// to localhost:open_track_port. Non-blocking, fire-and-forget.
+// ---------------------------------------------------------------------------
+class LeiaSrOpenTrackSender {
+public:
+#pragma pack(push, 1)
+    struct Packet {
+        double X;
+        double Y;
+        double Z;
+        double Yaw;
+        double Pitch;
+        double Roll;
+    };
+#pragma pack(pop)
+
+    bool init(int port, const char* host = "127.0.0.1") {
+        WSADATA wsa;
+        if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
+        wsa_started_ = true;
+
+        sock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (sock_ == INVALID_SOCKET) return false;
+
+        u_long nonblock = 1;
+        ioctlsocket(sock_, FIONBIO, &nonblock);
+
+        dest_.sin_family = AF_INET;
+        dest_.sin_port   = htons(static_cast<u_short>(port));
+        inet_pton(AF_INET, host, &dest_.sin_addr);
+
+        initialized_ = true;
+        return true;
+    }
+
+    bool send(double x, double y, double z, double yaw, double pitch, double roll) {
+        if (!initialized_) return false;
+        Packet pkt = { x, y, z, yaw, pitch, roll };
+        int sent = sendto(sock_, reinterpret_cast<const char*>(&pkt), sizeof(pkt), 0,
+                          reinterpret_cast<sockaddr*>(&dest_), sizeof(dest_));
+        return sent == sizeof(pkt);
+    }
+
+    bool sendIdentity() { return send(0.0, 0.0, 0.0, 0.0, 0.0, 0.0); }
+
+    void shutdown() {
+        if (sock_ != INVALID_SOCKET) {
+            sendIdentity();    // park consumer at neutral pose so it doesn't freeze
+            closesocket(sock_);
+            sock_ = INVALID_SOCKET;
+        }
+        if (wsa_started_) {
+            WSACleanup();
+            wsa_started_ = false;
+        }
+        initialized_ = false;
+    }
+
+    ~LeiaSrOpenTrackSender() { shutdown(); }
+
+private:
+    SOCKET       sock_ = INVALID_SOCKET;
+    sockaddr_in  dest_ = {};
+    bool         initialized_  = false;
+    bool         wsa_started_  = false;
+};
+
+// ---------------------------------------------------------------------------
+// Track pipeline: SR head pose -> One-Euro filter -> sensitivity/clamp/deadzone
+// -> mode-specific axis masking. Mirrors the external bridge's TrackPipeline,
+// configured from StereoDisplayDriverConfiguration.sr_* fields.
+// ---------------------------------------------------------------------------
+class LeiaSrTrackPipeline {
+public:
+    enum class Mode { XYZ_YawPitch = 1, XYZ = 2, YawPitch = 3, Full6DOF = 4, YawPitchRoll = 5 };
+
+    struct Result {
+        float yaw_deg = 0, pitch_deg = 0, roll_deg = 0;
+        float pos_x_cm = 0, pos_y_cm = 0, pos_z_cm = 0;
+        bool  valid = false;
+    };
+
+    static Mode ParseMode(const std::string& s) {
+        if (s == "XYZ")           return Mode::XYZ;
+        if (s == "YawPitch")      return Mode::YawPitch;
+        if (s == "Full6DOF")      return Mode::Full6DOF;
+        if (s == "YawPitchRoll")  return Mode::YawPitchRoll;
+        return Mode::XYZ_YawPitch;  // default + "XYZ_YawPitch"
+    }
+
+    explicit LeiaSrTrackPipeline(const StereoDisplayDriverConfiguration& cfg) {
+        mode_           = ParseMode(cfg.sr_track_mode);
+        deadzone_deg_   = cfg.sr_angle_deadzone_deg;
+        sens_yaw_       = cfg.sr_sens_yaw;
+        sens_pitch_     = cfg.sr_sens_pitch;
+        sens_roll_      = cfg.sr_sens_roll;
+        max_yaw_        = cfg.sr_max_yaw;
+        max_pitch_      = cfg.sr_max_pitch;
+        max_roll_       = cfg.sr_max_roll;
+
+        const float freq = 60.0f;
+        f_yaw_   = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
+        f_pitch_ = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
+        f_roll_  = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
+        f_x_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
+        f_y_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
+        f_z_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
+    }
+
+    Result process(float pos_x_mm, float pos_y_mm, float pos_z_mm,
+                   float orient_x_rad, float orient_y_rad, float orient_z_rad,
+                   float timestamp_sec)
+    {
+        Result r;
+        if (!std::isfinite(orient_x_rad) || !std::isfinite(orient_y_rad) || !std::isfinite(orient_z_rad)) {
+            return r;
+        }
+
+        const float to_deg = 180.0f / static_cast<float>(M_PI);
+        float pitch_raw = orient_x_rad * to_deg;
+        float yaw_raw   = orient_y_rad * to_deg;
+        float roll_raw  = orient_z_rad * to_deg;
+
+        float yaw_f   = f_yaw_.filter(yaw_raw,    timestamp_sec);
+        float pitch_f = f_pitch_.filter(pitch_raw, timestamp_sec);
+        float roll_f  = f_roll_.filter(roll_raw,   timestamp_sec);
+
+        // OpenTrack convention to match the consumer (MockControllerDeviceDriver
+        // ::OpenTrackThread negates X and Yaw on receive): pre-invert here so
+        // the round-trip matches an external bridge running in OpenTrack mode.
+        yaw_f  = -yaw_f;
+        roll_f = -roll_f;
+
+        r.yaw_deg   = std::clamp(yaw_f   * sens_yaw_,   -max_yaw_,   max_yaw_);
+        r.pitch_deg = std::clamp(pitch_f * sens_pitch_, -max_pitch_, max_pitch_);
+        r.roll_deg  = std::clamp(roll_f  * sens_roll_,  -max_roll_,  max_roll_);
+
+        if (std::fabs(r.yaw_deg)   < deadzone_deg_) r.yaw_deg   = 0.0f;
+        if (std::fabs(r.pitch_deg) < deadzone_deg_) r.pitch_deg = 0.0f;
+        if (std::fabs(r.roll_deg)  < deadzone_deg_) r.roll_deg  = 0.0f;
+
+        // Position passthrough (mm -> cm), X inverted to match OpenTrack.
+        float x_cm = -pos_x_mm / 10.0f;
+        float y_cm =  pos_y_mm / 10.0f;
+        float z_cm =  pos_z_mm / 10.0f;
+        // Run position through filter for stability.
+        r.pos_x_cm = f_x_.filter(x_cm, timestamp_sec);
+        r.pos_y_cm = f_y_.filter(y_cm, timestamp_sec);
+        r.pos_z_cm = f_z_.filter(z_cm, timestamp_sec);
+
+        switch (mode_) {
+            case Mode::XYZ_YawPitch:
+                r.roll_deg = 0.0f;
+                break;
+            case Mode::XYZ:
+                r.yaw_deg = r.pitch_deg = r.roll_deg = 0.0f;
+                break;
+            case Mode::YawPitch:
+                r.pos_x_cm = r.pos_y_cm = r.pos_z_cm = 0.0f;
+                r.roll_deg = 0.0f;
+                break;
+            case Mode::Full6DOF:
+                break;  // everything passes through
+            case Mode::YawPitchRoll:
+                r.pos_x_cm = r.pos_y_cm = r.pos_z_cm = 0.0f;
+                break;
+        }
+
+        r.valid = true;
+        return r;
+    }
+
+private:
+    Mode  mode_         = Mode::XYZ_YawPitch;
+    float deadzone_deg_ = 0.2f;
+    float sens_yaw_ = 1, sens_pitch_ = 1, sens_roll_ = 1;
+    float max_yaw_  = 70, max_pitch_  = 70, max_roll_  = 70;
+    OneEuroFilter f_yaw_, f_pitch_, f_roll_;
+    OneEuroFilter f_x_, f_y_, f_z_;
+};
+
+
+// Out-of-line ctor/dtor: the unique_ptr<> members above wrap forward-declared
+// types in the header. Defining them here, where the full types are visible,
+// keeps presenter_factory.cpp (and any other includer) free of the SR/winsock
+// headers.
+LeiaSrPresenter::LeiaSrPresenter() = default;
+LeiaSrPresenter::~LeiaSrPresenter() { Shutdown(); }
+
 
 bool LeiaSrPresenter::CreateSwapChain(Dx11Renderer& renderer)
 {
@@ -106,6 +343,12 @@ bool LeiaSrPresenter::Init(Dx11Renderer& renderer,
     eye_swap_      = cfg.eye_swap;
     auto_focus_    = cfg.auto_focus;
     focus_         = focus;
+
+    // Cache tracking config so the head-tracking thread can read it without
+    // touching the caller's StereoDisplayDriverConfiguration after Init returns.
+    tracking_enabled_ = cfg.use_open_track;
+    tracking_port_    = cfg.open_track_port;
+    tracking_cfg_     = cfg;
 
     // LeiaSR weaver targets a single SR display — never spans two monitors.
     platform::MonitorInfo primary{}, secondary{};
@@ -216,6 +459,20 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         sr_weaver_->setLatencyInFrames(1);
         sr_weaver_->setContext(renderer->Context());
 
+        // Build SR head tracker (registered as a Sense before initialize()) so
+        // OpenTrack-style head pose can be forwarded from this presenter.
+        if (tracking_enabled_) {
+            try {
+                sr_head_tracker_ = SR::HeadPoseTracker::create(*sr_context_);
+                head_listener_   = std::make_unique<LeiaSrHeadPoseListener>();
+                head_listener_->stream.set(sr_head_tracker_->openHeadPoseStream(head_listener_.get()));
+            } catch (const std::exception& e) {
+                LOG() << "LeiaSrPresenter: HeadPoseTracker::create failed: " << e.what();
+                sr_head_tracker_ = nullptr;
+                head_listener_.reset();
+            }
+        }
+
         // Activate sense streams.
         sr_context_->initialize();
         lens_hint_ = SR::SwitchableLensHint::create(*sr_context_);
@@ -225,10 +482,36 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 
     window_ready_.store(true);
 
+    // Spawn head-tracking sender thread once SR is up. Gated on use_open_track
+    // so this is a no-op when the consumer (MockControllerDeviceDriver::
+    // OpenTrackThread) wouldn't be listening anyway.
+    if (tracking_enabled_ && head_listener_) {
+        ot_sender_ = std::make_unique<LeiaSrOpenTrackSender>();
+        if (!ot_sender_->init(tracking_port_)) {
+            LOG() << "LeiaSrPresenter: OpenTrack UDP sender init failed; head tracking disabled";
+            ot_sender_.reset();
+        } else {
+            track_pipeline_ = std::make_unique<LeiaSrTrackPipeline>(tracking_cfg_);
+            tracking_stop_.store(false);
+            tracking_thread_ = std::thread(&LeiaSrPresenter::HeadTrackingThreadLoop, this);
+            LOG() << "LeiaSrPresenter: head tracking active (UDP -> 127.0.0.1:" << tracking_port_
+                  << ", mode=" << tracking_cfg_.sr_track_mode << ")";
+        }
+    }
+
     while (!window_stop_.load(std::memory_order_relaxed)) {
         renderer->WaitAndDrawPending(33);
         if (window_) window_->PollEvents();
     }
+
+    // Stop head tracking before tearing down SR. Stream must be closed before
+    // the tracker / context is destroyed.
+    tracking_stop_.store(true);
+    if (tracking_thread_.joinable()) tracking_thread_.join();
+    head_listener_.reset();          // ~InputStream calls stopListening for us
+    sr_head_tracker_ = nullptr;      // managed by SRContext; do not delete
+    if (ot_sender_) { ot_sender_->shutdown(); ot_sender_.reset(); }
+    track_pipeline_.reset();
 
     // Tear down SR resources on this thread (they were created here).
     if (sr_weaver_) {
@@ -369,6 +652,32 @@ void LeiaSrPresenter::FocusThreadLoop()
         }
 
         std::this_thread::sleep_for(50ms);
+    }
+}
+
+
+void LeiaSrPresenter::HeadTrackingThreadLoop()
+{
+    using namespace std::chrono;
+    if (!head_listener_ || !ot_sender_ || !track_pipeline_) return;
+
+    const auto t0 = steady_clock::now();
+    float pos[3], orient[3];
+    uint64_t time_us = 0;
+
+    while (!tracking_stop_.load(std::memory_order_relaxed)) {
+        if (head_listener_->get(pos, orient, time_us)) {
+            const float ts = duration<float>(steady_clock::now() - t0).count();
+            auto r = track_pipeline_->process(pos[0], pos[1], pos[2],
+                                              orient[0], orient[1], orient[2], ts);
+            if (r.valid) {
+                ot_sender_->send(r.pos_x_cm, r.pos_y_cm, r.pos_z_cm,
+                                 r.yaw_deg, r.pitch_deg, r.roll_deg);
+            }
+        }
+        // ~120Hz polling — SR head pose typically arrives at 60Hz; this keeps
+        // jitter low without burning a core.
+        std::this_thread::sleep_for(milliseconds(8));
     }
 }
 
