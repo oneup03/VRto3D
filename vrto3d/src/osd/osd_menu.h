@@ -50,6 +50,16 @@ struct MenuCallbacks {
     // Kick off a download of the latest vrto3d_profiles.zip from GitHub
     // releases and extract into the config folder. Reports progress via toast.
     std::function<void()> download_latest_profiles;
+
+    // Auto-depth feature: toggle + comfort-target slider (fraction of one
+    // eye's width). The Stereo tab binds these to read/write the live
+    // StereoDisplayComponent state.
+    std::function<bool()>      get_auto_depth_enabled;
+    std::function<void(bool)>  set_auto_depth_enabled;
+    std::function<float()>     get_auto_depth_target;
+    std::function<void(float)> set_auto_depth_target;
+    std::function<float()>     get_auto_depth_smoothing;
+    std::function<void(float)> set_auto_depth_smoothing;
 };
 
 // Renders the 4-tab configuration menu and the persistent chrome (title bar +

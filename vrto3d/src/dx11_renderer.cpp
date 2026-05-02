@@ -18,6 +18,7 @@
 
 #include "vrto3dlib/debug_log.hpp"
 
+#include "auto_depth.h"
 #include "hmd_device_driver.h"           // StereoDisplayComponent::GetConfig()
 #include "osd/osd_renderer.h"
 #include "osd/osd_menu.h"
@@ -181,6 +182,19 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
         mutex->ReleaseSync(0);
     }
 
+    // Auto-depth: dispatch the disparity compute pass on the freshly-copied
+    // out_sbs_, before OSD composite so the analysis runs on the clean frame.
+    if (osd_component_ && osd_component_->IsAutoDepthEnabled()) {
+        if (!auto_depth_) {
+            auto_depth_ = std::make_unique<vrto3d::AutoDepthAnalyzer>();
+            auto_depth_->Init(device_.Get());
+        }
+        auto_depth_->Run(context_.Get(), out_sbs_.Get(),
+                         sbs_width_, sbs_height_,
+                         frame_counter_.load(std::memory_order_relaxed),
+                         osd_component_);
+    }
+
     // Drain a pending screenshot request *before* OSD compositing so the saved
     // image is the clean stereo frame, not one with menu/toast text baked in.
     {
@@ -271,6 +285,12 @@ void Dx11Renderer::Shutdown()
         presenter_->Shutdown();
         presenter_.reset();
     }
+
+    if (auto_depth_) {
+        auto_depth_->Shutdown();
+        auto_depth_.reset();
+    }
+
     shared_texture_cache_.clear();
     out_sbs_.Reset();
     context_.Reset();
@@ -357,3 +377,4 @@ void Dx11Renderer::CaptureScreenshot(const std::string& app_name)
         }
     }
 }
+

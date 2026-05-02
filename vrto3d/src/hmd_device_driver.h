@@ -56,6 +56,20 @@ public:
     float GetConvergence();
     float GetFoV();
 
+    // Auto-depth: an external GPU pass measures the SbS frame's max disparity
+    // each frame and feeds it back via FeedAutoDepthSample. While enabled, the
+    // component lerps depth_ toward a target derived from `manual_depth_ *
+    // (target / observed)`, capped by `manual_depth_` (the user's intended
+    // ceiling). Toggling off snaps depth_ back to manual_depth_.
+    bool  IsAutoDepthEnabled() const;
+    void  SetAutoDepthEnabled(bool enabled);
+    float GetManualDepth() const;
+    float GetAutoDepthTargetDisparity() const;
+    void  SetAutoDepthTargetDisparity(float frac);
+    float GetAutoDepthSmoothing() const;
+    void  SetAutoDepthSmoothing(float v);
+    void  FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px);
+
     // UE3D Monitor Mode
     void SetMonitorMode(bool enabled);
     bool IsMonitorMode();
@@ -75,6 +89,10 @@ public:
     void Init(uint32_t device_index);
 
 private:
+    // Push new depth into depth_ (atomic CAS) and the OpenVR
+    // Prop_UserIpdMeters_Float property. Used by both manual and auto paths.
+    void ApplyDepth(float new_depth);
+
     StereoDisplayDriverConfiguration config_;
     std::atomic< float > depth_;
     std::atomic< float > convergence_;
@@ -85,6 +103,15 @@ private:
 
     // UE3D Monitor Mode
     std::atomic< bool > monitor_mode_{ false };
+
+    // Auto-depth state
+    std::atomic< bool >  auto_depth_enabled_{ false };
+    std::atomic< float > manual_depth_{ 0.1f };
+    std::atomic< float > auto_depth_target_disparity_{ 0.005f };
+    std::atomic< float > auto_depth_smoothing_{ 0.08f };
+    // EMA of incoming disparity-fraction samples (input-side jitter filter).
+    // -1 = uninitialized. Reset whenever auto-depth is toggled off.
+    std::atomic< float > auto_depth_disp_ema_{ -1.0f };
 };
 
 
