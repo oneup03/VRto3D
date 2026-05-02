@@ -25,6 +25,7 @@
 #include <delayimp.h>
 
 #include "dx11_renderer.h"
+#include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
 #include "one_euro_filter.h"
 
@@ -197,6 +198,20 @@ public:
     }
 
     explicit LeiaSrTrackPipeline(const StereoDisplayDriverConfiguration& cfg) {
+        const float freq = 60.0f;
+        f_yaw_   = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
+        f_pitch_ = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
+        f_roll_  = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
+        f_x_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
+        f_y_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
+        f_z_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
+        Apply(cfg);
+    }
+
+    // Push live cfg into the pipeline. Cheap — no allocation or reset of the
+    // One Euro filter state. Safe to call every iteration so OSD-tuned
+    // sr_filter_* / sr_sens_* / sr_max_* changes propagate without rebuild.
+    void Apply(const StereoDisplayDriverConfiguration& cfg) {
         mode_           = ParseMode(cfg.sr_track_mode);
         deadzone_deg_   = cfg.sr_angle_deadzone_deg;
         sens_yaw_       = cfg.sr_sens_yaw;
@@ -206,13 +221,42 @@ public:
         max_pitch_      = cfg.sr_max_pitch;
         max_roll_       = cfg.sr_max_roll;
 
-        const float freq = 60.0f;
-        f_yaw_   = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
-        f_pitch_ = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
-        f_roll_  = OneEuroFilter(freq, cfg.sr_filter_rot_mincutoff, cfg.sr_filter_rot_beta);
-        f_x_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
-        f_y_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
-        f_z_     = OneEuroFilter(freq, cfg.sr_filter_pos_mincutoff, cfg.sr_filter_pos_beta);
+        f_yaw_.setMinCutoff(cfg.sr_filter_rot_mincutoff);
+        f_yaw_.setBeta(cfg.sr_filter_rot_beta);
+        f_pitch_.setMinCutoff(cfg.sr_filter_rot_mincutoff);
+        f_pitch_.setBeta(cfg.sr_filter_rot_beta);
+        f_roll_.setMinCutoff(cfg.sr_filter_rot_mincutoff);
+        f_roll_.setBeta(cfg.sr_filter_rot_beta);
+        f_x_.setMinCutoff(cfg.sr_filter_pos_mincutoff);
+        f_x_.setBeta(cfg.sr_filter_pos_beta);
+        f_y_.setMinCutoff(cfg.sr_filter_pos_mincutoff);
+        f_y_.setBeta(cfg.sr_filter_pos_beta);
+        f_z_.setMinCutoff(cfg.sr_filter_pos_mincutoff);
+        f_z_.setBeta(cfg.sr_filter_pos_beta);
+    }
+
+    // Drop accumulated filter state — the next process() call re-initializes
+    // both LP filters from the new sample. Use on a use_open_track edge so
+    // resumption doesn't see a giant dx/dt spike from the long idle gap.
+    void ResetFilters() {
+        f_yaw_.reset(); f_pitch_.reset(); f_roll_.reset();
+        f_x_.reset();   f_y_.reset();    f_z_.reset();
+    }
+
+    // Set the current head orientation as the neutral zero. Stores per-axis
+    // degree offsets that process() then ADDS to the filtered values before
+    // sensitivity scaling — mirrors the Simulated-Reality-OpenTrack-Bridge
+    // Ctrl+X calibrate behavior. Position offsets are not adjusted.
+    void Calibrate(float orient_x_rad, float orient_y_rad, float orient_z_rad) {
+        const float to_deg = 180.0f / static_cast<float>(M_PI);
+        // Apply the same axis sign conventions process() uses (yaw + roll
+        // are pre-inverted to match the OpenTrack receiver).
+        const float pitch = orient_x_rad * to_deg;
+        const float yaw   = -(orient_y_rad * to_deg);
+        const float roll  = -(orient_z_rad * to_deg);
+        yaw_offset_   = -yaw;
+        pitch_offset_ = -pitch;
+        roll_offset_  = -roll;
     }
 
     Result process(float pos_x_mm, float pos_y_mm, float pos_z_mm,
@@ -239,9 +283,9 @@ public:
         yaw_f  = -yaw_f;
         roll_f = -roll_f;
 
-        r.yaw_deg   = std::clamp(yaw_f   * sens_yaw_,   -max_yaw_,   max_yaw_);
-        r.pitch_deg = std::clamp(pitch_f * sens_pitch_, -max_pitch_, max_pitch_);
-        r.roll_deg  = std::clamp(roll_f  * sens_roll_,  -max_roll_,  max_roll_);
+        r.yaw_deg   = std::clamp((yaw_f   + yaw_offset_)   * sens_yaw_,   -max_yaw_,   max_yaw_);
+        r.pitch_deg = std::clamp((pitch_f + pitch_offset_) * sens_pitch_, -max_pitch_, max_pitch_);
+        r.roll_deg  = std::clamp((roll_f  + roll_offset_)  * sens_roll_,  -max_roll_,  max_roll_);
 
         if (std::fabs(r.yaw_deg)   < deadzone_deg_) r.yaw_deg   = 0.0f;
         if (std::fabs(r.pitch_deg) < deadzone_deg_) r.pitch_deg = 0.0f;
@@ -285,6 +329,9 @@ private:
     float max_yaw_  = 70, max_pitch_  = 70, max_roll_  = 70;
     OneEuroFilter f_yaw_, f_pitch_, f_roll_;
     OneEuroFilter f_x_, f_y_, f_z_;
+    float yaw_offset_   = 0.0f;
+    float pitch_offset_ = 0.0f;
+    float roll_offset_  = 0.0f;
 };
 
 
@@ -459,18 +506,18 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         sr_weaver_->setLatencyInFrames(1);
         sr_weaver_->setContext(renderer->Context());
 
-        // Build SR head tracker (registered as a Sense before initialize()) so
-        // OpenTrack-style head pose can be forwarded from this presenter.
-        if (tracking_enabled_) {
-            try {
-                sr_head_tracker_ = SR::HeadPoseTracker::create(*sr_context_);
-                head_listener_   = std::make_unique<LeiaSrHeadPoseListener>();
-                head_listener_->stream.set(sr_head_tracker_->openHeadPoseStream(head_listener_.get()));
-            } catch (const std::exception& e) {
-                LOG() << "LeiaSrPresenter: HeadPoseTracker::create failed: " << e.what();
-                sr_head_tracker_ = nullptr;
-                head_listener_.reset();
-            }
+        // Always register the SR head tracker as a Sense before initialize().
+        // The use_open_track flag is checked at consumption time (see
+        // HeadTrackingThreadLoop) so the OSD can toggle it live without
+        // needing a presenter restart.
+        try {
+            sr_head_tracker_ = SR::HeadPoseTracker::create(*sr_context_);
+            head_listener_   = std::make_unique<LeiaSrHeadPoseListener>();
+            head_listener_->stream.set(sr_head_tracker_->openHeadPoseStream(head_listener_.get()));
+        } catch (const std::exception& e) {
+            LOG() << "LeiaSrPresenter: HeadPoseTracker::create failed: " << e.what();
+            sr_head_tracker_ = nullptr;
+            head_listener_.reset();
         }
 
         // Activate sense streams.
@@ -482,10 +529,10 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 
     window_ready_.store(true);
 
-    // Spawn head-tracking sender thread once SR is up. Gated on use_open_track
-    // so this is a no-op when the consumer (MockControllerDeviceDriver::
-    // OpenTrackThread) wouldn't be listening anyway.
-    if (tracking_enabled_ && head_listener_) {
+    // Always spawn the head-tracking sender thread once SR is up. The
+    // per-frame use_open_track flag is checked inside the loop so toggling
+    // it via the OSD takes effect immediately.
+    if (head_listener_) {
         ot_sender_ = std::make_unique<LeiaSrOpenTrackSender>();
         if (!ot_sender_->init(tracking_port_)) {
             LOG() << "LeiaSrPresenter: OpenTrack UDP sender init failed; head tracking disabled";
@@ -494,8 +541,9 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
             track_pipeline_ = std::make_unique<LeiaSrTrackPipeline>(tracking_cfg_);
             tracking_stop_.store(false);
             tracking_thread_ = std::thread(&LeiaSrPresenter::HeadTrackingThreadLoop, this);
-            LOG() << "LeiaSrPresenter: head tracking active (UDP -> 127.0.0.1:" << tracking_port_
-                  << ", mode=" << tracking_cfg_.sr_track_mode << ")";
+            LOG() << "LeiaSrPresenter: head tracking sender ready (UDP -> 127.0.0.1:" << tracking_port_
+                  << ", mode=" << tracking_cfg_.sr_track_mode
+                  << ", initial use_open_track=" << (tracking_enabled_ ? "true" : "false") << ")";
         }
     }
 
@@ -665,14 +713,44 @@ void LeiaSrPresenter::HeadTrackingThreadLoop()
     float pos[3], orient[3];
     uint64_t time_us = 0;
 
+    bool prev_use_ot = false;
     while (!tracking_stop_.load(std::memory_order_relaxed)) {
+        // Live-poll use_open_track + the SR filter cfg so the OSD's
+        // "Enable OpenTrack" checkbox and the sr_filter_*/sens_*/max_*
+        // sliders take effect without a presenter restart. We drain the
+        // SR head-pose stream regardless to keep its queue from backing
+        // up — but skip the UDP send and reset the One Euro filters on
+        // the disabled→enabled edge so resumption doesn't see a giant
+        // dx/dt spike from the idle gap.
+        bool use_ot = true;
+        StereoDisplayDriverConfiguration live_cfg{};
+        if (renderer_ && renderer_->Component()) {
+            live_cfg = renderer_->Component()->GetConfig();
+            use_ot   = live_cfg.use_open_track;
+        }
+
+        if (use_ot && !prev_use_ot && track_pipeline_) {
+            track_pipeline_->ResetFilters();
+        }
+        prev_use_ot = use_ot;
+
+        // Push the latest cfg into the pipeline every tick (cheap).
+        if (track_pipeline_) track_pipeline_->Apply(live_cfg);
+
         if (head_listener_->get(pos, orient, time_us)) {
-            const float ts = duration<float>(steady_clock::now() - t0).count();
-            auto r = track_pipeline_->process(pos[0], pos[1], pos[2],
-                                              orient[0], orient[1], orient[2], ts);
-            if (r.valid) {
-                ot_sender_->send(r.pos_x_cm, r.pos_y_cm, r.pos_z_cm,
-                                 r.yaw_deg, r.pitch_deg, r.roll_deg);
+            // Apply pending calibrate using the most recent raw orientation.
+            if (calibrate_request_.exchange(false) && track_pipeline_) {
+                track_pipeline_->Calibrate(orient[0], orient[1], orient[2]);
+                LOG() << "LeiaSrPresenter: head pose calibrated to neutral";
+            }
+            if (use_ot) {
+                const float ts = duration<float>(steady_clock::now() - t0).count();
+                auto r = track_pipeline_->process(pos[0], pos[1], pos[2],
+                                                  orient[0], orient[1], orient[2], ts);
+                if (r.valid) {
+                    ot_sender_->send(r.pos_x_cm, r.pos_y_cm, r.pos_z_cm,
+                                     r.yaw_deg, r.pitch_deg, r.roll_deg);
+                }
             }
         }
         // ~120Hz polling — SR head pose typically arrives at 60Hz; this keeps
@@ -681,6 +759,11 @@ void LeiaSrPresenter::HeadTrackingThreadLoop()
     }
 }
 
+
+void LeiaSrPresenter::RequestCalibrate()
+{
+    calibrate_request_.store(true);
+}
 
 void LeiaSrPresenter::Shutdown()
 {

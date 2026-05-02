@@ -28,6 +28,7 @@
 #include <openvr_driver.h>
 
 #include "dx11_renderer.h"
+#include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
 
 using Microsoft::WRL::ComPtr;
@@ -855,7 +856,14 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
         hdr.width     = per_eye_w;
         hdr.height    = td.Height;
         hdr.bpp       = 32;
-        hdr.flags     = eye_swap_ ? 1u : 0u;
+        // Live-poll eye_swap so the OSD's "Swap Eyes" toggle takes effect
+        // immediately. Falls back to the Init-time cache if no component
+        // pointer is wired.
+        bool live_swap = eye_swap_;
+        if (renderer_ && renderer_->Component()) {
+            live_swap = renderer_->Component()->GetConfig().eye_swap;
+        }
+        hdr.flags     = live_swap ? 1u : 0u;
         uint8_t* hdr_row = static_cast<uint8_t*>(lr.pBits) + td.Height * lr.Pitch;
         std::memcpy(hdr_row, &hdr, sizeof(hdr));
 

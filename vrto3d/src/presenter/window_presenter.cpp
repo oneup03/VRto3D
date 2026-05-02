@@ -16,6 +16,7 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 #include "dx11_renderer.h"
+#include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
 
 using Microsoft::WRL::ComPtr;
@@ -629,7 +630,13 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
         CBParams p{};
         p.mode             = ModeToShaderEnum(mode_);
         p.framepack_offset = framepack_offset_;
-        p.eye_swap         = eye_swap_ ? 1u : 0u;
+        // Poll eye_swap from the live config so the OSD's "Swap Eyes"
+        // checkbox takes effect immediately (no presenter restart).
+        bool live_swap = eye_swap_;
+        if (renderer_ && renderer_->Component()) {
+            live_swap = renderer_->Component()->GetConfig().eye_swap;
+        }
+        p.eye_swap         = live_swap ? 1u : 0u;
         p.out_width        = static_cast<float>(swap_width_);
         p.out_height       = static_cast<float>(swap_height_);
         p.aspect_ratio     = aspect_ratio_;

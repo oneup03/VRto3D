@@ -23,6 +23,12 @@
 #include "presenter/output_presenter.h"
 #include "vrto3dlib/stereo_config.h"
 
+class StereoDisplayComponent;
+namespace vrto3d::osd {
+class OsdRenderer;
+struct MenuCallbacks;
+} // namespace vrto3d::osd
+
 
 // Owns the DX11 device used to import the SteamVR-composited texture, maintains
 // a persistent copy (out_sbs_), and forwards it to the selected presenter.
@@ -50,6 +56,26 @@ public:
     bool WaitAndDrawPending(int timeout_ms);
 
     void Shutdown();
+
+    // Stash OSD configuration. The OsdRenderer is lazy-initialized on the
+    // window thread the first time WaitAndDrawPending sees a frame (so that
+    // per-eye dimensions are known). May be called before or after Init.
+    void ConfigureOsd(StereoDisplayComponent* component,
+                      vrto3d::osd::MenuCallbacks callbacks,
+                      void* headset_hwnd);
+
+    // Returns the OSD renderer pointer (may be null until first frame).
+    // Used by hmd_device_driver to push toast text and toggle the menu.
+    vrto3d::osd::OsdRenderer* Osd() { return osd_renderer_.get(); }
+
+    // Live access to the active StereoDisplayComponent. Used by presenters
+    // to poll mid-session-tunable fields (e.g. eye_swap) each frame instead
+    // of caching the value at Init.
+    StereoDisplayComponent* Component() { return osd_component_; }
+
+    // Live access to the active presenter — used by OSD callbacks that need
+    // to poke presenter-specific behavior (e.g. LeiaSR head-pose calibrate).
+    vrto3d::IOutputPresenter* Presenter() { return presenter_.get(); }
 
     // Accessors for the presenter.
     ID3D11Device*           Device()   const { return device_.Get();  }
@@ -95,4 +121,11 @@ private:
                               shared_texture_cache_;
 
     bool                   initialized_         = false;
+
+    // OSD overlay (lazy-initialized on first frame so eye dims are known).
+    std::unique_ptr<vrto3d::osd::OsdRenderer> osd_renderer_;
+    StereoDisplayComponent* osd_component_     = nullptr;
+    void*                   osd_headset_hwnd_  = nullptr;
+    std::unique_ptr<vrto3d::osd::MenuCallbacks> osd_pending_callbacks_;
+    bool                    osd_initialized_   = false;
 };
