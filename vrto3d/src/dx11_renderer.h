@@ -64,6 +64,13 @@ public:
                       vrto3d::osd::MenuCallbacks callbacks,
                       void* headset_hwnd);
 
+    // Request that the next composited stereo frame be saved to disk as two
+    // PNG images under <Steam>\steamapps\common\SteamVR\screenshots:
+    // one as-is (parallel-view) and one with eyes swapped (cross-view). The
+    // capture happens on the window thread inside WaitAndDrawPending, after
+    // the SBS copy completes but before the OSD is composited in.
+    void RequestScreenshot(std::string app_name);
+
     // Returns the OSD renderer pointer (may be null until first frame).
     // Used by hmd_device_driver to push toast text and toggle the menu.
     vrto3d::osd::OsdRenderer* Osd() { return osd_renderer_.get(); }
@@ -128,4 +135,11 @@ private:
     void*                   osd_headset_hwnd_  = nullptr;
     std::unique_ptr<vrto3d::osd::MenuCallbacks> osd_pending_callbacks_;
     bool                    osd_initialized_   = false;
+
+    // Pending screenshot request — drained by WaitAndDrawPending.
+    std::mutex              screenshot_mutex_;
+    std::string             pending_screenshot_app_;
+    bool                    screenshot_pending_ = false;
+
+    void CaptureScreenshot(const std::string& app_name);
 };

@@ -11,6 +11,7 @@ set(DRIVER_SOURCES
     src/hmd_driver_factory.cpp
     src/device_provider.cpp
     src/dx11_renderer.cpp
+    src/screenshot.cpp
     src/presenter/presenter_factory.cpp
     src/presenter/window_presenter.cpp
     src/osd/osd_renderer.cpp

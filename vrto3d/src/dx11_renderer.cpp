@@ -14,10 +14,14 @@
 #  include <windows.h>
 #endif
 
+#include <cstdio>
+
 #include "vrto3dlib/debug_log.hpp"
 
+#include "hmd_device_driver.h"           // StereoDisplayComponent::GetConfig()
 #include "osd/osd_renderer.h"
 #include "osd/osd_menu.h"
+#include "screenshot.h"
 
 
 Dx11Renderer::Dx11Renderer()
@@ -177,6 +181,23 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
         mutex->ReleaseSync(0);
     }
 
+    // Drain a pending screenshot request *before* OSD compositing so the saved
+    // image is the clean stereo frame, not one with menu/toast text baked in.
+    {
+        bool want = false;
+        std::string name;
+        {
+            std::lock_guard<std::mutex> lk(screenshot_mutex_);
+            if (screenshot_pending_) {
+                want = true;
+                name = std::move(pending_screenshot_app_);
+                pending_screenshot_app_.clear();
+                screenshot_pending_ = false;
+            }
+        }
+        if (want) CaptureScreenshot(name);
+    }
+
     // Lazy-init the OSD now that we know per-eye dimensions.
     if (!osd_initialized_ && osd_pending_callbacks_ && device_ && context_) {
         osd_renderer_ = std::make_unique<vrto3d::osd::OsdRenderer>();
@@ -267,4 +288,72 @@ void Dx11Renderer::ConfigureOsd(StereoDisplayComponent* component,
     osd_pending_callbacks_ = std::make_unique<vrto3d::osd::MenuCallbacks>(std::move(callbacks));
     // Real OsdRenderer construction happens on the window thread on the next
     // WaitAndDrawPending so all D3D11 work stays on the right thread.
+}
+
+
+void Dx11Renderer::RequestScreenshot(std::string app_name)
+{
+    std::lock_guard<std::mutex> lk(screenshot_mutex_);
+    pending_screenshot_app_ = std::move(app_name);
+    screenshot_pending_     = true;
+}
+
+
+void Dx11Renderer::CaptureScreenshot(const std::string& app_name)
+{
+    if (!device_ || !context_ || !out_sbs_) return;
+
+    D3D11_TEXTURE2D_DESC desc{};
+    out_sbs_->GetDesc(&desc);
+
+    // Stage the texture for CPU read; everything pixel-side lives in screenshot.cpp.
+    D3D11_TEXTURE2D_DESC sd = desc;
+    sd.Usage          = D3D11_USAGE_STAGING;
+    sd.BindFlags      = 0;
+    sd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    sd.MiscFlags      = 0;
+    sd.MipLevels      = 1;
+    sd.ArraySize      = 1;
+    sd.SampleDesc     = {1, 0};
+
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+    HRESULT hr = device_->CreateTexture2D(&sd, nullptr, &staging);
+    if (FAILED(hr)) {
+        LOG() << "Screenshot: CreateTexture2D(staging) hr=0x" << std::hex << hr;
+        return;
+    }
+    context_->CopyResource(staging.Get(), out_sbs_.Get());
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    hr = context_->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(hr)) {
+        LOG() << "Screenshot: Map(staging) hr=0x" << std::hex << hr;
+        return;
+    }
+
+    // Per-eye target aspect ratio comes from the live config (settable by the
+    // user in the OSD / profile JSON). 0 disables aspect-ratio scaling.
+    float target_eye_aspect = 0.0f;
+    if (osd_component_) {
+        target_eye_aspect = osd_component_->GetConfig().aspect_ratio;
+    }
+
+    auto r = vrto3d::screenshot::SaveStereoPair(app_name,
+                                                desc.Width, desc.Height,
+                                                desc.Format,
+                                                mapped.pData, mapped.RowPitch,
+                                                target_eye_aspect);
+    context_->Unmap(staging.Get(), 0);
+
+    if (osd_initialized_ && osd_renderer_) {
+        if (r.ok) {
+            char msg[256];
+            _snprintf_s(msg, _TRUNCATE,
+                        "Screenshot saved: %s_%04d.png (+_crossview)",
+                        app_name.empty() ? "vrto3d" : app_name.c_str(), r.index);
+            osd_renderer_->SetText(msg);
+        } else {
+            osd_renderer_->SetText("Screenshot failed (see log)");
+        }
+    }
 }
