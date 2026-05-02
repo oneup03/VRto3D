@@ -107,13 +107,14 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
+		COPY /Y "$(ProjectDir)..\external\openvr\bin\win$(PlatformArchitecture)\openvr_api.dll" "$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\openvr_api.dll"
 		XCOPY "$(SolutionDir)output\drivers\" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\" /S /Y /I
-	  </Command>
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -135,13 +136,14 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
+		COPY /Y "$(ProjectDir)..\external\openvr\bin\win$(PlatformArchitecture)\openvr_api.dll" "$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\openvr_api.dll"
 		XCOPY "$(SolutionDir)output\drivers\" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\" /S /Y /I
-	  </Command>
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -158,14 +160,15 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
+		COPY /Y "$(ProjectDir)..\external\openvr\bin\win$(PlatformArchitecture)\openvr_api.dll" "$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\openvr_api.dll"
 		XCOPY "$(SolutionDir)output\drivers\" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\" /S /Y /I
-	  </Command>
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -186,14 +189,15 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
       <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
+		COPY /Y "$(ProjectDir)..\external\openvr\bin\win$(PlatformArchitecture)\openvr_api.dll" "$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\openvr_api.dll"
 		XCOPY "$(SolutionDir)output\drivers\" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\" /S /Y /I
-	  </Command>
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -202,6 +206,7 @@
     <ClCompile Include="src\hmd_driver_factory.cpp" />
     <ClCompile Include="src\dx11_renderer.cpp" />
     <ClCompile Include="src\screenshot.cpp" />
+    <ClCompile Include="src\vr_recenter.cpp" />
     <ClCompile Include="src\platform\platform_win32.cpp" />
     <ClCompile Include="src\presenter\presenter_factory.cpp" />
     <ClCompile Include="src\presenter\window_presenter.cpp" />
@@ -224,6 +229,7 @@
     <ClInclude Include="src\focus_context.h" />
     <ClInclude Include="src\dx11_renderer.h" />
     <ClInclude Include="src\screenshot.h" />
+    <ClInclude Include="src\vr_recenter.h" />
     <ClInclude Include="src\platform\platform.h" />
     <ClInclude Include="src\presenter\output_presenter.h" />
     <ClInclude Include="src\presenter\window_presenter.h" />
