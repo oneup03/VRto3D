@@ -19,7 +19,6 @@ namespace vrto3d {
 struct FocusContext {
     std::atomic<bool>*     is_on_top     = nullptr;
     std::atomic<bool>*     man_on_top    = nullptr;
-    std::atomic<bool>*     ue3d_on_top   = nullptr;
     std::atomic<uint32_t>* app_pid       = nullptr;
 };
 

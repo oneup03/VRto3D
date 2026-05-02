@@ -148,6 +148,7 @@ struct OsdRenderer::Impl {
     bool                              styles_overridden = false;
     LONG_PTR                          saved_ex_style    = 0;
     HWND                              styled_hwnd       = nullptr;
+    std::function<void()>             on_menu_closed;
 
     HWND DiscoverHwnd() {
 #ifdef _WIN32
@@ -191,6 +192,8 @@ struct OsdRenderer::Impl {
             }
             styles_overridden = false;
             styled_hwnd = nullptr;
+            // Menu just closed — hand input focus back to the game.
+            if (on_menu_closed) on_menu_closed();
         }
         prev_menu_visible = now_visible;
 #else
@@ -303,6 +306,7 @@ bool OsdRenderer::Init(ID3D11Device* device,
     s.imgui_dx11_ready = true;
 
     s.input = CreateOsdInput();
+    s.on_menu_closed = callbacks.request_game_focus;
     s.menu  = std::make_unique<OsdMenu>(component, std::move(callbacks));
 
     // Pin the active output mode to whatever the presenter was constructed

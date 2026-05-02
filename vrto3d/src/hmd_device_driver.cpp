@@ -149,7 +149,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     device_index_ = unObjectId;
     is_on_top_ = false;
     man_on_top_ = false;
-    ue3d_on_top_ = false;
     app_updated_ = false;
     no_profile_ = false;
 
@@ -435,6 +434,29 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 man_on_top_ = is_on_top_.load();
             };
             cb.always_on_top = [this]() { return is_on_top_.load(); };
+            cb.request_game_focus = [this]() {
+                uint32_t pid = app_pid_.load();
+                LOG() << "request_game_focus fired pid=" << pid;
+                if (pid == 0 || !IsProcessRunning(pid)) return;
+                std::thread([pid]() {
+                    // Let any held hotkey modifiers (Ctrl+Home was likely
+                    // just used to close the menu) settle before we try
+                    // to take foreground — the ALT-key trick inside
+                    // ForceFocus misbehaves when Ctrl is still held.
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    for (int i = 0; i < 5; ++i) {
+                        HWND game_hwnd = GetHWNDFromPID(pid);
+                        if (game_hwnd) {
+                            ForceFocus(game_hwnd,
+                                       GetCurrentThreadId(),
+                                       GetWindowThreadProcessId(game_hwnd, nullptr));
+                            LOG() << "request_game_focus iter=" << i
+                                  << " fg_match=" << (GetForegroundWindow() == game_hwnd);
+                        }
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                }).detach();
+            };
             cb.open_config_folder = [this]() {
 #ifdef _WIN32
                 std::string steam = GetSteamInstallPath();
@@ -1117,7 +1139,6 @@ vrto3d::FocusContext MockControllerDeviceDriver::GetFocusContext()
     vrto3d::FocusContext fc;
     fc.is_on_top   = &is_on_top_;
     fc.man_on_top  = &man_on_top_;
-    fc.ue3d_on_top = &ue3d_on_top_;
     fc.app_pid     = &app_pid_;
     return fc;
 }
@@ -1149,15 +1170,6 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 
         if (mon)
         {
-            if (config.auto_focus && !is_on_top_ && !ue3d_on_top_) {
-                BeepSuccess();
-                std::this_thread::sleep_for(std::chrono::seconds(2));
-                is_on_top_ = true;
-                man_on_top_ = true;
-                ue3d_on_top_ = true;
-                vrto3d::TriggerOpenVRRecenter();
-            }
-
             // Depth commands from UEVR (Calibrate, VRto3D++/+/-/--)
             uint8_t depth_cmd = rx.get_depth_request();
             if (depth_cmd >= 2 && depth_cmd <= 6) {
@@ -1224,12 +1236,6 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
             LOG() << "Loaded " << app_name.c_str() << " profile";
             BeepSuccess();
             app_updated_ = true;
-            if (config.auto_focus) {
-                std::this_thread::sleep_for(std::chrono::seconds(8));
-                is_on_top_ = true;
-                man_on_top_ = true;
-                vrto3d::TriggerOpenVRRecenter();
-            }
         }
         else {
             BeepFailure();
@@ -1237,12 +1243,32 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         }
 
         SetAsync(config.async_enable);
+
+        if (config.auto_focus) {
+            std::this_thread::sleep_for(std::chrono::seconds(8));
+            is_on_top_ = true;
+            man_on_top_ = true;
+            vrto3d::TriggerOpenVRRecenter();
+        }
     }
     else if (status == vr::VREvent_ProcessDisconnected)
     {
         is_on_top_ = false;
         man_on_top_ = false;
-        ue3d_on_top_ = false;
+
+        // Some games briefly disconnect from SteamVR (compositor blip,
+        // scene-app handoff) and immediately reconnect with the same exe
+        // still alive. Wait 15s, then re-engage focus if the original
+        // process is still running and no new app has connected since.
+        uint32_t pid = app_pid_.load();
+        std::thread([this, pid]() {
+            std::this_thread::sleep_for(std::chrono::seconds(15));
+            if (!is_active_) return;
+            if (app_pid_.load() == pid && IsProcessRunning(pid)) {
+                is_on_top_ = true;
+                man_on_top_ = true;
+            }
+        }).detach();
     }
 }
 
