@@ -472,9 +472,13 @@ void OsdRenderer::RenderFrame(ID3D11Texture2D* out_sbs) {
                                            ImGuiWindowFlags_NoInputs |
                                            ImGuiWindowFlags_NoBackground;
             const float pad_x = 50.0f;
-            const float line_h = ImGui::GetFontSize();
+            // Toast text is 2x the menu font so it's legible at headset
+            // distance even when the menu chrome is hidden.
+            const float toast_scale = 2.0f;
+            const float line_h = ImGui::GetFontSize() * toast_scale;
             ImGui::SetNextWindowPos(ImVec2(pad_x, static_cast<float>(s.eye_h) - line_h - 30.0f));
             if (ImGui::Begin("##vrto3d_toast", nullptr, flags)) {
+                ImGui::SetWindowFontScale(toast_scale);
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
                 ImGui::TextUnformatted(msg.c_str());
                 ImGui::PopStyleColor();
