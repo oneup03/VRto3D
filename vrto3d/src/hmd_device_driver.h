@@ -150,7 +150,6 @@ private:
     std::unique_ptr< Dx11Renderer > renderer_;
     std::atomic< bool > is_on_top_;
     std::atomic< bool > man_on_top_;
-    std::atomic< bool > ue3d_on_top_;
     std::atomic< bool > launch_script_executed_;
 
     std::mutex pose_mutex_;

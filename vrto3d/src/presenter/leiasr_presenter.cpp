@@ -27,6 +27,7 @@
 #include "dx11_renderer.h"
 #include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
+#include "vrto3dlib/win32_helper.hpp"
 #include "one_euro_filter.h"
 
 // LeiaSR SDK headers
@@ -649,14 +650,12 @@ void LeiaSrPresenter::FocusThreadLoop()
     bool was_on_top = false;
     int  reassert_counter = 0;
     uint32_t last_auto_focused_pid = 0;
-    uint32_t last_ue3d_focused_pid = 0;
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
 
         const bool is_on_top   = focus_.is_on_top   && focus_.is_on_top->load();
         const bool man_on_top  = focus_.man_on_top  && focus_.man_on_top->load();
-        const bool ue3d_on_top = focus_.ue3d_on_top && focus_.ue3d_on_top->load();
         const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
 
         // LeiaSR runs on a single SR display — no multi-display nudge.
@@ -664,7 +663,6 @@ void LeiaSrPresenter::FocusThreadLoop()
         const bool app_running = platform::IsProcessRunning(pid);
         if (pid == 0 || !app_running) {
             last_auto_focused_pid = 0;
-            last_ue3d_focused_pid = 0;
         }
 
         bool want_on_top = false;
@@ -672,25 +670,50 @@ void LeiaSrPresenter::FocusThreadLoop()
             want_on_top = true;
         } else if (is_on_top && app_running) {
             want_on_top = true;
-        } else if (auto_focus_ && !is_on_top && !ue3d_on_top
+        } else if (auto_focus_ && !is_on_top
                    && app_running && pid != 0
                    && pid != last_auto_focused_pid) {
             if (focus_.is_on_top)  focus_.is_on_top->store(true);
             if (focus_.man_on_top) focus_.man_on_top->store(true);
             last_auto_focused_pid = pid;
             want_on_top = true;
-        } else if (ue3d_on_top && pid != 0 && pid != last_ue3d_focused_pid) {
-            last_ue3d_focused_pid = pid;
-            want_on_top = true;
         }
 
         if (want_on_top != was_on_top) {
+            HWND vr_hwnd = static_cast<HWND>(window_->NativeHandle());
             if (want_on_top) {
                 window_->BringToTop();
                 if (lens_hint_) lens_hint_->enable();
+                if (vr_hwnd) {
+                    LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
+                                      ex | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+                    SetLayeredWindowAttributes(vr_hwnd, 0, 255, LWA_ALPHA);
+                }
+                // When SteamVR is launched by the app, the game window may
+                // not exist yet at the +8s mark, or SteamVR's bring-up
+                // (vrmonitor / status window) may grab foreground after
+                // our first ForceFocus. Run a watch loop that re-asserts
+                // focus whenever the foreground drifts off the game.
+                std::thread([pid]() {
+                    for (int i = 0; i < 15; ++i) {
+                        HWND game_hwnd = GetHWNDFromPID(pid);
+                        if (game_hwnd && GetForegroundWindow() != game_hwnd) {
+                            ForceFocus(game_hwnd,
+                                       GetCurrentThreadId(),
+                                       GetWindowThreadProcessId(game_hwnd, nullptr));
+                        }
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                }).detach();
             } else {
                 window_->ReleaseTopmost();
                 if (lens_hint_) lens_hint_->disable();
+                if (vr_hwnd) {
+                    LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
+                                      ex & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT));
+                }
             }
             was_on_top = want_on_top;
             reassert_counter = 0;

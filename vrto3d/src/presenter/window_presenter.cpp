@@ -18,6 +18,7 @@
 #include "dx11_renderer.h"
 #include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
+#include "vrto3dlib/win32_helper.hpp"
 
 using Microsoft::WRL::ComPtr;
 
@@ -548,7 +549,7 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         swapchain_->Present(0, 0);
     }
     // Window starts non-topmost; FocusThreadLoop asserts topmost when
-    // is_on_top_ / man_on_top_ / ue3d_on_top_ / auto_focus path triggers.
+    // is_on_top_ / man_on_top_ / auto_focus path triggers.
     window_ready_.store(true);
 
     // This thread owns the window message pump AND drives rendering. Win32
@@ -725,7 +726,6 @@ void WindowPresenter::FocusThreadLoop()
     bool nudged     = false;
     int  reassert_counter = 0;
     uint32_t last_auto_focused_pid = 0;   // tracks which pid we already auto-raised for (auto_focus path)
-    uint32_t last_ue3d_focused_pid = 0;   // tracks which pid we already raised for via UE3D IPC
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
@@ -735,7 +735,6 @@ void WindowPresenter::FocusThreadLoop()
 
         const bool is_on_top   = focus_.is_on_top   && focus_.is_on_top->load();
         const bool man_on_top  = focus_.man_on_top  && focus_.man_on_top->load();
-        const bool ue3d_on_top = focus_.ue3d_on_top && focus_.ue3d_on_top->load();
         const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
 
         // Multi-display placement nudge, once after first show.
@@ -746,11 +745,10 @@ void WindowPresenter::FocusThreadLoop()
 
         const bool app_running = platform::IsProcessRunning(pid);
 
-        // Reset auto-focus + UE3D latches when the tracked app is gone so a
-        // future launch of a (possibly same-pid-recycled) app can re-trigger.
+        // Reset auto-focus latch when the tracked app is gone so a future
+        // launch of a (possibly same-pid-recycled) app can re-trigger.
         if (pid == 0 || !app_running) {
             last_auto_focused_pid = 0;
-            last_ue3d_focused_pid = 0;
         }
 
         bool want_on_top = false;
@@ -758,7 +756,7 @@ void WindowPresenter::FocusThreadLoop()
             want_on_top = true;
         } else if (is_on_top && app_running) {
             want_on_top = true;
-        } else if (auto_focus_ && !is_on_top && !ue3d_on_top
+        } else if (auto_focus_ && !is_on_top
                    && app_running && pid != 0
                    && pid != last_auto_focused_pid) {
             // Auto-raise once per new tracked app PID. Without the pid latch
@@ -768,16 +766,44 @@ void WindowPresenter::FocusThreadLoop()
             if (focus_.man_on_top) focus_.man_on_top->store(true);
             last_auto_focused_pid = pid;
             want_on_top = true;
-        } else if (ue3d_on_top && pid != 0 && pid != last_ue3d_focused_pid) {
-            // UE3D IPC set ue3d_on_top_; raise once per new pid. Same latch
-            // pattern as auto-focus so Ctrl+F8 can subsequently disable it.
-            last_ue3d_focused_pid = pid;
-            want_on_top = true;
         }
 
         if (want_on_top != was_on_top) {
-            if (want_on_top) window_->BringToTop();
-            else             window_->ReleaseTopmost();
+            HWND vr_hwnd = static_cast<HWND>(window_->NativeHandle());
+            if (want_on_top) {
+                window_->BringToTop();
+                // Make the VR window click-through so input falls through to
+                // the game window underneath.
+                if (vr_hwnd) {
+                    LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
+                                      ex | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+                    SetLayeredWindowAttributes(vr_hwnd, 0, 255, LWA_ALPHA);
+                }
+                // When SteamVR is launched by the app, the game window may
+                // not exist yet at the +8s mark, or SteamVR's bring-up
+                // (vrmonitor / status window) may grab foreground after
+                // our first ForceFocus. Run a watch loop that re-asserts
+                // focus whenever the foreground drifts off the game.
+                std::thread([pid]() {
+                    for (int i = 0; i < 15; ++i) {
+                        HWND game_hwnd = GetHWNDFromPID(pid);
+                        if (game_hwnd && GetForegroundWindow() != game_hwnd) {
+                            ForceFocus(game_hwnd,
+                                       GetCurrentThreadId(),
+                                       GetWindowThreadProcessId(game_hwnd, nullptr));
+                        }
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                }).detach();
+            } else {
+                window_->ReleaseTopmost();
+                if (vr_hwnd) {
+                    LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
+                                      ex & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT));
+                }
+            }
             was_on_top = want_on_top;
             reassert_counter = 0;
         }

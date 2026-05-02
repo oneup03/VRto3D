@@ -30,6 +30,7 @@
 #include "dx11_renderer.h"
 #include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
+#include "vrto3dlib/win32_helper.hpp"
 
 using Microsoft::WRL::ComPtr;
 
@@ -937,20 +938,17 @@ void NvStereoDx9Presenter::FocusThreadLoop()
     bool was_on_top = false;
     int  reassert_counter = 0;
     uint32_t last_auto_focused_pid = 0;
-    uint32_t last_ue3d_focused_pid = 0;
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
 
         const bool is_on_top   = focus_.is_on_top   && focus_.is_on_top->load();
         const bool man_on_top  = focus_.man_on_top  && focus_.man_on_top->load();
-        const bool ue3d_on_top = focus_.ue3d_on_top && focus_.ue3d_on_top->load();
         const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
 
         const bool app_running = platform::IsProcessRunning(pid);
         if (pid == 0 || !app_running) {
             last_auto_focused_pid = 0;
-            last_ue3d_focused_pid = 0;
         }
 
         // FSE mode: D3D9 FSE bypasses the normal window Z-order, so
@@ -965,7 +963,7 @@ void NvStereoDx9Presenter::FocusThreadLoop()
         // ShowWindow(SW_RESTORE) + ForceForeground.
         if (is_fse_) {
             bool want_on_top = false;
-            if (man_on_top || is_on_top || ue3d_on_top) {
+            if (man_on_top || is_on_top) {
                 want_on_top = true;
             } else if (auto_focus_ && app_running && pid != 0
                        && pid != last_auto_focused_pid) {
@@ -988,6 +986,24 @@ void NvStereoDx9Presenter::FocusThreadLoop()
                                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                     ForceForeground(hwnd);
                 }
+                // Hand input focus to the game window — FSE keeps the VR
+                // window visually on top, but the user expects keystrokes
+                // and mouse input to land in the game. When SteamVR is
+                // launched by the app, the game window may not exist yet
+                // and SteamVR's status window often grabs foreground
+                // mid-bring-up; run a watch loop that re-asserts focus
+                // whenever it drifts off the game.
+                std::thread([pid]() {
+                    for (int i = 0; i < 15; ++i) {
+                        HWND game_hwnd = GetHWNDFromPID(pid);
+                        if (game_hwnd && GetForegroundWindow() != game_hwnd) {
+                            ForceFocus(game_hwnd,
+                                       GetCurrentThreadId(),
+                                       GetWindowThreadProcessId(game_hwnd, nullptr));
+                        }
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                }).detach();
                 was_on_top = true;
                 reassert_counter = 0;
             } else if (!want_on_top && was_on_top) {
