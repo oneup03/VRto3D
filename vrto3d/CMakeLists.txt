@@ -12,6 +12,7 @@ set(DRIVER_SOURCES
     src/device_provider.cpp
     src/dx11_renderer.cpp
     src/screenshot.cpp
+    src/vr_recenter.cpp
     src/presenter/presenter_factory.cpp
     src/presenter/window_presenter.cpp
     src/osd/osd_renderer.cpp
@@ -104,6 +105,7 @@ if(WIN32)
         "/DELAYLOAD:DimencoWeaving.dll"
         "/DELAYLOAD:opencv_core343.dll"
         "/DELAYLOAD:nvapi64.dll"
+        "/DELAYLOAD:openvr_api.dll"
     )
     target_compile_definitions(driver_vrto3d PRIVATE
         WIN32_LEAN_AND_MEAN
@@ -160,6 +162,14 @@ else()
     set(BIN_SUBDIR "bin/linux64")
 endif()
 
+if(WIN32)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(OPENVR_DLL "${ROOT}/external/openvr/bin/win64/openvr_api.dll")
+    else()
+        set(OPENVR_DLL "${ROOT}/external/openvr/bin/win32/openvr_api.dll")
+    endif()
+endif()
+
 add_custom_command(TARGET driver_vrto3d POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${OUT_DIR}/${BIN_SUBDIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:driver_vrto3d>
@@ -169,3 +179,11 @@ add_custom_command(TARGET driver_vrto3d POST_BUILD
             "${OUT_DIR}"
     COMMENT "Staging driver_vrto3d into ${OUT_DIR}"
 )
+
+if(WIN32)
+    add_custom_command(TARGET driver_vrto3d POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OPENVR_DLL}"
+                "${OUT_DIR}/${BIN_SUBDIR}/openvr_api.dll"
+        COMMENT "Staging openvr_api.dll next to driver_vrto3d"
+    )
+endif()

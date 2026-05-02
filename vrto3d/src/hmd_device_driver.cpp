@@ -23,6 +23,7 @@
 #include "vrto3dlib/json_manager.h"
 #include "osd/osd_renderer.h"
 #include "osd/osd_menu.h"
+#include "vr_recenter.h"
 
 #ifdef _WIN32
 #  include <shellapi.h>
@@ -1154,6 +1155,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
                 is_on_top_ = true;
                 man_on_top_ = true;
                 ue3d_on_top_ = true;
+                vrto3d::TriggerOpenVRRecenter();
             }
 
             // Depth commands from UEVR (Calibrate, VRto3D++/+/-/--)
@@ -1226,6 +1228,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
                 std::this_thread::sleep_for(std::chrono::seconds(8));
                 is_on_top_ = true;
                 man_on_top_ = true;
+                vrto3d::TriggerOpenVRRecenter();
             }
         }
         else {
