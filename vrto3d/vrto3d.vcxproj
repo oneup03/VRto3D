@@ -201,6 +201,7 @@
     <ClCompile Include="src\device_provider.cpp" />
     <ClCompile Include="src\hmd_driver_factory.cpp" />
     <ClCompile Include="src\dx11_renderer.cpp" />
+    <ClCompile Include="src\screenshot.cpp" />
     <ClCompile Include="src\platform\platform_win32.cpp" />
     <ClCompile Include="src\presenter\presenter_factory.cpp" />
     <ClCompile Include="src\presenter\window_presenter.cpp" />
@@ -222,6 +223,7 @@
     <ClInclude Include="src\device_provider.h" />
     <ClInclude Include="src\focus_context.h" />
     <ClInclude Include="src\dx11_renderer.h" />
+    <ClInclude Include="src\screenshot.h" />
     <ClInclude Include="src\platform\platform.h" />
     <ClInclude Include="src\presenter\output_presenter.h" />
     <ClInclude Include="src\presenter\window_presenter.h" />

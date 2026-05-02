@@ -149,7 +149,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     is_on_top_ = false;
     man_on_top_ = false;
     ue3d_on_top_ = false;
-    take_screenshot_ = false;
     app_updated_ = false;
     no_profile_ = false;
 
@@ -1064,9 +1063,16 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         else if (sleep.top > 0) {
             --sleep.top;
         }
-        // Ctrl+F12 Take Screenshot
+        // Ctrl+F12 Take Screenshot — drains on the next composited frame
+        // inside Dx11Renderer::WaitAndDrawPending.
         if (isCtrlDown() && isDown(VK_F12) && sleep.shot == 0) {
-            take_screenshot_ = true;
+            if (renderer_) {
+                std::string name = !app_name_.empty() ? app_name_
+                                  : !prev_name_.empty() ? prev_name_
+                                  : std::string("vrto3d");
+                renderer_->RequestScreenshot(name);
+                setOverlay("Screenshot requested");
+            }
             sleep.shot = cfg.sleep_count_max;
         }
         else if (sleep.shot > 0) {
