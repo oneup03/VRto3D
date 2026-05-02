@@ -44,6 +44,7 @@ public:
               const FocusContext& focus) override;
     void PresentFrame(ID3D11Texture2D* sbs_input) override;
     void Shutdown() override;
+    void RequestCalibrate() override;
 
 private:
     bool CreateSwapChain(Dx11Renderer& renderer);
@@ -100,6 +101,7 @@ private:
     std::unique_ptr<LeiaSrTrackPipeline>          track_pipeline_;
     std::thread                                   tracking_thread_;
     std::atomic<bool>                             tracking_stop_{false};
+    std::atomic<bool>                             calibrate_request_{false};
 };
 
 }  // namespace vrto3d

@@ -33,6 +33,13 @@ public:
     virtual void PresentFrame(ID3D11Texture2D* sbs_input) = 0;
 
     virtual void Shutdown() = 0;
+
+    // Optional: snap the current head pose as the neutral zero. Default
+    // no-op — only the LeiaSR presenter implements head-pose calibration.
+    // Called from the menu-callback thread; implementations MUST be
+    // thread-safe (typically just an atomic flag the render/track thread
+    // reads on the next iteration).
+    virtual void RequestCalibrate() {}
 };
 
 std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode);

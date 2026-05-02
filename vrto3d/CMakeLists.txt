@@ -13,6 +13,9 @@ set(DRIVER_SOURCES
     src/dx11_renderer.cpp
     src/presenter/presenter_factory.cpp
     src/presenter/window_presenter.cpp
+    src/osd/osd_renderer.cpp
+    src/osd/osd_menu.cpp
+    src/osd/osd_keymap.cpp
 )
 
 if(WIN32)
@@ -21,12 +24,26 @@ if(WIN32)
         src/presenter/leiasr_presenter.cpp
         src/presenter/nvstereo_dx9_presenter.cpp
         src/presenter/display_timing_helper.cpp
+        src/osd/osd_input_win32.cpp
     )
 else()
     list(APPEND DRIVER_SOURCES
         src/platform/platform_linux.cpp
+        src/osd/osd_input_linux.cpp
     )
 endif()
+
+# Dear ImGui (vendored as submodule at external/imgui).
+# Compiled directly into the driver — no separate target.
+set(IMGUI_DIR "${ROOT}/external/imgui")
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
+)
+list(APPEND DRIVER_SOURCES ${IMGUI_SOURCES})
 
 add_library(driver_vrto3d SHARED ${DRIVER_SOURCES})
 
@@ -39,6 +56,8 @@ target_include_directories(driver_vrto3d PRIVATE
     ${ROOT}/external/LeiaSR/third_party/OpenCV/include
     ${ROOT}/external/nvapi
     ${ROOT}/utils/vrmath
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
 )
 
 # VRto3DLib submodule — compile its sources directly. No transitive target yet.
@@ -71,6 +90,7 @@ if(WIN32)
         ws2_32
         user32
         gdi32
+        urlmon
     )
     # Delay-load LeiaSR + OpenCV + NVAPI DLLs so the driver still loads when
     # those runtimes aren't installed. The DLLs are only resolved when their
@@ -87,6 +107,8 @@ if(WIN32)
     target_compile_definitions(driver_vrto3d PRIVATE
         WIN32_LEAN_AND_MEAN
         NOMINMAX
+        UNICODE
+        _UNICODE
     )
 else()
     # Linux build — Win32-only subsystems are stubbed.
@@ -100,6 +122,14 @@ else()
         pkg_check_modules(SDL2 IMPORTED_TARGET sdl2)
         if(SDL2_FOUND)
             target_link_libraries(driver_vrto3d PRIVATE PkgConfig::SDL2)
+            target_compile_definitions(driver_vrto3d PRIVATE VRTO3D_HAVE_SDL2)
+        endif()
+        # libevdev for OSD keyboard/mouse input on Linux. Optional — falls back
+        # to text-only OSD when not present.
+        pkg_check_modules(LIBEVDEV IMPORTED_TARGET libevdev)
+        if(LIBEVDEV_FOUND)
+            target_link_libraries(driver_vrto3d PRIVATE PkgConfig::LIBEVDEV)
+            target_compile_definitions(driver_vrto3d PRIVATE VRTO3D_HAVE_LIBEVDEV)
         endif()
     endif()
     # openvr_api: prefer prebuilt .so under external/openvr/lib/linux64; otherwise find_library.

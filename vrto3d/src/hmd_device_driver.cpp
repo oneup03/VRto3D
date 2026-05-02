@@ -21,8 +21,15 @@
 #include "platform/platform.h"
 #include "vrto3dlib/key_mappings.h"
 #include "vrto3dlib/json_manager.h"
+#include "osd/osd_renderer.h"
+#include "osd/osd_menu.h"
+
+#ifdef _WIN32
+#  include <shellapi.h>
+#  include <urlmon.h>
+#  pragma comment(lib, "urlmon.lib")
+#endif
 #include "vrto3dlib/app_id_mgr.h"
-#include "vrto3dlib/overlay_mgr.h"
 #include "vrto3dlib/win32_helper.hpp"
 #include "vrmath.h"
 
@@ -333,11 +340,12 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
     depth_thread_ = std::thread(&MockControllerDeviceDriver::AutoDepthThread, this);
-    if (stereo_display_component_->GetConfig().use_open_track) {
-        open_track_att_ = HmdQuaternion_Identity;
-		open_track_pos_ = { 0.0, 0.0, 0.0 };
-        track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
-    }
+    // Always start OpenTrack listener; the use_open_track flag is checked at
+    // consumption time (PoseUpdateThread / Stereo component) so it can be
+    // toggled live from the OSD without restarting the driver.
+    open_track_att_ = HmdQuaternion_Identity;
+    open_track_pos_ = { 0.0, 0.0, 0.0 };
+    track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
 
     HANDLE thread_handle = pose_thread_.native_handle();
 
@@ -357,6 +365,179 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         if (!renderer_->Init(luid, stereo_display_component_->GetConfig(), GetFocusContext())) {
             LOG() << "Dx11Renderer::Init failed; IVRVirtualDisplay path will be inactive";
             renderer_.reset();
+        } else {
+            // Wire OSD callbacks. The OsdRenderer is lazy-initialized on the
+            // window thread when the first frame arrives.
+            vrto3d::osd::MenuCallbacks cb;
+            cb.save_game_profile = [this](std::string toast) {
+                if (prev_name_.empty()) return;
+                auto cfg = stereo_display_component_->GetConfig();
+                cfg.depth       = stereo_display_component_->GetDepth();
+                cfg.convergence = stereo_display_component_->GetConvergence();
+                cfg.fov         = stereo_display_component_->GetFoV();
+                JsonManager().SaveProfileToJson(prev_name_ + "_config.json", cfg);
+                if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
+            };
+            cb.save_default_profile = [this](std::string toast) {
+                auto cfg = stereo_display_component_->GetConfig();
+                cfg.depth       = stereo_display_component_->GetDepth();
+                cfg.convergence = stereo_display_component_->GetConvergence();
+                cfg.fov         = stereo_display_component_->GetFoV();
+                // SaveFullConfigToJson writes every key (display_index,
+                // output_mode, render dims, OpenTrack, track filter, LeiaSR,
+                // launch_script, etc.) — required so System-tab edits persist.
+                JsonManager().SaveFullConfigToJson(DEF_CFG, cfg);
+                if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
+            };
+            cb.reload_game_profile = [this](std::string toast) {
+                if (prev_name_.empty()) return;
+                auto cfg = stereo_display_component_->GetConfig();
+                if (JsonManager().LoadProfileFromJson(prev_name_ + "_config.json", cfg)) {
+                    stereo_display_component_->LoadSettings(cfg);
+                    SetAsync(cfg.async_enable);
+                    app_name_ = prev_name_;
+                    if (renderer_ && renderer_->Osd()) {
+                        renderer_->Osd()->SetAppName(app_name_);
+                        renderer_->Osd()->SetText(toast);
+                    }
+                }
+            };
+            cb.reload_default_profile = [this](std::string toast) {
+                auto cfg = stereo_display_component_->GetConfig();
+                // LoadProfileFromJson only reads per-profile fields; for the
+                // default config we also need to refresh global driver fields
+                // (display_index, output_mode, render dims, hmd_x/y/yaw,
+                // OpenTrack, track filter, LeiaSR sens, async_enable, etc).
+                // LoadParamsFromJson reads exactly that superset.
+                JsonManager().LoadParamsFromJson(cfg);
+                if (JsonManager().LoadProfileFromJson(DEF_CFG, cfg)) {
+                    stereo_display_component_->LoadSettings(cfg);
+                    SetAsync(cfg.async_enable);
+                    app_name_ = "";
+                    if (renderer_ && renderer_->Osd()) {
+                        renderer_->Osd()->SetAppName(app_name_);
+                        renderer_->Osd()->SetText(toast);
+                    }
+                }
+            };
+            cb.reset_projection = [this]() {
+                stereo_display_component_->ResetProjection();
+            };
+            cb.calibrate_leiasr_head = [this]() {
+                if (renderer_ && renderer_->Presenter()) {
+                    renderer_->Presenter()->RequestCalibrate();
+                    if (renderer_->Osd())
+                        renderer_->Osd()->SetText("LeiaSR head pose calibrated");
+                }
+            };
+            cb.toggle_always_on_top = [this]() {
+                is_on_top_  = !is_on_top_;
+                man_on_top_ = is_on_top_.load();
+            };
+            cb.always_on_top = [this]() { return is_on_top_.load(); };
+            cb.open_config_folder = [this]() {
+#ifdef _WIN32
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string path = steam + "\\config\\vrto3d";
+                ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#endif
+            };
+            cb.download_latest_profiles = [this]() {
+#ifdef _WIN32
+                // Re-entrancy guard — ignore clicks while a previous download
+                // is still in flight.
+                static std::atomic<bool> in_flight{false};
+                bool expected = false;
+                if (!in_flight.compare_exchange_strong(expected, true)) {
+                    if (renderer_ && renderer_->Osd())
+                        renderer_->Osd()->SetText("Profile download already running");
+                    return;
+                }
+                std::thread([this]{
+                    auto toast = [this](const std::string& msg,
+                                        std::chrono::milliseconds ttl =
+                                          std::chrono::milliseconds(3000)) {
+                        if (renderer_ && renderer_->Osd())
+                            renderer_->Osd()->SetText(msg, ttl);
+                    };
+                    static std::atomic<bool>& done = in_flight;
+                    struct ResetOnExit { std::atomic<bool>& f; ~ResetOnExit(){ f.store(false); } } _r{done};
+
+                    std::string steam = GetSteamInstallPath();
+                    if (steam.empty()) {
+                        toast("Profile download failed: Steam path not found");
+                        return;
+                    }
+                    const std::string folder = steam + "\\config\\vrto3d";
+                    const std::string zip    = folder + "\\vrto3d_profiles.zip";
+                    const wchar_t* url =
+                        L"https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip";
+
+                    toast("Downloading latest profiles…", std::chrono::milliseconds(60000));
+
+                    // Make sure the destination folder exists.
+                    CreateDirectoryA(folder.c_str(), nullptr);
+
+                    std::wstring wzip(zip.begin(), zip.end());
+                    HRESULT hr = URLDownloadToFileW(nullptr, url, wzip.c_str(), 0, nullptr);
+                    if (FAILED(hr)) {
+                        char buf[160];
+                        std::snprintf(buf, sizeof(buf),
+                                      "Profile download failed (hr=0x%08lX)",
+                                      static_cast<unsigned long>(hr));
+                        toast(buf);
+                        return;
+                    }
+
+                    toast("Extracting profiles…", std::chrono::milliseconds(30000));
+
+                    // Use PowerShell's Expand-Archive to unpack — no extra
+                    // dependency, available on every supported Windows.
+                    std::string cmd =
+                        "powershell.exe -NoProfile -ExecutionPolicy Bypass "
+                        "-Command \"Expand-Archive -LiteralPath '" + zip +
+                        "' -DestinationPath '" + folder + "' -Force\"";
+
+                    STARTUPINFOA si{};
+                    si.cb = sizeof(si);
+                    si.dwFlags = STARTF_USESHOWWINDOW;
+                    si.wShowWindow = SW_HIDE;
+                    PROCESS_INFORMATION pi{};
+                    std::vector<char> cmdline(cmd.begin(), cmd.end());
+                    cmdline.push_back('\0');
+                    BOOL ok = CreateProcessA(nullptr, cmdline.data(), nullptr, nullptr,
+                                             FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
+                                             &si, &pi);
+                    DWORD exit_code = 1;
+                    if (ok) {
+                        WaitForSingleObject(pi.hProcess, 60000);
+                        GetExitCodeProcess(pi.hProcess, &exit_code);
+                        CloseHandle(pi.hProcess);
+                        CloseHandle(pi.hThread);
+                    }
+                    DeleteFileA(zip.c_str());
+
+                    if (!ok) {
+                        toast("Extract failed: PowerShell unavailable");
+                    } else if (exit_code != 0) {
+                        char buf[160];
+                        std::snprintf(buf, sizeof(buf),
+                                      "Extract failed (exit %lu)",
+                                      static_cast<unsigned long>(exit_code));
+                        toast(buf);
+                    } else {
+                        toast("Profiles installed to config\\vrto3d");
+                    }
+                }).detach();
+#endif
+            };
+
+            // The headset HWND is created by the presenter on its window
+            // thread; FindWindow is the only way to discover it from here.
+            // OsdRenderer handles null gracefully — input mouse mapping just
+            // skips until the HWND becomes available.
+            renderer_->ConfigureOsd(stereo_display_component_.get(), std::move(cb), nullptr);
         }
     }
 
@@ -680,6 +861,14 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 
         if (config.use_track_filter)
         {
+            // Reset on the disabled→enabled edge so the filter doesn't carry
+            // stale state (potentially minutes old) into its first FilterPose
+            // call when the OSD toggles use_track_filter on. Without this the
+            // initial samples produce noisy output until the filter resettles.
+            if (!track_filter_was_enabled_)
+            {
+                track_filter_.Reset();
+            }
             double filtered_position[3] = {
                 pose.vecPosition[0],
                 pose.vecPosition[1],
@@ -748,21 +937,19 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 void MockControllerDeviceDriver::PollHotkeysThread() {
     struct {
         int shot = 0;
-        int hmd = 0;
         int top = 0;
         int save = 0;
-        int overlay = 0;
+        int menu = 0;
     } sleep;
 
     const int sleep_time = static_cast<int>(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
-    std::string overlay_msg;
-    HWND overlay_hwnd = nullptr;
 
-    InitGDIPlus();
+    auto getOsd = [this]() -> vrto3d::osd::OsdRenderer* {
+        return renderer_ ? renderer_->Osd() : nullptr;
+    };
 
     auto setOverlay = [&](const std::string& msg) {
-        overlay_msg = msg;
-        sleep.overlay = stereo_display_component_->GetConfig().sleep_count_max * 3;
+        if (auto* osd = getOsd()) osd->SetText(msg);
     };
     auto fmt = [&](const std::string& label, float value, int precision = 3) {
         std::ostringstream ss;
@@ -780,6 +967,26 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
 
     while (is_active_) {
         auto cfg = stereo_display_component_->GetConfig();
+
+        // Ctrl+Home toggles the OSD menu. Always polled (independent of
+        // disable_hotkeys) so users can always recover from a runaway config.
+        if (isCtrlDown() && isDown(VK_HOME) && sleep.menu == 0) {
+            if (auto* osd = getOsd()) {
+                osd->ToggleMenu();
+                osd->SetAppName(app_name_);
+                osd->SetVersion(stereo_version_number_);
+            }
+            sleep.menu = cfg.sleep_count_max;
+        } else if (sleep.menu > 0) {
+            --sleep.menu;
+        }
+
+        // While the menu is open, suppress the rest of the hotkey poll so
+        // arrow keys / numbers / Enter reach ImGui instead of bumping depth.
+        if (auto* osd = getOsd(); osd && osd->MenuVisible()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+            continue;
+        }
 
         if (!cfg.disable_hotkeys) {
             // Ctrl+F3 Decrease Depth
@@ -820,18 +1027,8 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 }
                 sleep.save = cfg.sleep_count_max;
             }
-            // Ctrl+F9 Save HMD Position & Yaw
-            if (isCtrlDown() && isDown(VK_F9) && sleep.hmd == 0) {
-                JsonManager().SaveHmdOffsets(cfg);
-                BeepSuccess();
-                setOverlay("Saved HMD Offsets");
-                sleep.hmd = cfg.sleep_count_max;
-            }
-            else if (sleep.hmd > 0) {
-                --sleep.hmd;
-            }
             // Ctrl+F10 Reload settings from Game Profile or (+Shift) Default Profile
-            else if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
+            if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
                 std::string path = "";
                 if (isDown(VK_SHIFT)) {
                     path = DEF_CFG;
@@ -875,141 +1072,17 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         else if (sleep.shot > 0) {
             --sleep.shot;
         }
-        // Ctrl+- Decrease Sensitivity / Shift+Ctrl+- Decrease Filter Deadzone
-        if (isCtrlDown() && isDown(VK_OEM_MINUS)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterRotationDeadzone(-0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot DZ: ", cfg.trk_flt_rot_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterRotation(-0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot Sens: ", cfg.trk_flt_rot_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustSensitivity(-0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
-            }
-        }
-        // Ctrl++ Increase Sensitivity / Shift+Ctrl++ Increase Filter Deadzone
-        else if (isCtrlDown() && isDown(VK_OEM_PLUS)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterRotationDeadzone(0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot DZ: ", cfg.trk_flt_rot_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterRotation(0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot Sens: ", cfg.trk_flt_rot_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustSensitivity(0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
-            }
-        }
-        // Ctrl+[ Decrease Pitch Radius / Shift+Ctrl+[ Decrease Filter Position Deadzone
-        if (isCtrlDown() && isDown(VK_OEM_4)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterTranslationDeadzone(-0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos DZ: ", cfg.trk_flt_pos_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterTranslation(-0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos Sens: ", cfg.trk_flt_pos_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustRadius(-0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
-            }
-        }
-        // Ctrl+] Increase Pitch Radius / Shift+Ctrl+] Increase Filter Position Deadzone
-        else if (isCtrlDown() && isDown(VK_OEM_6)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterTranslationDeadzone(0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos DZ: ", cfg.trk_flt_pos_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterTranslation(0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos Sens: ", cfg.trk_flt_pos_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustRadius(0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
-            }
-        }
-
-        // Ctrl+; Decrease Filter Zoom Smoothing / Shift+Ctrl+; Decrease Filter Max Zoom
-        if (isCtrlDown() && isDown(VK_OEM_1)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterMaxZoom(-0.1f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Max Zoom: ", cfg.trk_flt_max_zoom, 2));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterZoomSmoothing(-0.05f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Zoom Smooth: ", cfg.trk_flt_zoom_smooth, 2));
-                }
-            }
-        }
-        // Ctrl+' Increase Filter Zoom Smoothing / Shift+Ctrl+' Increase Filter Max Zoom
-        else if (isCtrlDown() && isDown(VK_OEM_7)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterMaxZoom(0.1f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Max Zoom: ", cfg.trk_flt_max_zoom, 2));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterZoomSmoothing(0.05f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Zoom Smooth: ", cfg.trk_flt_zoom_smooth, 2));
-                }
-            }
-        }
-
-        // Check User binds
+        // Check User binds (preset hotkeys configured by the user — load/store)
         auto hotkey_str = stereo_display_component_->CheckUserSettings();
-
-        // Check for Position Adjustment
-        auto pos_str = stereo_display_component_->CheckPositionInput();
-
         if (!hotkey_str.empty()) {
             setOverlay(hotkey_str);
-        }
-        else if (!pos_str.empty()) {
-            setOverlay(pos_str);
         }
 
         // Check for new profile load
         if (app_updated_)
         {
             setOverlay("Loaded " + app_name_ + "_config.json profile");
+            if (auto* osd = getOsd()) osd->SetAppName(app_name_);
             app_updated_ = false;
         }
         // Check for no profile
@@ -1017,15 +1090,6 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         {
             setOverlay("No profile found for " + app_name_);
             no_profile_ = false;
-        }
-
-        // Draw Overlay if applicable
-        if (!overlay_hwnd) {
-            overlay_hwnd = FindWindow(NULL, L"Headset Window");
-        }
-        else if (sleep.overlay > 0) {
-            DrawOverlayText(overlay_hwnd, overlay_msg, cfg.window_height);
-            --sleep.overlay;
         }
 
         // Sleep for ~ 1 frame
@@ -1515,62 +1579,6 @@ std::string StereoDisplayComponent::CheckUserSettings()
     config_ = config;
 
     return overlay_msg;
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Move HMD origin position with keyboard input
-//-----------------------------------------------------------------------------
-std::string StereoDisplayComponent::CheckPositionInput() {
-    if (!isCtrlDown())
-        return "";
-
-    const float step = 0.01f;
-    auto config = GetConfig();
-
-    if (isDown(VK_HOME)) {
-            config.hmd_y -= step;       // Forward
-    }
-    else if (isDown(VK_END)) {
-            config.hmd_y += step;       // Backward
-    }
-    else if (isDown(VK_DELETE)) {
-        config.hmd_x -= step;       // Left
-    }
-    else if (isDown(VK_NEXT)) {
-        if (isDown(VK_SHIFT)) {
-            config.hmd_height -= step;  // Down
-        }
-        else {
-            config.hmd_x += step;       // Right
-        }
-    }
-    else if (isDown(VK_PRIOR)) {
-        if (isDown(VK_SHIFT)) {
-            config.hmd_height += step;  // Up
-        }
-        else {
-            config.hmd_yaw -= step * 10;     // Yaw CW
-        }
-    }
-    else if (isDown(VK_INSERT)) {
-        config.hmd_yaw += step * 10;     // Yaw CCW
-    }
-    else {
-        return "";
-    }
-
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2);
-    oss << "Pos X:" << config.hmd_x
-        << " Y:" << config.hmd_y
-        << " Z:" << config.hmd_height
-        << " Yaw:" << config.hmd_yaw;
-
-    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
-    config_ = config;
-
-    return oss.str();
 }
 
 

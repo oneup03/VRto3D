@@ -98,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -124,7 +124,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -150,7 +150,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -176,7 +176,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -207,6 +207,15 @@
     <ClCompile Include="src\presenter\leiasr_presenter.cpp" />
     <ClCompile Include="src\presenter\nvstereo_dx9_presenter.cpp" />
     <ClCompile Include="src\presenter\display_timing_helper.cpp" />
+    <ClCompile Include="src\osd\osd_renderer.cpp" />
+    <ClCompile Include="src\osd\osd_menu.cpp" />
+    <ClCompile Include="src\osd\osd_input_win32.cpp" />
+    <ClCompile Include="src\osd\osd_keymap.cpp" />
+    <ClCompile Include="..\external\imgui\imgui.cpp" />
+    <ClCompile Include="..\external\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\external\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\external\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\external\imgui\backends\imgui_impl_dx11.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
@@ -220,6 +229,10 @@
     <ClInclude Include="src\presenter\nvstereo_dx9_presenter.h" />
     <ClInclude Include="src\presenter\display_timing_helper.h" />
     <ClInclude Include="src\presenter\display_utils.h" />
+    <ClInclude Include="src\osd\osd_renderer.h" />
+    <ClInclude Include="src\osd\osd_menu.h" />
+    <ClInclude Include="src\osd\osd_input.h" />
+    <ClInclude Include="src\osd\osd_keymap.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">

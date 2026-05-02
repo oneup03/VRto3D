@@ -16,6 +16,9 @@
 
 #include "vrto3dlib/debug_log.hpp"
 
+#include "osd/osd_renderer.h"
+#include "osd/osd_menu.h"
+
 
 Dx11Renderer::Dx11Renderer()
 {
@@ -174,6 +177,31 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
         mutex->ReleaseSync(0);
     }
 
+    // Lazy-init the OSD now that we know per-eye dimensions.
+    if (!osd_initialized_ && osd_pending_callbacks_ && device_ && context_) {
+        osd_renderer_ = std::make_unique<vrto3d::osd::OsdRenderer>();
+        const UINT eye_w = sbs_width_ / 2;
+        if (osd_renderer_->Init(device_.Get(), context_.Get(),
+                                eye_w, sbs_height_,
+                                osd_headset_hwnd_,
+                                osd_component_,
+                                std::move(*osd_pending_callbacks_))) {
+            osd_initialized_ = true;
+            LOG() << "Dx11Renderer: OSD initialized eye=" << eye_w << "x" << sbs_height_;
+        } else {
+            LOG() << "Dx11Renderer: OSD init failed";
+            osd_renderer_.reset();
+        }
+        osd_pending_callbacks_.reset();
+    }
+
+    // Composite OSD into out_sbs_ before the presenter sees it.
+    if (osd_initialized_ && osd_renderer_) {
+        const UINT eye_w = sbs_width_ / 2;
+        osd_renderer_->OnResize(eye_w, sbs_height_);
+        osd_renderer_->RenderFrame(out_sbs_.Get());
+    }
+
     if (presenter_) presenter_->PresentFrame(out_sbs_.Get());
 
     // VsyncEvent pacing signal fires after the actual display present.
@@ -211,6 +239,13 @@ void Dx11Renderer::Shutdown()
     }
     pending_cv_.notify_all();
 
+    if (osd_renderer_) {
+        osd_renderer_->Shutdown();
+        osd_renderer_.reset();
+    }
+    osd_initialized_ = false;
+    osd_pending_callbacks_.reset();
+
     if (presenter_) {
         presenter_->Shutdown();
         presenter_.reset();
@@ -221,4 +256,15 @@ void Dx11Renderer::Shutdown()
     device_.Reset();
     adapter_.Reset();
     initialized_ = false;
+}
+
+void Dx11Renderer::ConfigureOsd(StereoDisplayComponent* component,
+                                vrto3d::osd::MenuCallbacks callbacks,
+                                void* headset_hwnd)
+{
+    osd_component_    = component;
+    osd_headset_hwnd_ = headset_hwnd;
+    osd_pending_callbacks_ = std::make_unique<vrto3d::osd::MenuCallbacks>(std::move(callbacks));
+    // Real OsdRenderer construction happens on the window thread on the next
+    // WaitAndDrawPending so all D3D11 work stays on the right thread.
 }

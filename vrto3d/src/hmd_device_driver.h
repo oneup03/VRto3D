@@ -61,7 +61,6 @@ public:
     bool IsMonitorMode();
 
     std::string CheckUserSettings();
-    std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
     void AdjustRadius(float delta);
     void AdjustTrackFilterRotation(float delta);
