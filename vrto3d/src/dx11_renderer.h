@@ -24,10 +24,13 @@
 #include "vrto3dlib/stereo_config.h"
 
 class StereoDisplayComponent;
-namespace vrto3d::osd {
+namespace vrto3d {
+class AutoDepthAnalyzer;
+namespace osd {
 class OsdRenderer;
 struct MenuCallbacks;
-} // namespace vrto3d::osd
+} // namespace osd
+} // namespace vrto3d
 
 
 // Owns the DX11 device used to import the SteamVR-composited texture, maintains
@@ -142,4 +145,8 @@ private:
     bool                    screenshot_pending_ = false;
 
     void CaptureScreenshot(const std::string& app_name);
+
+    // Auto-depth disparity analyzer. Owns the compute pipeline + readback
+    // ring; lazy-initialized on first frame where auto-depth is enabled.
+    std::unique_ptr<vrto3d::AutoDepthAnalyzer> auto_depth_;
 };

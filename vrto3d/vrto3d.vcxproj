@@ -204,6 +204,7 @@
     <ClCompile Include="src\hmd_device_driver.cpp" />
     <ClCompile Include="src\device_provider.cpp" />
     <ClCompile Include="src\hmd_driver_factory.cpp" />
+    <ClCompile Include="src\auto_depth.cpp" />
     <ClCompile Include="src\dx11_renderer.cpp" />
     <ClCompile Include="src\screenshot.cpp" />
     <ClCompile Include="src\vr_recenter.cpp" />
@@ -227,6 +228,7 @@
     <ClInclude Include="src\hmd_device_driver.h" />
     <ClInclude Include="src\device_provider.h" />
     <ClInclude Include="src\focus_context.h" />
+    <ClInclude Include="src\auto_depth.h" />
     <ClInclude Include="src\dx11_renderer.h" />
     <ClInclude Include="src\screenshot.h" />
     <ClInclude Include="src\vr_recenter.h" />

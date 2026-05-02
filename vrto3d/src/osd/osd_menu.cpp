@@ -181,12 +181,6 @@ void OsdMenu::Impl::DrawFooter() {
         if (ImGui::Button("Reload Default Cfg")) {
             callbacks.reload_default_profile("Reloaded default_config.json");
         }
-        ImGui::SameLine();
-    }
-    if (callbacks.open_config_folder) {
-        if (ImGui::Button("Open Cfg Folder")) {
-            callbacks.open_config_folder();
-        }
     }
 }
 
@@ -218,6 +212,29 @@ void OsdMenu::Impl::DrawStereoTab() {
     float fov = component->GetFoV();
     if (ImGui::SliderFloat("FoV", &fov, 40.0f, 120.0f, "%.1f")) {
         component->AdjustFoV(fov);
+    }
+
+    if (callbacks.get_auto_depth_enabled && callbacks.set_auto_depth_enabled) {
+        bool ad = callbacks.get_auto_depth_enabled();
+        if (ImGui::Checkbox("Auto-Depth", &ad)) {
+            callbacks.set_auto_depth_enabled(ad);
+        }
+        ImGui::SameLine(); ImGui::TextDisabled("(Ctrl+F11)");
+
+        if (callbacks.get_auto_depth_target && callbacks.set_auto_depth_target) {
+            float target = callbacks.get_auto_depth_target();
+            if (ImGui::SliderFloat("Comfort Target", &target, 0.001f, 0.01f, "%.3f")) {
+                callbacks.set_auto_depth_target(target);
+            }
+            ImGui::SameLine(); ImGui::TextDisabled("(fraction of eye width)");
+        }
+        if (callbacks.get_auto_depth_smoothing && callbacks.set_auto_depth_smoothing) {
+            float smoothing = callbacks.get_auto_depth_smoothing();
+            if (ImGui::SliderFloat("Smoothing", &smoothing, 0.005f, 0.25f, "%.3f")) {
+                callbacks.set_auto_depth_smoothing(smoothing);
+            }
+            ImGui::SameLine(); ImGui::TextDisabled("(higher = snappier)");
+        }
     }
 
     bool eye_swap = cfg.eye_swap;
@@ -665,6 +682,11 @@ void OsdMenu::Impl::DrawSystemTab() {
         }
         ImGui::SameLine();
         ImGui::TextDisabled("(github.com/oneup03/VRto3D/releases/latest)");
+        if (callbacks.open_config_folder) {
+            if (ImGui::Button("Open Cfg Folder")) {
+                callbacks.open_config_folder();
+            }
+        }
     }
 
     if (ImGui::CollapsingHeader("About", ImGuiTreeNodeFlags_DefaultOpen)) {

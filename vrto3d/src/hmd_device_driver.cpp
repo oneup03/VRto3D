@@ -174,10 +174,17 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     {
         auto cfg = stereo_display_component_->GetConfig();
         platform::MonitorInfo primary{}, secondary{};
-        if (platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary)) {
-            cfg.display_frequency = platform::QueryRefreshHz(primary, 60.0f);
+        // JSON-supplied display_frequency overrides auto-detection. 0 (the
+        // default) means "ask the monitor".
+        if (cfg.display_frequency <= 0.0f) {
+            if (platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary)) {
+                cfg.display_frequency = platform::QueryRefreshHz(primary, 60.0f);
+            } else {
+                cfg.display_frequency = 60.0f;
+            }
         } else {
-            cfg.display_frequency = 60.0f;
+            // Still resolve the monitor so the log line reports the target.
+            platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary);
         }
         cfg.display_latency   = (cfg.display_frequency > 1.0f)
             ? (0.5f / cfg.display_frequency) : 0.011f;
@@ -421,6 +428,24 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             };
             cb.reset_projection = [this]() {
                 stereo_display_component_->ResetProjection();
+            };
+            cb.get_auto_depth_enabled = [this]() {
+                return stereo_display_component_->IsAutoDepthEnabled();
+            };
+            cb.set_auto_depth_enabled = [this](bool on) {
+                stereo_display_component_->SetAutoDepthEnabled(on);
+            };
+            cb.get_auto_depth_target = [this]() {
+                return stereo_display_component_->GetAutoDepthTargetDisparity();
+            };
+            cb.set_auto_depth_target = [this](float v) {
+                stereo_display_component_->SetAutoDepthTargetDisparity(v);
+            };
+            cb.get_auto_depth_smoothing = [this]() {
+                return stereo_display_component_->GetAutoDepthSmoothing();
+            };
+            cb.set_auto_depth_smoothing = [this](float v) {
+                stereo_display_component_->SetAutoDepthSmoothing(v);
             };
             cb.calibrate_leiasr_head = [this]() {
                 if (renderer_ && renderer_->Presenter()) {
@@ -962,6 +987,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         int top = 0;
         int save = 0;
         int menu = 0;
+        int auto_depth = 0;
     } sleep;
 
     const int sleep_time = static_cast<int>(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
@@ -1075,6 +1101,17 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             }
             else if (sleep.save > 0) {
                 --sleep.save;
+            }
+            // Ctrl+F11 Toggle Auto-Depth
+            if (isCtrlDown() && isDown(VK_F11) && sleep.auto_depth == 0) {
+                const bool now = !stereo_display_component_->IsAutoDepthEnabled();
+                stereo_display_component_->SetAutoDepthEnabled(now);
+                setOverlay(now ? "Auto-Depth: ON"
+                               : "Auto-Depth: OFF (manual restored)");
+                sleep.auto_depth = cfg.sleep_count_max;
+            }
+            else if (sleep.auto_depth > 0) {
+                --sleep.auto_depth;
             }
         }
         // Ctrl+F8 Toggle Always On Top
@@ -1337,7 +1374,12 @@ MockControllerDeviceDriver::~MockControllerDeviceDriver() = default;
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
     : config_( config ), depth_(config.depth), convergence_(config.convergence), fov_(config.fov)
-{}
+{
+    manual_depth_.store(config.depth);
+    auto_depth_enabled_.store(config.auto_depth_enabled);
+    auto_depth_target_disparity_.store(config.auto_depth_target_disparity);
+    auto_depth_smoothing_.store(config.auto_depth_smoothing);
+}
 
 
 //-----------------------------------------------------------------------------
@@ -1464,16 +1506,138 @@ StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 //-----------------------------------------------------------------------------
 // Purpose: To update the Depth value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta)
+void StereoDisplayComponent::ApplyDepth(float new_depth)
 {
+    if (new_depth < 0.0f) new_depth = 0.0f;
     float cur_depth = GetDepth();
-    if (is_delta) {
-        new_depth += cur_depth;
-        new_depth = (new_depth < 0) ? 0 : new_depth;
-    }
     while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
     vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
     vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
+}
+
+
+void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta)
+{
+    if (is_delta) {
+        new_depth += manual_depth_.load(std::memory_order_relaxed);
+        if (new_depth < 0.0f) new_depth = 0.0f;
+    }
+    // Manual edits always update the user's intended ceiling.
+    manual_depth_.store(new_depth, std::memory_order_relaxed);
+
+    if (auto_depth_enabled_.load(std::memory_order_relaxed)) {
+        // Auto on: the auto loop drives the live depth_ down toward the
+        // disparity target. Don't yank the live depth up past the new
+        // ceiling — clamp it from above instead.
+        ApplyDepth((std::min)(GetDepth(), new_depth));
+    } else {
+        ApplyDepth(new_depth);
+    }
+}
+
+
+bool StereoDisplayComponent::IsAutoDepthEnabled() const
+{
+    return auto_depth_enabled_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthEnabled(bool enabled)
+{
+    auto_depth_enabled_.store(enabled, std::memory_order_relaxed);
+    // Reset the input-side disparity EMA so the next enable starts fresh
+    // rather than carrying stale samples from a previous session.
+    auto_depth_disp_ema_.store(-1.0f, std::memory_order_relaxed);
+    if (!enabled) {
+        // Snap the live depth back to the user's manual ceiling.
+        ApplyDepth(manual_depth_.load(std::memory_order_relaxed));
+    }
+}
+
+
+float StereoDisplayComponent::GetManualDepth() const
+{
+    return manual_depth_.load(std::memory_order_relaxed);
+}
+
+
+float StereoDisplayComponent::GetAutoDepthTargetDisparity() const
+{
+    return auto_depth_target_disparity_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthTargetDisparity(float frac)
+{
+    if (frac < 0.001f) frac = 0.001f;
+    if (frac > 0.01f)  frac = 0.01f;
+    auto_depth_target_disparity_.store(frac, std::memory_order_relaxed);
+}
+
+
+float StereoDisplayComponent::GetAutoDepthSmoothing() const
+{
+    return auto_depth_smoothing_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthSmoothing(float v)
+{
+    if (v < 0.005f) v = 0.005f;
+    if (v > 0.25f)  v = 0.25f;
+    auto_depth_smoothing_.store(v, std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px)
+{
+    if (!auto_depth_enabled_.load(std::memory_order_relaxed) || eye_w_px == 0) {
+        return;
+    }
+    const float ceiling     = manual_depth_.load(std::memory_order_relaxed);
+    const float target_frac = auto_depth_target_disparity_.load(std::memory_order_relaxed);
+    const float smoothing   = auto_depth_smoothing_.load(std::memory_order_relaxed);
+    const float raw_frac    = static_cast<float>(max_disp_px) / static_cast<float>(eye_w_px);
+
+    // Input-side jitter filter: low-pass the disparity-fraction samples
+    // before they drive the depth target. Uses an asymmetric EMA — fast
+    // on rising disparity (close objects must clamp depth quickly for
+    // comfort) and slow on falling disparity (so a noisy frame that
+    // misses a close object doesn't briefly snap depth back up).
+    constexpr float kAlphaUp   = 0.20f;  // disparity rising  -> moderate
+    constexpr float kAlphaDown = 0.05f;  // disparity falling -> slow ease
+    // Deadband: ignore changes under 0.5% of eye width (~10 source pixels at
+    // 1920 wide). Frame-to-frame bucket jitter at the integer-disparity
+    // resolution (4px = 0.2% of eye width) sits well inside this band.
+    constexpr float kDeadband  = 0.005f;
+
+    float prev_ema = auto_depth_disp_ema_.load(std::memory_order_relaxed);
+    float new_ema;
+    if (prev_ema < 0.0f) {
+        new_ema = raw_frac;  // first sample primes the filter
+    } else {
+        const float diff = raw_frac - prev_ema;
+        if (std::fabs(diff) < kDeadband) {
+            new_ema = prev_ema;  // inside deadband — hold steady
+        } else {
+            const float alpha = (diff > 0.0f) ? kAlphaUp : kAlphaDown;
+            new_ema = prev_ema + alpha * diff;
+        }
+    }
+    auto_depth_disp_ema_.store(new_ema, std::memory_order_relaxed);
+
+    const float disp_frac = new_ema;
+    float target_depth;
+    if (disp_frac <= target_frac || disp_frac <= 0.0f) {
+        target_depth = ceiling;
+    } else {
+        target_depth = ceiling * (target_frac / disp_frac);
+        if (target_depth > ceiling) target_depth = ceiling;
+        if (target_depth < 0.0f)    target_depth = 0.0f;
+    }
+    const float cur      = GetDepth();
+    const float smoothed = cur + (target_depth - cur) * smoothing;
+    ApplyDepth(smoothed);
 }
 
 
@@ -1746,10 +1910,21 @@ void StereoDisplayComponent::SetReset()
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& config)
 {
+    // Apply auto-depth settings BEFORE AdjustDepth so that the new ceiling /
+    // enabled state are observed when AdjustDepth decides whether to clamp.
+    auto_depth_target_disparity_.store(config.auto_depth_target_disparity, std::memory_order_relaxed);
+    auto_depth_smoothing_.store(config.auto_depth_smoothing, std::memory_order_relaxed);
+    // Disable auto temporarily so AdjustDepth applies the JSON depth as the
+    // live value, then restore the desired enabled state.
+    const bool want_auto = config.auto_depth_enabled;
+    auto_depth_enabled_.store(false, std::memory_order_relaxed);
+
     // Apply loaded settings
     AdjustDepth(config.depth, false);
     AdjustConvergence(config.convergence, false);
     AdjustFoV(config.fov);
+
+    auto_depth_enabled_.store(want_auto, std::memory_order_relaxed);
 
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_ = config;
