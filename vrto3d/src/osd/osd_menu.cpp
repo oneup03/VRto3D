@@ -314,24 +314,23 @@ void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
     ImGui::TextWrapped(
         "Each row maps a Load key to one or more (Depth, Convergence, FoV) presets. "
         "Press the Load key to apply / cycle through the comma-separated presets. "
-        "The Store key overwrites the currently-active preset with live values.");
+        "FoV = 0 means \"use the active profile FoV\". Use Copy Live to fill the "
+        "row from the current settings.");
     ImGui::Spacing();
 
     // Active capture session — drain the input pump.
     if (capture_row_ >= 0) {
         ImGui::TextColored(ImVec4(1, 0.85f, 0.2f, 1),
                             capture_combo_pending_
-                                ? "Capturing combo for %s on row %d — press a chord, then release all to commit. (Esc to cancel)"
-                                : "Capturing key for %s on row %d — press a key or controller button. (Esc to cancel)",
-                            capture_slot_ == 0 ? "Load" : "Store",
+                                ? "Capturing combo for Load on row %d — press a chord, then release all to commit. (Esc to cancel)"
+                                : "Capturing key for Load on row %d — press a key or controller button. (Esc to cancel)",
                             capture_row_ + 1);
 
         CapturedKey c = input.PollCapture();
         if (c.valid) {
             const size_t r = static_cast<size_t>(capture_row_);
             if (r < cfg.num_user_settings) {
-                if (capture_slot_ == 0) cfg.user_load_str[r]  = c.portable_name;
-                else                    cfg.user_store_str[r] = c.portable_name;
+                cfg.user_load_str[r] = c.portable_name;
                 dirty = true;
             }
             capture_row_ = -1;
@@ -348,12 +347,11 @@ void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
 
     static const char* kModes[] = { "switch", "toggle", "hold" };
 
-    if (ImGui::BeginTable("##user_hotkeys", 6,
+    if (ImGui::BeginTable("##user_hotkeys", 5,
                            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                            ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("#",         ImGuiTableColumnFlags_WidthFixed, 28.0f);
         ImGui::TableSetupColumn("Load",      ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("Store",     ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn("Mode",      ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableSetupColumn("Depth / Conv / FoV (comma = cycle)", ImGuiTableColumnFlags_WidthStretch, 3.0f);
         ImGui::TableSetupColumn("",          ImGuiTableColumnFlags_WidthFixed, 28.0f);
@@ -386,31 +384,6 @@ void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
                 if (ImGui::Button("Combo##load")) {
                     capture_row_  = static_cast<int>(i);
                     capture_slot_ = 0;
-                    capture_combo_pending_ = true;
-                    input.BeginCapture(true);
-                }
-            }
-
-            // ----- Store key -----
-            ImGui::TableNextColumn();
-            {
-                char buf[256];
-                std::snprintf(buf, sizeof(buf), "%s", cfg.user_store_str[i].c_str());
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                if (ImGui::InputText("##store", buf, sizeof(buf))) {
-                    cfg.user_store_str[i] = buf;
-                    dirty = true;
-                }
-                if (ImGui::Button("Set##store")) {
-                    capture_row_  = static_cast<int>(i);
-                    capture_slot_ = 1;
-                    capture_combo_pending_ = false;
-                    input.BeginCapture(false);
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Combo##store")) {
-                    capture_row_  = static_cast<int>(i);
-                    capture_slot_ = 1;
                     capture_combo_pending_ = true;
                     input.BeginCapture(true);
                 }
@@ -453,6 +426,19 @@ void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
                 ImGui::Text("FoV");        ImGui::SameLine(80);
                 editCsv("##fov",   cfg.user_fov[i], 1);
 
+                if (ImGui::Button("Copy Live")) {
+                    // Replace the row's preset list with a single-element list
+                    // containing the current depth/convergence/FoV. Edit the
+                    // CSV by hand if you want to add more presets to cycle.
+                    cfg.user_depth[i]       = { component->GetDepth() };
+                    cfg.user_convergence[i] = { component->GetConvergence() };
+                    cfg.user_fov[i]         = { component->GetFoV() };
+                    if (i < cfg.user_preset_index.size())
+                        cfg.user_preset_index[i] = 0;
+                    dirty = true;
+                }
+                ImGui::SameLine();
+
                 const size_t presets = cfg.user_depth[i].size();
                 if (presets > 1) {
                     const size_t cur = i < cfg.user_preset_index.size()
@@ -468,10 +454,8 @@ void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
             ImGui::TableNextColumn();
             if (ImGui::SmallButton("X")) {
                 cfg.user_load_key.erase(cfg.user_load_key.begin() + i);
-                cfg.user_store_key.erase(cfg.user_store_key.begin() + i);
                 cfg.user_key_type.erase(cfg.user_key_type.begin() + i);
                 cfg.user_load_str.erase(cfg.user_load_str.begin() + i);
-                cfg.user_store_str.erase(cfg.user_store_str.begin() + i);
                 cfg.user_type_str.erase(cfg.user_type_str.begin() + i);
                 cfg.user_depth.erase(cfg.user_depth.begin() + i);
                 cfg.user_convergence.erase(cfg.user_convergence.begin() + i);
@@ -498,10 +482,8 @@ void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
     ImGui::Spacing();
     if (ImGui::Button("+ Add Preset Row")) {
         cfg.user_load_key.push_back(0);
-        cfg.user_store_key.push_back(0);
         cfg.user_key_type.push_back(0);  // SWITCH
         cfg.user_load_str.push_back("");
-        cfg.user_store_str.push_back("");
         cfg.user_type_str.push_back("switch");
         cfg.user_depth.push_back({ component->GetDepth() });
         cfg.user_convergence.push_back({ component->GetConvergence() });
@@ -683,7 +665,7 @@ void OsdMenu::Impl::DrawSystemTab() {
         ImGui::SameLine();
         ImGui::TextDisabled("(github.com/oneup03/VRto3D/releases/latest)");
         if (callbacks.open_config_folder) {
-            if (ImGui::Button("Open Cfg Folder")) {
+            if (ImGui::Button("Open Profile Folder")) {
                 callbacks.open_config_folder();
             }
         }
@@ -703,7 +685,6 @@ void OsdMenu::Impl::DrawSystemTab() {
             bool xi = false;
             ReparseHotkey(cfg.user_load_str[i],  cfg.user_load_key[i],  &xi);
             cfg.load_xinput[i] = xi;
-            ReparseHotkey(cfg.user_store_str[i], cfg.user_store_key[i], nullptr);
             auto kt = KeyBindTypes.find(cfg.user_type_str[i]);
             if (kt != KeyBindTypes.end()) cfg.user_key_type[i] = kt->second;
         }
