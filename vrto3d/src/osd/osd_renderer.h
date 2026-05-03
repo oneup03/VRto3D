@@ -62,6 +62,11 @@ public:
 
     void Shutdown();
 
+    // Update the headset_hwnd used for mouse coordinate mapping. Used by
+    // presenters whose display surface is owned by an external process and
+    // only becomes available some time after Init() ran.
+    void SetHeadsetHwnd(void* hwnd);
+
     // Returns true if the menu OR a live toast is currently visible.
     // Dx11Renderer can use this to skip the composite pass when there's
     // nothing to draw.

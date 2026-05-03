@@ -186,6 +186,23 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             // Still resolve the monitor so the log line reports the target.
             platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary);
         }
+
+        // Frame-sequential modes (NVIDIA 3D Vision, WibbleWobble lightfield)
+        // alternate L/R eyes at the panel's refresh rate, so the actual
+        // stereo-pair rate is panel_rate / 2. Producing SBS pairs faster than
+        // that just wastes GPU bandwidth (every other pair gets dropped) and
+        // adds latency through the consumer's frame queue.
+        const bool frame_sequential =
+            cfg.output_mode == OutputMode::NvidiaDX9
+         || cfg.output_mode == OutputMode::WibbleWobble;
+        if (frame_sequential && cfg.display_frequency > 1.0f) {
+            const float panel_hz = cfg.display_frequency;
+            cfg.display_frequency = panel_hz * 0.5f;
+            LOG() << "Display: frame-sequential mode — halving reported "
+                     "display freq to compositor (" << panel_hz << "Hz panel -> "
+                  << cfg.display_frequency << "Hz stereo-pair rate)";
+        }
+
         cfg.display_latency   = (cfg.display_frequency > 1.0f)
             ? (0.5f / cfg.display_frequency) : 0.011f;
         cfg.sleep_count_max   = (int)(floor(1600.0 / (1000.0 / cfg.display_frequency)));

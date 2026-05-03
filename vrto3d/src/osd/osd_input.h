@@ -84,6 +84,13 @@ public:
     virtual void CancelCapture() = 0;
     virtual CapturedKey PollCapture() = 0;
     virtual bool IsCapturing() const = 0;
+
+    // Toggle the always-on global mouse hook. Cheap when stable; called by
+    // OsdRenderer when the menu visibility changes so we don't keep a
+    // WH_MOUSE_LL hook installed (and dispatched to our process for every
+    // system-wide mouse event) when the OSD isn't actually consuming clicks.
+    // Default no-op for platforms that don't install a hook.
+    virtual void SetMouseHookActive(bool /*active*/) {}
 };
 
 // Factory — implemented in the per-platform .cpp.

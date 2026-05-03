@@ -340,6 +340,11 @@ void OsdRenderer::OnResize(UINT eye_w, UINT eye_h) {
     }
 }
 
+void OsdRenderer::SetHeadsetHwnd(void* hwnd) {
+    impl_->headset_hwnd = hwnd;
+    impl_->cached_hwnd  = nullptr;  // force re-discovery on next access
+}
+
 void OsdRenderer::Shutdown() {
     auto& s = *impl_;
     s.ApplyMenuVisibility(false);  // restore window styles before tearing down
@@ -407,8 +412,17 @@ void OsdRenderer::RenderFrame(ID3D11Texture2D* out_sbs) {
     // sync with menu visibility so clicks reach the OSD when it's open.
     s.ApplyMenuVisibility(MenuVisible());
 
-    // Cheap early-out if there's nothing to draw and no toast pending.
+    // Gate the global LL mouse hook on menu visibility (or active capture).
+    // Keeping it always-on routes every system-wide mouse event through this
+    // process, which adds latency / cursor stutter when our pump thread is
+    // busy. Clicks/wheel are only consumed by the OSD when it's actually
+    // visible, so the hook is unnecessary the rest of the time.
     bool has_content = HasContent();
+    if (s.input) {
+        s.input->SetMouseHookActive(MenuVisible() || s.input->IsCapturing());
+    }
+
+    // Cheap early-out if there's nothing to draw and no toast pending.
     if (!has_content && (!s.input || !s.input->IsCapturing())) {
         // Still pump input edges so a future Ctrl+Home press is detected.
         if (s.input) s.input->Poll();
