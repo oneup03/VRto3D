@@ -75,6 +75,12 @@ public:
                       vrto3d::osd::MenuCallbacks callbacks,
                       void* headset_hwnd);
 
+    // Update the headset_hwnd used by the OSD for cursor coord mapping.
+    // Used by presenters whose display surface is owned by an external
+    // process (WibbleWobble) and only becomes available some time after
+    // ConfigureOsd was called.
+    void SetOsdHeadsetHwnd(void* hwnd);
+
     // Request that the next composited stereo frame be saved to disk as two
     // PNG images under <Steam>\steamapps\common\SteamVR\screenshots:
     // one as-is (parallel-view) and one with eyes swapped (cross-view). The

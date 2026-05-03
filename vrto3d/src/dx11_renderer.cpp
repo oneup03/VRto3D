@@ -259,13 +259,6 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
     }
 #endif
 
-    const uint64_t c = frame_counter_.load(std::memory_order_relaxed);
-    if (c <= 5 || (c % 600 == 0)) {
-        LOG() << "Dx11Renderer: frame=" << c
-              << " incoming=" << incoming_desc.Width << "x" << incoming_desc.Height
-              << " fmt=" << incoming_desc.Format
-              << " mutex=" << (acquired ? "acquired" : (mutex ? "skip" : "none"));
-    }
     return true;
 }
 
@@ -316,6 +309,12 @@ void Dx11Renderer::ConfigureOsd(StereoDisplayComponent* component,
     osd_pending_callbacks_ = std::make_unique<vrto3d::osd::MenuCallbacks>(std::move(callbacks));
     // Real OsdRenderer construction happens on the window thread on the next
     // WaitAndDrawPending so all D3D11 work stays on the right thread.
+}
+
+void Dx11Renderer::SetOsdHeadsetHwnd(void* hwnd)
+{
+    osd_headset_hwnd_ = hwnd;
+    if (osd_renderer_) osd_renderer_->SetHeadsetHwnd(hwnd);
 }
 
 

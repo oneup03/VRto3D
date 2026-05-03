@@ -142,13 +142,22 @@ ImGuiKey VkToImGuiKey(int vk) {
 class Win32Input final : public IOsdInput {
 public:
     Win32Input() {
-        EnsureMouseHook();
+        // Mouse hook deferred — OsdRenderer enables it via SetMouseHookActive
+        // only when the menu is open (or capturing), so a closed OSD doesn't
+        // route every system-wide mouse event through our process.
         keys_curr_.fill(false);
         keys_prev_.fill(false);
         pad_curr_  = pad_prev_ = 0;
     }
     ~Win32Input() override {
-        ReleaseMouseHook();
+        if (hook_active_) ReleaseMouseHook();
+    }
+
+    void SetMouseHookActive(bool active) override {
+        if (active == hook_active_) return;
+        if (active) EnsureMouseHook();
+        else        ReleaseMouseHook();
+        hook_active_ = active;
     }
 
     void Poll() override {
@@ -376,6 +385,7 @@ private:
     std::set<std::string> capture_set_;
     CapturedKey           captured_;
     HWND                  cached_hwnd_ = nullptr;
+    bool                  hook_active_ = false;
 };
 
 } // namespace
