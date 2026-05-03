@@ -98,7 +98,12 @@ void Dx11Renderer::EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming)
     d.Usage              = D3D11_USAGE_DEFAULT;
     d.BindFlags          = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
     d.CPUAccessFlags     = 0;
-    d.MiscFlags          = 0;
+    // SHARED so cross-device presenters (WibbleWobble's in-process client uses
+    // its own internal D3D11 device) can call OpenSharedResource on this
+    // texture's GetSharedHandle() without us having to copy into a separate
+    // shared staging buffer. Other presenters that use out_sbs_ on the same
+    // device (Window/LeiaSR/NvStereoDX9) ignore the flag.
+    d.MiscFlags          = D3D11_RESOURCE_MISC_SHARED;
 
     out_sbs_.Reset();
     HRESULT hr = device_->CreateTexture2D(&d, nullptr, &out_sbs_);

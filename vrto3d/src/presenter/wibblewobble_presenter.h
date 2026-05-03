@@ -18,7 +18,6 @@
 
 #ifdef _WIN32
 
-#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -35,13 +34,14 @@ class Dx11Renderer;
 
 namespace vrto3d {
 
-// Bare-minimum WibbleWobble lightfield bridge.
+// WibbleWobble lightfield bridge.
 //
-// Publishes the canonical 2W x H side-by-side texture to the
-// WibbleWobbleClient process via the WW_CAPTURE_DATA shared memory IPC,
-// and (optionally) launches WWClientApplication.exe — discovered via the
-// HKLM\SOFTWARE\PHARTGAMES\WibbleWobbleClient\install_path registry value
-// installed by the WibbleWobbleClient setup.
+// Loads WibbleWobbleClient.dll in-process (path discovered via the
+// HKLM\SOFTWARE\PHARTGAMES\WibbleWobbleClient\install_path registry value)
+// and pushes the canonical 2W x H side-by-side texture each frame via the
+// WWClient_PresentFrame C-ABI shim — no shared-memory IPC, no per-frame
+// CopyResource into a destination ring buffer. The client opens our shared
+// HANDLE on its own internal D3D11 device.
 class WibbleWobblePresenter : public IOutputPresenter {
 public:
     WibbleWobblePresenter();
@@ -76,24 +76,17 @@ private:
     bool                 auto_focus_ = true;
     FocusContext         focus_{};
 
-    // Last-published source dimensions/format. When PresentFrame sees a
-    // resize it republishes metadata and resets the IPC state machine.
-    DXGI_FORMAT          last_published_fmt_ = DXGI_FORMAT_UNKNOWN;
-    uint32_t             last_published_w_ = 0;
-    uint32_t             last_published_h_ = 0;
+    // Per-frame state for WWClient_PresentFrame.
+    // shared_handle_ is the HANDLE returned by IDXGIResource::GetSharedHandle
+    // on the current out_sbs_ texture; refreshed when the source texture
+    // pointer changes (resize, format change, presenter init).
+    ID3D11Texture2D*     last_sbs_input_  = nullptr;
+    void*                shared_handle_   = nullptr;
+    uint64_t             frame_id_        = 0;
 
-    // Cache of destination textures opened from WibbleWobbleClient's
-    // HANDLEs — keyed by frame index (WW_CAPTURE_FRAME_COUNT == 3 in
-    // the IPC contract). Reopened lazily when the HANDLE changes.
-    struct Slot {
-        uint64_t                                handle = 0;
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
-    };
-    std::array<Slot, 3>  dst_cache_{};
-
-    // pImpl holds the vendored IPC structs, the named-shared-memory mapping,
-    // the named mutex/event handles, and the spawned client PROCESS_INFORMATION.
-    // Confined to the .cpp so this header doesn't drag in <windows.h>.
+    // pImpl holds Windows.h-flavored state (HMODULE, function pointers,
+    // PROCESS_INFORMATION). Confined to the .cpp so this header doesn't
+    // drag in <windows.h>.
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
