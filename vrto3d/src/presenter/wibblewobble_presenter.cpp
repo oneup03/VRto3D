@@ -96,6 +96,14 @@ struct WibbleWobblePresenter::Impl {
     PFN_WWClient_Destroy          pDestroy         = nullptr;
     PFN_WWClient_SetSourceFormat  pSetSourceFormat = nullptr;
     PFN_WWClient_PresentFrame     pPresentFrame    = nullptr;
+
+    // GPU completion fence. The client samples our shared out_sbs_ on its
+    // own internal D3D11 device; without an explicit Flush + wait, the
+    // upstream CopyResource (compositor -> out_sbs_) and the OSD composite
+    // pass may still be queued on our immediate context when the client
+    // reads. That race shows up as the OSD blinking out on alternating
+    // frames. Mirrors the COPY_WAIT path in WibbleWobbleVR.h.
+    Microsoft::WRL::ComPtr<ID3D11Query> copy_wait_query;
 };
 
 WibbleWobblePresenter::WibbleWobblePresenter() = default;
@@ -126,6 +134,17 @@ bool WibbleWobblePresenter::Init(Dx11Renderer& renderer,
     }
 
     impl_ = std::make_unique<Impl>();
+
+    // Lazily create the GPU-completion fence used in PresentFrame.
+    {
+        D3D11_QUERY_DESC qd{};
+        qd.Query = D3D11_QUERY_EVENT;
+        device_->CreateQuery(&qd, impl_->copy_wait_query.GetAddressOf());
+        if (!impl_->copy_wait_query) {
+            LOG() << "WibbleWobblePresenter: CreateQuery(D3D11_QUERY_EVENT) failed — "
+                     "OSD may flicker due to missing cross-device GPU sync";
+        }
+    }
 
     auto fail = [&](const char* what, DWORD err = ERROR_SUCCESS) {
         LOG() << "WibbleWobblePresenter: " << what
@@ -306,6 +325,21 @@ void WibbleWobblePresenter::PresentFrame(ID3D11Texture2D* sbs_input) {
         LOG() << "WibbleWobblePresenter: shared HANDLE refreshed for new out_sbs_";
     }
     if (!shared_handle_) return;
+
+    // Force all pending work that touches out_sbs_ (the upstream compositor
+    // CopyResource AND the OSD composite pass, both queued by Dx11Renderer
+    // before us) to actually execute on the GPU before we hand the texture
+    // off. Without this the client's read can race ahead of our queued
+    // OSD draws — visible as the OSD blinking out on alternating frames.
+    if (context_) {
+        context_->Flush();
+        if (impl_->copy_wait_query) {
+            context_->End(impl_->copy_wait_query.Get());
+            while (context_->GetData(impl_->copy_wait_query.Get(), nullptr, 0, 0) != S_OK) {
+                Sleep(0);  // yield rather than hot-spin
+            }
+        }
+    }
 
     // Direct hand-off to the in-process client. frame_id is a monotonic
     // counter — the client uses it as a pair-atomicity key and dedups
