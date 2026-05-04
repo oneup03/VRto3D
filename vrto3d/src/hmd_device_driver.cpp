@@ -475,7 +475,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 is_on_top_  = !is_on_top_;
                 man_on_top_ = is_on_top_.load();
             };
-            cb.always_on_top = [this]() { return is_on_top_.load(); };
+            cb.always_on_top = [this]() { return man_on_top_.load(); };
             cb.request_game_focus = [this]() {
                 uint32_t pid = app_pid_.load();
                 LOG() << "request_game_focus fired pid=" << pid;

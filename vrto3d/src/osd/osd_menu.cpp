@@ -231,7 +231,7 @@ void OsdMenu::Impl::DrawStereoTab() {
 
         if (callbacks.get_auto_depth_target && callbacks.set_auto_depth_target) {
             float target = callbacks.get_auto_depth_target();
-            if (ImGui::SliderFloat("Comfort Target", &target, 0.001f, 0.01f, "%.3f")) {
+            if (ImGui::SliderFloat("Comfort Target", &target, 0.001f, 0.02f, "%.3f")) {
                 callbacks.set_auto_depth_target(target);
             }
             ImGui::SameLine(); ImGui::TextDisabled("(fraction of eye width)");
