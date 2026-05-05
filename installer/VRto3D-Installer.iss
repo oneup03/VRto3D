@@ -4,7 +4,8 @@
 #define AppName       "VRto3D"
 #define AppPublisher  "oneup03"
 #define AppURL        "https://github.com/oneup03/VRto3D"
-#define VRto3DZipUrl  "https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip"
+#define VRto3DReleaseUrl    "https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip"
+#define VRto3DPreReleaseUrl "https://github.com/oneup03/VRto3D/releases/download/latest/VRto3D.zip"
 #define WWZipUrl      "https://github.com/user-attachments/files/27381158/WibbleWobbleBeta7.zip"
 #define SteamVRAppId  "250820"
 
@@ -37,20 +38,24 @@ CloseApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "install";       Description: "Install / update VRto3D driver";                                   GroupDescription: "Actions:";              Flags: checkedonce
-Name: "wibblewobble";  Description: "Install WibbleWobble for Frame Sequential 3D";                    GroupDescription: "Actions:";              Flags: unchecked
-Name: "cleanreshade";  Description: "Remove legacy ReShade from SteamVR\bin\win64";                    GroupDescription: "Cleanup (recommended):"
-Name: "cleandrivers";  Description: "Remove third-party SteamVR drivers and reset steamvr.vrsettings"; GroupDescription: "Cleanup (recommended):"
-Name: "launchsteamvr"; Description: "Launch SteamVR when finished";                                    GroupDescription: "Finish:"
+Name: "install";              Description: "Install / update VRto3D driver";                                   GroupDescription: "Actions:";              Flags: checkedonce
+Name: "install\release";      Description: "Latest official release";                                          Flags: exclusive
+Name: "install\prerelease";   Description: "Latest pre-release";                                               Flags: exclusive unchecked
+Name: "wibblewobble";         Description: "Install WibbleWobble for Frame Sequential 3D";                    GroupDescription: "Actions:";              Flags: unchecked
+Name: "cleanreshade";         Description: "Remove legacy ReShade from SteamVR\bin\win64";                    GroupDescription: "Cleanup (recommended):"
+Name: "cleandrivers";         Description: "Remove third-party SteamVR drivers and reset steamvr.vrsettings"; GroupDescription: "Cleanup (recommended):"
+Name: "launchsteamvr";        Description: "Launch SteamVR when finished";                                    GroupDescription: "Finish:"
 
 [Code]
 var
-  SteamPath:     String;
-  SteamVRPath:   String;
-  ReleaseTag:    String;
-  ReleaseTitle:  String;
-  LocalZipNote:  String;
-  LogPath:       String;
+  SteamPath:        String;
+  SteamVRPath:      String;
+  ReleaseTag:       String;
+  ReleaseTitle:     String;
+  PreReleaseTag:    String;
+  PreReleaseTitle:  String;
+  LocalZipNote:     String;
+  LogPath:          String;
 
   SteamPage:     TInputDirWizardPage;
   WWPage:        TInputDirWizardPage;
@@ -301,35 +306,40 @@ begin
   Result := Out_;
 end;
 
-procedure FetchLatestRelease;
+procedure FetchReleaseInfo(const Endpoint: String; out Tag, Title: String);
 var
   WinHttp: Variant;
   Body: String;
   Status: Integer;
 begin
-  ReleaseTag := '';
-  ReleaseTitle := '';
-  LogLine('FetchLatestRelease: GET releases/latest');
+  Tag := '';
+  Title := '';
+  LogLine('FetchReleaseInfo: GET ' + Endpoint);
   try
     WinHttp := CreateOleObject('WinHttp.WinHttpRequest.5.1');
     WinHttp.SetTimeouts(10000, 10000, 10000, 10000);
-    WinHttp.Open('GET', 'https://api.github.com/repos/oneup03/VRto3D/releases/latest', False);
+    WinHttp.Open('GET', 'https://api.github.com/repos/oneup03/VRto3D' + Endpoint, False);
     WinHttp.SetRequestHeader('User-Agent', 'VRto3D-Installer');
     WinHttp.SetRequestHeader('Accept', 'application/vnd.github+json');
     WinHttp.Send('');
     Status := WinHttp.Status;
-    LogLine('FetchLatestRelease: HTTP ' + IntToStr(Status));
+    LogLine('FetchReleaseInfo: HTTP ' + IntToStr(Status));
     if Status = 200 then
     begin
       Body := WinHttp.ResponseText;
-      LogLine('FetchLatestRelease: body length ' + IntToStr(Length(Body)));
-      ReleaseTag := ExtractJsonString(Body, 'tag_name');
-      ReleaseTitle := ExtractJsonString(Body, 'name');
-      LogLine('FetchLatestRelease: tag="' + ReleaseTag + '" title="' + ReleaseTitle + '"');
+      Tag := ExtractJsonString(Body, 'tag_name');
+      Title := ExtractJsonString(Body, 'name');
+      LogLine('FetchReleaseInfo: tag="' + Tag + '" title="' + Title + '"');
     end;
   except
-    LogLine('FetchLatestRelease error: ' + GetExceptionMessage);
+    LogLine('FetchReleaseInfo error: ' + GetExceptionMessage);
   end;
+end;
+
+procedure FetchLatestRelease;
+begin
+  FetchReleaseInfo('/releases/latest', ReleaseTag, ReleaseTitle);
+  FetchReleaseInfo('/releases/tags/latest', PreReleaseTag, PreReleaseTitle);
 end;
 
 { ============================================================ }
@@ -479,7 +489,7 @@ end;
 
 procedure TaskInstallVRto3D;
 var
-  ZipPath, ExtractDir, SrcDir, DestDir: String;
+  ZipPath, ExtractDir, SrcDir, DestDir, ChannelUrl, Channel: String;
 begin
   if SteamVRPath = '' then
   begin
@@ -487,7 +497,19 @@ begin
     Exit;
   end;
 
-  if not ResolveZip('{#VRto3DZipUrl}', 'vrto3d.zip', ZipPath) then
+  if WizardIsTaskSelected('install\prerelease') then
+  begin
+    ChannelUrl := '{#VRto3DPreReleaseUrl}';
+    Channel := 'pre-release';
+  end
+  else
+  begin
+    ChannelUrl := '{#VRto3DReleaseUrl}';
+    Channel := 'release';
+  end;
+  LogLine('TaskInstallVRto3D: channel=' + Channel + ' url=' + ChannelUrl);
+
+  if not ResolveZip(ChannelUrl, 'vrto3d.zip', ZipPath) then
   begin
     MsgBox(
       'Could not download vrto3d.zip and no local copy was found next to the installer.' #13#10 #13#10 +
@@ -819,18 +841,19 @@ var
   WelcomeText: String;
 begin
   if ReleaseTag <> '' then
-    WelcomeText := 'Latest VRto3D release: ' + ReleaseTag
+    WelcomeText := 'Latest release: ' + ReleaseTag
   else
-    WelcomeText := 'Latest VRto3D release: unknown (will use local vrto3d.zip if present next to this installer)';
-  if (ReleaseTitle <> '') and (ReleaseTitle <> ReleaseTag) then
-    WelcomeText := WelcomeText + #13#10 + ReleaseTitle;
+    WelcomeText := 'Latest release: unknown';
+  if PreReleaseTitle <> '' then
+    WelcomeText := WelcomeText + #13#10 + 'Latest pre-release: ' + PreReleaseTitle
+  else if PreReleaseTag <> '' then
+    WelcomeText := WelcomeText + #13#10 + 'Latest pre-release: ' + PreReleaseTag
+  else
+    WelcomeText := WelcomeText + #13#10 + 'Latest pre-release: unknown';
   WelcomeText := WelcomeText + LocalZipNote;
 
   WizardForm.WelcomeLabel2.Caption :=
     WizardForm.WelcomeLabel2.Caption + #13#10 + #13#10 + WelcomeText;
-
-  if ReleaseTag <> '' then
-    WizardForm.Caption := 'Setup - VRto3D ' + ReleaseTag;
 
   SteamPage := CreateInputDirPage(wpWelcome,
     'SteamVR Location',
@@ -893,8 +916,15 @@ var
 begin
   S := 'SteamVR root:' + NewLine + Space + SteamVRPath + NewLine + NewLine;
   if WizardIsTaskSelected('install') then
+  begin
     S := S + 'Install / update VRto3D driver:' + NewLine +
-         Space + SteamVRPath + '\drivers\vrto3d' + NewLine + NewLine;
+         Space + SteamVRPath + '\drivers\vrto3d' + NewLine;
+    if WizardIsTaskSelected('install\prerelease') then
+      S := S + Space + 'Channel: pre-release (' + PreReleaseTag + ')' + NewLine
+    else
+      S := S + Space + 'Channel: official release (' + ReleaseTag + ')' + NewLine;
+    S := S + NewLine;
+  end;
   if WizardIsTaskSelected('wibblewobble') and (WWPage <> nil) then
     S := S + 'Install WibbleWobble:' + NewLine +
          Space + WWPage.Values[0] + NewLine +
