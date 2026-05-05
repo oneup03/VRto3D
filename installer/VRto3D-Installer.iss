@@ -378,11 +378,27 @@ end;
 function IsReShadeDll(const Path: String): Boolean;
 var
   Raw: AnsiString;
+  I, N: Integer;
 begin
   Result := False;
   if not FileExists(Path) then Exit;
-  if LoadStringFromFile(Path, Raw) then
-    Result := Pos(AnsiString('ReShade'), Raw) > 0;
+  if not LoadStringFromFile(Path, Raw) then Exit;
+  N := Length(Raw);
+  if N < 7 then Exit;
+  for I := 1 to N - 6 do
+  begin
+    if (Raw[I]     = 'R') and
+       (Raw[I + 1] = 'e') and
+       (Raw[I + 2] = 'S') and
+       (Raw[I + 3] = 'h') and
+       (Raw[I + 4] = 'a') and
+       (Raw[I + 5] = 'd') and
+       (Raw[I + 6] = 'e') then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
 end;
 
 function InstallerDir: String;
