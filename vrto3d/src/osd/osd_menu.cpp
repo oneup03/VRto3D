@@ -49,7 +49,7 @@ struct OsdMenu::Impl {
 
     void DrawStereoTab();
     void DrawUserHotkeysTab(OsdInput& input);
-    void DrawTrackingTab();
+    void DrawTrackingTab(OsdInput& input);
     void DrawSystemTab();
     void DrawFooter();
     void DrawTitleChrome();
@@ -58,6 +58,11 @@ struct OsdMenu::Impl {
     int  capture_row_  = -1;
     int  capture_slot_ = 0;          // 0 = load, 1 = store
     bool capture_combo_pending_ = false;
+
+    // Click-to-capture state for the Tracking-tab single-key pickers.
+    // 0 = none, 1 = pose_reset, 2 = ctrl_toggle.
+    int  tracking_capture_target_ = 0;
+    bool tracking_capture_combo_  = false;
 };
 
 OsdMenu::OsdMenu(StereoDisplayComponent* component, MenuCallbacks callbacks)
@@ -104,7 +109,7 @@ void OsdMenu::BuildUI(OsdInput& input) {
     if (ImGui::BeginTabBar("##vrto3d_tabs")) {
         if (ImGui::BeginTabItem("Stereo"))       { s.DrawStereoTab();         ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("User Hotkeys")) { s.DrawUserHotkeysTab(input); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Tracking"))     { s.DrawTrackingTab();       ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Tracking"))     { s.DrawTrackingTab(input);  ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("System"))       { s.DrawSystemTab();        ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
@@ -253,11 +258,6 @@ void OsdMenu::Impl::DrawStereoTab() {
         component->LoadSettings(cfg);
     }
 
-    float aspect = cfg.aspect_ratio;
-    if (ImGui::DragFloat("Aspect Ratio", &aspect, 0.001f, 0.5f, 4.0f, "%.3f")) {
-        cfg.aspect_ratio = aspect;
-        component->LoadSettings(cfg);
-    }
 }
 
 // Helpers for the User Hotkeys tab.
@@ -519,7 +519,7 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
 // ---------------------------------------------------------------------------
 // Tracking tab — HMD pose, controller, OpenTrack, track filter, LeiaSR.
 // ---------------------------------------------------------------------------
-void OsdMenu::Impl::DrawTrackingTab() {
+void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
     auto cfg = component->GetConfig();
     bool dirty = false;
 
@@ -537,6 +537,73 @@ void OsdMenu::Impl::DrawTrackingTab() {
         if (ImGui::SliderFloat("Pitch Radius",   &cfg.pitch_radius,    0.0f, 1.0f, "%.3f")) dirty = true;
         if (ImGui::SliderFloat("Sensitivity",    &cfg.ctrl_sensitivity,0.0f, 5.0f, "%.2f")) dirty = true;
         if (ImGui::SliderFloat("Stick Deadzone", &cfg.ctrl_deadzone,   0.0f, 1.0f, "%.3f")) dirty = true;
+
+        ImGui::Separator();
+
+        // Drain the input pump while a tracking-tab capture is active.
+        // Combo capture supports XInput chord bindings (e.g.
+        // LBUMPER+RBUMPER) — keyboard combos won't resolve through
+        // json_manager's parser and will silently no-op, matching the
+        // User Hotkeys tab's existing behavior.
+        if (tracking_capture_target_ != 0) {
+            ImGui::TextColored(ImVec4(1, 0.85f, 0.2f, 1),
+                                tracking_capture_combo_
+                                    ? "Capturing combo — press a chord, then release all to commit. (Esc to cancel)"
+                                    : "Capturing key — press a key or controller button. (Esc to cancel)");
+            CapturedKey c = input.PollCapture();
+            if (c.valid) {
+                if (tracking_capture_target_ == 1) {
+                    cfg.pose_reset_str = c.key_name;
+                } else if (tracking_capture_target_ == 2) {
+                    cfg.ctrl_toggle_str = c.key_name;
+                }
+                dirty = true;
+                tracking_capture_target_ = 0;
+                tracking_capture_combo_  = false;
+                input.CancelCapture();
+            } else if (input.WasPressed(VK_ESCAPE)) {
+                tracking_capture_target_ = 0;
+                tracking_capture_combo_  = false;
+                input.CancelCapture();
+            }
+            ImGui::Separator();
+        }
+
+        auto hotkey_row = [&](const char* label, int target, std::string& out_str) {
+            ImGui::PushID(label);
+            char buf[256];
+            std::snprintf(buf, sizeof(buf), "%s", out_str.c_str());
+            if (ImGui::InputText(label, buf, sizeof(buf))) {
+                out_str = buf;
+                dirty = true;
+            }
+            if (ImGui::Button("Set")) {
+                tracking_capture_target_ = target;
+                tracking_capture_combo_  = false;
+                input.BeginCapture(false);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Combo")) {
+                tracking_capture_target_ = target;
+                tracking_capture_combo_  = true;
+                input.BeginCapture(true);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(VK_* or XINPUT_GAMEPAD_*)");
+            ImGui::PopID();
+        };
+
+        hotkey_row("Pose Reset Key", 1, cfg.pose_reset_str);
+        hotkey_row("Toggle Key",     2, cfg.ctrl_toggle_str);
+
+        static const char* kModes[] = { "toggle", "hold" };
+        int sel = 0;
+        for (int k = 0; k < IM_ARRAYSIZE(kModes); ++k)
+            if (cfg.ctrl_type_str == kModes[k]) { sel = k; break; }
+        if (ImGui::Combo("Toggle Mode", &sel, kModes, IM_ARRAYSIZE(kModes))) {
+            cfg.ctrl_type_str = kModes[sel];
+            dirty = true;
+        }
     }
 
     if (ImGui::CollapsingHeader("OpenTrack")) {
@@ -642,6 +709,7 @@ void OsdMenu::Impl::DrawSystemTab() {
             "AnaglyphRedCyan", "AnaglyphRedCyanDubois", "AnaglyphRedCyanDeghosted", "AnaglyphRedCyanCompromise",
             "AnaglyphGreenMagenta", "AnaglyphGreenMagentaDubois", "AnaglyphGreenMagentaDeghosted",
             "AnaglyphBlueAmber",
+            "Mono",
         };
         int mode_sel = static_cast<int>(cfg.output_mode);
         if (mode_sel < 0 || mode_sel >= IM_ARRAYSIZE(modes)) mode_sel = 0;
@@ -654,6 +722,7 @@ void OsdMenu::Impl::DrawSystemTab() {
         if (ImGui::InputInt("Render Height", &cfg.render_height)) dirty = true;
         if (ImGui::InputFloat("Display Frequency", &cfg.display_frequency, 0.0f, 0.0f, "%.2f")) dirty = true;
         ImGui::SameLine(); ImGui::TextDisabled("(0.0 = use current)");
+        if (ImGui::DragFloat("Aspect Ratio", &cfg.aspect_ratio, 0.001f, 0.5f, 4.0f, "%.3f")) dirty = true;
     }
 
     if (ImGui::CollapsingHeader("Misc")) {
@@ -698,6 +767,10 @@ void OsdMenu::Impl::DrawSystemTab() {
             auto kt = KeyBindTypes.find(cfg.user_type_str[i]);
             if (kt != KeyBindTypes.end()) cfg.user_key_type[i] = kt->second;
         }
+        ReparseHotkey(cfg.pose_reset_str,   cfg.pose_reset_key,   &cfg.reset_xinput);
+        ReparseHotkey(cfg.ctrl_toggle_str,  cfg.ctrl_toggle_key,  &cfg.ctrl_xinput);
+        auto kt = KeyBindTypes.find(cfg.ctrl_type_str);
+        if (kt != KeyBindTypes.end()) cfg.ctrl_type = kt->second;
         component->LoadSettings(cfg);
     }
 }

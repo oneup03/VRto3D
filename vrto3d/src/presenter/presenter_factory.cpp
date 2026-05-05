@@ -48,6 +48,7 @@ std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode)
         case OutputMode::AnaglyphGreenMagentaDubois:
         case OutputMode::AnaglyphGreenMagentaDeghosted:
         case OutputMode::AnaglyphBlueAmber:
+        case OutputMode::Mono:
             return std::make_unique<WindowPresenter>();
 
         case OutputMode::LeiaSR:
