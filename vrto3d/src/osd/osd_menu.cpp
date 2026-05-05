@@ -54,9 +54,8 @@ struct OsdMenu::Impl {
     void DrawFooter();
     void DrawTitleChrome();
 
-    // State for the click-to-capture key picker. -1 row + slot 0 = none.
+    // State for the click-to-capture key picker. -1 row = none.
     int  capture_row_  = -1;
-    int  capture_slot_ = 0;          // 0 = load, 1 = store
     bool capture_combo_pending_ = false;
 
     // Click-to-capture state for the Tracking-tab single-key pickers.
@@ -322,9 +321,10 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
     bool dirty = false;
 
     ImGui::TextWrapped(
-        "Each row maps a Load key to one or more (Depth, Convergence, FoV) presets. "
-        "Press the Load key to apply / cycle through the comma-separated presets. "
-        "FoV = 0 means \"use the active profile FoV\". Use Copy Live to fill the "
+        "Each row maps a Load key to a (Depth, Convergence, FoV) preset. "
+        "Only \"toggle\" mode supports comma-separated values that cycle on each press; "
+        "\"switch\" and \"hold\" keep only the first value. "
+        "FoV = 0 means \"use the active profile FoV\". Use Copy Current to fill the "
         "row from the current settings.");
     ImGui::Spacing();
 
@@ -357,13 +357,24 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
 
     static const char* kModes[] = { "switch", "toggle", "hold" };
 
+    // Only "toggle" mode is allowed to keep multi-element preset cycles. For
+    // "switch" and "hold" we collapse depth/conv/fov to the first entry. Used
+    // both when the mode dropdown changes away from toggle and when the user
+    // commits a multi-value CSV in a non-toggle row.
+    auto trimRowToFirst = [&](size_t row) {
+        if (cfg.user_depth[row].size() > 1)       cfg.user_depth[row].resize(1);
+        if (cfg.user_convergence[row].size() > 1) cfg.user_convergence[row].resize(1);
+        if (cfg.user_fov[row].size() > 1)         cfg.user_fov[row].resize(1);
+        if (row < cfg.user_preset_index.size())   cfg.user_preset_index[row] = 0;
+    };
+
     if (ImGui::BeginTable("##user_hotkeys", 5,
                            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                            ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("#",         ImGuiTableColumnFlags_WidthFixed, 28.0f);
         ImGui::TableSetupColumn("Load",      ImGuiTableColumnFlags_WidthStretch, 1.2f);
         ImGui::TableSetupColumn("Mode",      ImGuiTableColumnFlags_WidthFixed, 100.0f);
-        ImGui::TableSetupColumn("Depth / Conv / FoV (comma = cycle)", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+        ImGui::TableSetupColumn("Depth / Conv / FoV (comma = cycle, toggle only)", ImGuiTableColumnFlags_WidthStretch, 3.0f);
         ImGui::TableSetupColumn("",          ImGuiTableColumnFlags_WidthFixed, 28.0f);
         ImGui::TableHeadersRow();
 
@@ -386,14 +397,12 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
                 }
                 if (ImGui::Button("Set##load")) {
                     capture_row_  = static_cast<int>(i);
-                    capture_slot_ = 0;
                     capture_combo_pending_ = false;
                     input.BeginCapture(false);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Combo##load")) {
                     capture_row_  = static_cast<int>(i);
-                    capture_slot_ = 0;
                     capture_combo_pending_ = true;
                     input.BeginCapture(true);
                 }
@@ -408,6 +417,9 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
                 ImGui::SetNextItemWidth(-FLT_MIN);
                 if (ImGui::Combo("##mode", &sel, kModes, IM_ARRAYSIZE(kModes))) {
                     cfg.user_type_str[i] = kModes[sel];
+                    if (cfg.user_type_str[i] != "toggle") {
+                        trimRowToFirst(i);
+                    }
                     dirty = true;
                 }
             }
@@ -415,6 +427,7 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
             // ----- Preset CSVs -----
             ImGui::TableNextColumn();
             {
+                const bool toggle_mode = (cfg.user_type_str[i] == "toggle");
                 auto editCsv = [&](const char* label_id, std::vector<float>& vec, int prec) {
                     char buf[256];
                     std::string csv = FloatsToCsv(vec, prec);
@@ -424,6 +437,9 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
                                          ImGuiInputTextFlags_EnterReturnsTrue)) {
                         auto parsed = CsvToFloats(buf);
                         if (!parsed.empty()) {
+                            // Non-toggle modes never cycle, so commit only the
+                            // first value regardless of how many the user typed.
+                            if (!toggle_mode && parsed.size() > 1) parsed.resize(1);
                             vec = std::move(parsed);
                             dirty = true;
                         }
@@ -436,7 +452,7 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
                 ImGui::Text("FoV");        ImGui::SameLine(80);
                 editCsv("##fov",   cfg.user_fov[i], 1);
 
-                if (ImGui::Button("Copy Live")) {
+                if (ImGui::Button("Copy Current")) {
                     // Replace the row's preset list with a single-element list
                     // containing the current depth/convergence/FoV. Edit the
                     // CSV by hand if you want to add more presets to cycle.

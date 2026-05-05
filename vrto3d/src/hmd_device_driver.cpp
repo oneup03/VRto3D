@@ -360,7 +360,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     xinput_thread_ = std::thread(&MockControllerDeviceDriver::XInputUpdateThread, this);
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
-    depth_thread_ = std::thread(&MockControllerDeviceDriver::AutoDepthThread, this);
+    monitor_thread_ = std::thread(&MockControllerDeviceDriver::MonitorModeThread, this);
     // Always start OpenTrack listener; the use_open_track flag is checked at
     // consumption time (PoseUpdateThread / Stereo component) so it can be
     // toggled live from the OSD without restarting the driver.
@@ -722,6 +722,14 @@ void MockControllerDeviceDriver::OpenTrackThread()
     }
 
     while (is_active_) {
+        // Skip the recv pump entirely when OpenTrack is off; the OSD can flip
+        // use_open_track live, so we keep the thread (and bound socket) alive
+        // and just sleep a coarser tick while disabled.
+        if (!stereo_display_component_->GetConfig().use_open_track) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
         //Read UDP socket with OpenTrack data
         memset(&open_track, 0, sizeof(open_track));
         auto bytes_read = recvfrom(socket_s, (char*)(&open_track), sizeof(open_track), 0, (sockaddr*)&from, &from_len);
@@ -753,11 +761,34 @@ void MockControllerDeviceDriver::XInputUpdateThread()
 {
     float current_pitch = 0.0f;
     vr::HmdQuaternion_t current_yaw_quat = HmdQuaternion_Identity;
+    bool was_idle = false;
 
     while (is_active_)
     {
         const auto loop_start = std::chrono::steady_clock::now();
         const auto config = stereo_display_component_->GetConfig();
+
+        // When neither stick is consumed and no reset is pending, skip the
+        // XInput poll, math, and mutex publish. On the live→idle edge, clear
+        // the published controller pose once so PoseUpdateThread doesn't keep
+        // applying the last non-zero offset.
+        if (!config.pitch_enable && !config.yaw_enable && !config.pose_reset)
+        {
+            if (!was_idle)
+            {
+                current_pitch = 0.0f;
+                current_yaw_quat = HmdQuaternion_Identity;
+                {
+                    std::lock_guard<std::mutex> lock(controller_pose_mutex_);
+                    controller_rotation_ = HmdQuaternion_Identity;
+                    controller_pos_offset_ = { 0.0, 0.0, 0.0 };
+                }
+                was_idle = true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(8));
+            continue;
+        }
+        was_idle = false;
 
         XINPUT_STATE state;
         ZeroMemory(&state, sizeof(XINPUT_STATE));
@@ -1195,7 +1226,7 @@ vrto3d::FocusContext MockControllerDeviceDriver::GetFocusContext()
 //-----------------------------------------------------------------------------
 // Purpose: Process UE3D/UEVR shared-memory monitor/depth requests
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::AutoDepthThread() {
+void MockControllerDeviceDriver::MonitorModeThread() {
     auto& rx = uevr::receiver();
     static float last_hint_ipd = -1.0f;
 
@@ -1359,8 +1390,8 @@ void MockControllerDeviceDriver::Deactivate()
         if (hotkey_thread_.joinable()) {
             hotkey_thread_.join();
         }
-        if (depth_thread_.joinable()) {
-            depth_thread_.join();
+        if (monitor_thread_.joinable()) {
+            monitor_thread_.join();
         }
         if (track_thread_.joinable()) {
             track_thread_.join();

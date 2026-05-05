@@ -25,6 +25,7 @@ Find your display type and use the listed Output Mode(s):
     - `FramePacked1080p24` - 1920x2205 @24Hz, 45px gap (most universal)
     - `FramePacked1080p60` - 1920x2205 @60Hz, 45px gap, 371.25 MHz pixel clock (HDMI 2.0+)
     - `FramePacked1080p60CVT` - 1920x2205 @60Hz with CVT reduced blanking, 45px gap, 280.8 MHz pixel clock (HDMI 2.0)
+    - For any of these modes, it is recommended to start SteamVR before starting the game, as they change monitor modes, which might break games
 - For FramePacked, you can also try manually creating one of these Custom Resolutions in Nvidia Control Panel or CRU first:
     - **frame_packed_720p** - 1280x1470, 60Hz
         - horizontal: 1280 active; 110 front, 40 sync, 220 back (1650 total)
@@ -92,8 +93,9 @@ Find your display type and use the listed Output Mode(s):
   <summary markdown="span">3D Vision / Frame Sequential (Shutter Glasses)</summary>
 
 - **Output Modes:** `WibbleWobble` (preferred) or `NvidiaDX9` (legacy / unstable)
-- `WibbleWobble` requires the WibbleWobbleClient - the VRto3D installer can deploy it. Follow the [WibbleWobbleVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup) (skip the WibbleWobbleVR copy step, but do the rest). If performance is bad, will have eye flickering
+- `WibbleWobble` requires the WibbleWobbleClient - the VRto3D installer can deploy it. Follow the [WibbleWobble SteamVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup) (skip the `VR Config` step, but do the rest). When framerate is low, you will have eye flickering
 - `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset
+- For both of these modes, it is recommended to start SteamVR before starting the game, as they change monitor modes, which might break games
 
 </details>
 
@@ -160,7 +162,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 - **Recommended**: Download [`VRto3D-Installer.exe`](https://github.com/oneup03/VRto3D/releases/latest/download/VRto3D-Installer.exe) from the latest release and run it. The installer auto-detects your Steam library, installs/updates the VRto3D driver, and offers optional cleanup of legacy ReShade and third-party SteamVR drivers. It can also install WibbleWobble and launch SteamVR for you.
     - **Manual alternative**: Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder from inside the VRto3D.zip to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate `default_config.json` and you should see a 1080p SbS `VRto3D` window upscaled to fullscreen
-- Open the OSD menu with `Ctrl + Home` and use the `System` tab to pick `Display Index`, `Output Mode`, and render resolution for your display - see the [Output Modes](#output-modes) table for which mode to choose
+- Open the OSD menu with `Ctrl + Home` and use the `System` tab to pick `Display Index`, `Output Mode`, and render resolution for your display - see the [Output Modes](#compatible-3d-displays--output-modes) table for which mode to choose
     - Or edit `Steam\config\vrto3d\default_config.json` manually - [see what each setting does](#configuration)
     - Sometimes the display selection glitches back to the wrong screen and you may have to restart SteamVR
     - If your display is half-SbS or half-TaB, you can usually save some performance by reducing the per-eye render to half-resolution. (may break aspect ratio in some games)
@@ -190,7 +192,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 | Field Name                    | Type    | Description                                                                                       | Default Value  |
 |-------------------------------|---------|---------------------------------------------------------------------------------------------------|----------------|
 | `display_index`               | `int`   | 3D display selection by display order (`0` = auto primary, `1` = first display, `2` = second, etc.) | `0`            |
-| `output_mode`                 | `string`| Stereo output format. See the [Output Modes](#output-modes) table for valid values                | `"SbS"`        |
+| `output_mode`                 | `string`| Stereo output format. See the [Output Modes](#compatible-3d-displays--output-modes) table for valid values                | `"SbS"`        |
 | `eye_swap`                    | `bool`  | Swap left and right eyes                                                                          | `false`        |
 | `render_width`                | `int`   | The width to render per eye                                                                       | `1920`         |
 | `render_height`               | `int`   | The height to render per eye                                                                      | `1080`         |
@@ -241,10 +243,10 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 | `ctrl_deadzone` +             | `float` | Controller Deadzone when using pitch or yaw emulation                                             | `0.05`         |
 | `ctrl_sensitivity` +          | `float` | Controller Sensitivity when using pitch or yaw emulation                                          | `1.0`          |
 | `user_settings[].user_load_key` +    | `string`| The Virtual-Key Code (or XInput chord) to load a user preset                               | `"VK_NUMPAD1"` |
-| `user_settings[].user_key_type` +    | `string`| The load key's behavior (`"switch"`, `"toggle"`, `"hold"`)                                 | `"switch"`     |
-| `user_settings[].user_depth` +       | `float` or `[float]` | The separation value(s) for a user preset (array = cycle on each press)        | `0.1`          |
-| `user_settings[].user_convergence` + | `float` or `[float]` | The convergence value(s) for a user preset (array = cycle on each press)       | `1.0`          |
-| `user_settings[].user_fov` +         | `float` or `[float]` | The fov value(s) for a user preset; `0` falls back to the global FoV           | `90.0`         |
+| `user_settings[].user_key_type` +    | `string`| The load key's behavior. Only `"toggle"` supports multi-preset cycles; `"switch"` and `"hold"` keep just the first value | `"switch"` |
+| `user_settings[].user_depth` +       | `float` or `[float]` | The separation value(s) for a user preset (array = cycle on each press, `toggle` mode only) | `0.1`          |
+| `user_settings[].user_convergence` + | `float` or `[float]` | The convergence value(s) for a user preset (array = cycle on each press, `toggle` mode only) | `1.0`          |
+| `user_settings[].user_fov` +         | `float` or `[float]` | The fov value(s) for a user preset; `0` falls back to the global FoV (array = cycle on each press, `toggle` mode only) | `90.0`         |
 
 
 ## Notes
@@ -280,7 +282,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 
 #### User Presets (via OSD)
 - Press `Ctrl + Home` to open the OSD menu and select the `User Hotkeys` tab
-- Each row maps a Load key to one or more `(Depth, Convergence, FoV)` presets
+- Each row maps a Load key to a `(Depth, Convergence, FoV)` preset. Only `toggle` mode supports multi-preset cycles - `switch` and `hold` rows are trimmed to the first value on edit and on profile load
     - Click `Set` to capture a single key, mouse button, or XInput button
     - Click `Combo` to capture an XInput chord (e.g. `XINPUT_GAMEPAD_LEFT_SHOULDER+XINPUT_GAMEPAD_RIGHT_SHOULDER`); the chord commits when you release everything
     - You can also type any <a href="https://github.com/oneup03/VRto3D/blob/main/external/VRto3DLib/include/vrto3dlib/key_mappings.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> string into the Load field directly
@@ -288,8 +290,8 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
     - `switch` - jump to the preset and stay there
     - `toggle` - bounce between the preset and the previous setting every 1.5s
     - `hold` - apply the preset only while the key is held
-- Edit `Depth`, `Conv`, and `FoV` directly, or click `Copy Live` to fill them from the current Stereo tab values
-    - Comma-separated values create a cycle - each press of the Load key advances to the next entry (`switch` / `toggle` modes only)
+- Edit `Depth`, `Conv`, and `FoV` directly, or click `Copy Current` to fill them from the current Stereo tab values
+    - Comma-separated values create a cycle - each press of the Load key advances to the next entry (`toggle` mode only; `switch` and `hold` keep only the first value)
     - `FoV = 0` falls back to the active profile's global FoV
 - `+ Add Preset Row` adds a new empty row; the `X` button removes a row
 - It is recommended to keep one `switch` preset that matches your default depth/convergence so you can easily get back to baseline
@@ -300,7 +302,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 1. Launch the game and let VRto3D load - the OSD title bar will show `Profile: (default)` if no per-game profile exists yet
 2. Press `Ctrl + Home` to open the OSD menu
 3. **Stereo tab**: dial in `Depth`, `Convergence`, `FoV`, and toggle `Swap Eyes` / `Auto-Depth` as needed
-4. **User Hotkeys tab**: add preset rows for the depth/convergence/fov values you want, bind their Load keys, and use `Copy Live` to capture the current values into a row
+4. **User Hotkeys tab**: add preset rows for the depth/convergence/fov values you want, bind their Load keys, and use `Copy Current` to capture the current values into a row
 5. **Tracking tab** (only if the game needs it): set `Height` under `HMD Pose`, and enable `Pitch (right stick)` / `Yaw (right stick)` under `XInput (Xbox) Controller` for games that need camera control
 6. **System tab**: toggle `Async Reprojection` under `Misc` if it helps smoothness for this game
 7. In the footer click `Save Game Cfg` to write `Steam\config\vrto3d\Game.exe_config.json` (the button label includes the game name and is disabled until VRto3D detects a running game). `Save Default Cfg` writes the equivalent values to `default_config.json` for use as a global baseline

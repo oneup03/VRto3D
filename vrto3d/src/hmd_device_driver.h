@@ -147,7 +147,7 @@ public:
     void XInputUpdateThread();
     void PoseUpdateThread();
     void PollHotkeysThread();
-    void AutoDepthThread();
+    void MonitorModeThread();
 
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
     void SetAsync(bool enable);
@@ -190,7 +190,7 @@ private:
     std::thread xinput_thread_;
     std::thread pose_thread_;
     std::thread hotkey_thread_;
-    std::thread depth_thread_;
+    std::thread monitor_thread_;
     std::thread track_thread_;
 
     vr::HmdQuaternion_t open_track_att_;
