@@ -55,6 +55,7 @@ constexpr uint32_t kModeAnaglyphGreenMagenta          = 11;
 constexpr uint32_t kModeAnaglyphGreenMagentaDubois    = 12;
 constexpr uint32_t kModeAnaglyphGreenMagentaDeghosted = 13;
 constexpr uint32_t kModeAnaglyphBlueAmber             = 14;
+constexpr uint32_t kModeMono                          = 15;
 
 uint32_t ModeToShaderEnum(OutputMode m)
 {
@@ -79,6 +80,7 @@ uint32_t ModeToShaderEnum(OutputMode m)
         case OutputMode::AnaglyphGreenMagentaDubois:     return kModeAnaglyphGreenMagentaDubois;
         case OutputMode::AnaglyphGreenMagentaDeghosted:  return kModeAnaglyphGreenMagentaDeghosted;
         case OutputMode::AnaglyphBlueAmber:              return kModeAnaglyphBlueAmber;
+        case OutputMode::Mono:                           return kModeMono;
         default:                                         return kModeSbS;
     }
 }
@@ -308,6 +310,11 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         image.g = accum.g + (accum.r * (DeGhost * -0.75)) + (accum.g * (DeGhost * 1.5))   + (accum.b * (DeGhost * -0.75));
         image.b = accum.b + (accum.r * (DeGhost * -1.5)) + (accum.g * (DeGhost * -1.5))  + (accum.b * (DeGhost * 3.0));
         return saturate(image);
+    }
+
+    // Mono — single-eye view. eye_swap selects right (1) instead of left (0).
+    if (mode == 15) {
+        return SampleEye(0u, uv.x, uv.y);
     }
 
     // Fallback
