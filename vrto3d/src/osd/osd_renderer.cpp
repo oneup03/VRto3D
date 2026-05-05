@@ -23,12 +23,10 @@
 
 #include <d3dcompiler.h>
 
-#ifdef _WIN32
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  include <windows.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
 #endif
+#include <windows.h>
 
 #include "imgui.h"
 #include "backends/imgui_impl_dx11.h"
@@ -125,7 +123,7 @@ struct OsdRenderer::Impl {
     bool                              imgui_dx11_ready = false;
 
     // Input pump + menu (created in Init).
-    std::unique_ptr<IOsdInput>        input;
+    std::unique_ptr<OsdInput>         input;
     std::unique_ptr<OsdMenu>          menu;
 
     // Toast text (replacement for old GDI+ overlay).
@@ -159,21 +157,16 @@ struct OsdRenderer::Impl {
     std::function<void()>             on_menu_closed;
 
     HWND DiscoverHwnd() {
-#ifdef _WIN32
         if (headset_hwnd && IsWindow(static_cast<HWND>(headset_hwnd)))
             return static_cast<HWND>(headset_hwnd);
         if (cached_hwnd && IsWindow(cached_hwnd))
             return cached_hwnd;
         cached_hwnd = FindWindowW(L"VRto3D_PresentWindow", nullptr);
         return cached_hwnd;
-#else
-        return nullptr;
-#endif
     }
     HWND cached_hwnd = nullptr;
 
     void ApplyMenuVisibility(bool now_visible) {
-#ifdef _WIN32
         if (now_visible == prev_menu_visible) return;
         HWND hwnd = DiscoverHwnd();
         if (!hwnd) { prev_menu_visible = now_visible; return; }
@@ -204,9 +197,6 @@ struct OsdRenderer::Impl {
             if (on_menu_closed) on_menu_closed();
         }
         prev_menu_visible = now_visible;
-#else
-        prev_menu_visible = now_visible;
-#endif
     }
 
     bool CreateOffscreen(UINT w, UINT h) {
@@ -313,7 +303,7 @@ bool OsdRenderer::Init(ID3D11Device* device,
     }
     s.imgui_dx11_ready = true;
 
-    s.input = CreateOsdInput();
+    s.input = std::make_unique<OsdInput>();
     s.on_menu_closed = callbacks.request_game_focus;
     s.menu  = std::make_unique<OsdMenu>(component, std::move(callbacks));
 

@@ -15,7 +15,6 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef _WIN32
 
 #include "nvstereo_dx9_presenter.h"
 #include "display_utils.h"
@@ -1328,4 +1327,3 @@ void NvStereoDx9Presenter::Shutdown()
 
 }  // namespace vrto3d
 
-#endif  // _WIN32

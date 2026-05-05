@@ -17,12 +17,9 @@
 
 #include "output_presenter.h"
 #include "window_presenter.h"
-
-#ifdef _WIN32
-#  include "leiasr_presenter.h"
-#  include "nvstereo_dx9_presenter.h"
-#  include "wibblewobble_presenter.h"
-#endif
+#include "leiasr_presenter.h"
+#include "nvstereo_dx9_presenter.h"
+#include "wibblewobble_presenter.h"
 
 #include "vrto3dlib/debug_log.hpp"
 
@@ -54,28 +51,13 @@ std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode)
             return std::make_unique<WindowPresenter>();
 
         case OutputMode::LeiaSR:
-#ifdef _WIN32
             return std::make_unique<LeiaSrPresenter>();
-#else
-            LOG() << "MakePresenter: LeiaSR not available on this platform; falling back to SbS";
-            return std::make_unique<WindowPresenter>();
-#endif
 
         case OutputMode::NvidiaDX9:
-#ifdef _WIN32
             return std::make_unique<NvStereoDx9Presenter>();
-#else
-            LOG() << "MakePresenter: NvidiaDX9 not available on this platform; falling back to SbS";
-            return std::make_unique<WindowPresenter>();
-#endif
 
         case OutputMode::WibbleWobble:
-#ifdef _WIN32
             return std::make_unique<WibbleWobblePresenter>();
-#else
-            LOG() << "MakePresenter: WibbleWobble not available on this platform; falling back to SbS";
-            return std::make_unique<WindowPresenter>();
-#endif
     }
     return std::make_unique<WindowPresenter>();
 }

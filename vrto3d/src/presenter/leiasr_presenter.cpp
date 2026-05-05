@@ -15,7 +15,6 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef _WIN32
 
 #define NOMINMAX
 #include <winsock2.h>   // must precede windows.h
@@ -812,4 +811,3 @@ void LeiaSrPresenter::Shutdown()
 
 }  // namespace vrto3d
 
-#endif  // _WIN32

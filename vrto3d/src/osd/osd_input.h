@@ -18,7 +18,7 @@
 
 #include <array>
 #include <cstdint>
-#include <memory>
+#include <set>
 #include <string>
 
 struct ImGuiIO;
@@ -46,54 +46,67 @@ struct OsdSurface {
     StereoLayout layout = StereoLayout::Mono;
 };
 
-// One-shot capture result returned by IOsdInput::PollCapture().
+// One-shot capture result returned by OsdInput::PollCapture().
+// `key_name` is a raw VK_*/XINPUT_GAMEPAD_* string (or '+'-joined combo) that
+// VRto3DLib's VirtualKeyMappings / XInputMappings can resolve back to a code.
 struct CapturedKey {
-    bool         valid = false;       // false if no key/button captured this poll
-    std::string  portable_name;       // canonical portable name (e.g. "Numpad1", "Pad.Guide")
+    bool        valid = false;
+    std::string key_name;
 };
 
-// Cross-platform input pump. Concrete implementations live in
-// osd_input_win32.cpp / osd_input_linux.cpp and are selected at build time.
-class IOsdInput {
+// Win32 keyboard + XInput pump for the OSD. Polls global state each frame
+// (the SteamVR driver is never the foreground process), feeds ImGuiIO, and
+// supports a one-shot key-capture mode for the User Hotkeys picker.
+class OsdInput {
 public:
-    virtual ~IOsdInput() = default;
+    OsdInput();
+    ~OsdInput();
+
+    OsdInput(const OsdInput&) = delete;
+    OsdInput& operator=(const OsdInput&) = delete;
 
     // Refresh internal key/mouse/wheel state. Call once per frame.
-    virtual void Poll() = 0;
+    void Poll();
 
     // Push refreshed state into ImGui's IO. Caller must have already
     // called ImGui::SetCurrentContext().
-    virtual void FeedImGui(ImGuiIO& io, const OsdSurface& surface) = 0;
+    void FeedImGui(ImGuiIO& io, const OsdSurface& surface);
 
-    // Returns true the first frame `portable_name` transitions key-down. Used
-    // by the hotkey poll loop to detect chords like Ctrl+Home / Ctrl+F1.
-    // Implementations should track edge state across Poll() calls.
-    virtual bool WasPressed(const char* portable_name) = 0;
+    // Returns true the first frame `vk` transitions key-down. Pass a Win32
+    // VK_* code for keyboard keys or an XINPUT_GAMEPAD_* mask for buttons.
+    bool WasPressed(int vk) const;
 
-    // True while `portable_name` is currently held.
-    virtual bool IsHeld(const char* portable_name) = 0;
+    // True while `vk` is currently held.
+    bool IsHeld(int vk) const;
 
     // Begin a one-shot key-capture session for the User Hotkeys picker.
-    // While capturing, normal ImGui input may still flow but the next
-    // discrete key/button press is recorded and returned by PollCapture().
     // `combo == true` accumulates every key/button held simultaneously and
     // commits the captured combo (joined with '+') only after the user
     // releases everything — required for XInput chord bindings like
-    // "Pad.LBumper+Pad.RBumper".
-    virtual void BeginCapture(bool combo = false) = 0;
-    virtual void CancelCapture() = 0;
-    virtual CapturedKey PollCapture() = 0;
-    virtual bool IsCapturing() const = 0;
+    // "XINPUT_GAMEPAD_LEFT_SHOULDER+XINPUT_GAMEPAD_RIGHT_SHOULDER".
+    void BeginCapture(bool combo = false);
+    void CancelCapture();
+    CapturedKey PollCapture();
+    bool IsCapturing() const { return capturing_; }
 
     // Toggle the always-on global mouse hook. Cheap when stable; called by
     // OsdRenderer when the menu visibility changes so we don't keep a
     // WH_MOUSE_LL hook installed (and dispatched to our process for every
     // system-wide mouse event) when the OSD isn't actually consuming clicks.
-    // Default no-op for platforms that don't install a hook.
-    virtual void SetMouseHookActive(bool /*active*/) {}
-};
+    void SetMouseHookActive(bool active);
 
-// Factory — implemented in the per-platform .cpp.
-std::unique_ptr<IOsdInput> CreateOsdInput();
+private:
+    std::array<bool, 256> keys_curr_{};
+    std::array<bool, 256> keys_prev_{};
+    uint16_t              pad_curr_ = 0;
+    uint16_t              pad_prev_ = 0;
+    bool                  capturing_ = false;
+    bool                  capture_combo_ = false;
+    bool                  had_any_press_ = false;
+    std::set<std::string> capture_set_;
+    CapturedKey           captured_;
+    void*                 cached_hwnd_ = nullptr; // HWND
+    bool                  hook_active_ = false;
+};
 
 } // namespace vrto3d::osd

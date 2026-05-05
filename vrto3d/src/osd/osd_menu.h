@@ -25,7 +25,7 @@ class StereoDisplayComponent;
 
 namespace vrto3d::osd {
 
-class IOsdInput;
+class OsdInput;
 
 // Callbacks the menu uses to perform actions that live outside the
 // StereoDisplayComponent's API surface (profile save/load, file-manager
@@ -87,7 +87,7 @@ public:
 
     // Build the menu's ImGui widgets. Called once per frame between
     // ImGui::NewFrame and ImGui::Render.
-    void BuildUI(IOsdInput& input);
+    void BuildUI(OsdInput& input);
 
     // Provide the full version string for the title bar + System tab.
     void SetVersion(std::string version);

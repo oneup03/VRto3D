@@ -16,7 +16,6 @@
  */
 #pragma once
 
-#ifdef _WIN32
 
 #include <atomic>
 #include <cstdint>
@@ -93,4 +92,3 @@ private:
 
 }  // namespace vrto3d
 
-#endif  // _WIN32

@@ -16,7 +16,6 @@
  */
 #pragma once
 
-#ifdef _WIN32
 
 #include <cstdint>
 #include <string>
@@ -84,4 +83,3 @@ private:
 
 }  // namespace vrto3d
 
-#endif  // _WIN32

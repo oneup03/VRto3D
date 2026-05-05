@@ -17,15 +17,13 @@
 
 #include "screenshot.h"
 
-#ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  include <windows.h>
-#  include <wincodec.h>
-#  include <shlobj.h>
-#  include <wrl/client.h>
-#  pragma comment(lib, "windowscodecs.lib")
-#  pragma comment(lib, "shell32.lib")
-#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <wincodec.h>
+#include <shlobj.h>
+#include <wrl/client.h>
+#pragma comment(lib, "windowscodecs.lib")
+#pragma comment(lib, "shell32.lib")
 
 #include <cmath>
 #include <cstdio>
@@ -36,7 +34,6 @@
 
 namespace vrto3d::screenshot {
 
-#ifdef _WIN32
 namespace {
 
 // Map an 8-bit DXGI format to its WIC pixel-format GUID. Returns nullptr for
@@ -221,7 +218,6 @@ int FindNextScreenshotIndex(const std::wstring& dir, const std::wstring& base) {
 }
 
 }  // namespace
-#endif // _WIN32
 
 
 SaveResult SaveStereoPair(const std::string& app_name,
@@ -233,7 +229,6 @@ SaveResult SaveStereoPair(const std::string& app_name,
                           float               target_eye_aspect)
 {
     SaveResult r;
-#ifdef _WIN32
     if (!data || sbs_width < 2 || (sbs_width & 1u) != 0 || sbs_height == 0) {
         LOG() << "Screenshot: invalid input " << sbs_width << "x" << sbs_height;
         return r;
@@ -316,10 +311,6 @@ SaveResult SaveStereoPair(const std::string& app_name,
     } else {
         LOG() << "Screenshot: encode failed (normal=" << ok1 << " crossview=" << ok2 << ")";
     }
-#else
-    (void)app_name; (void)sbs_width; (void)sbs_height; (void)dxgi_format;
-    (void)data; (void)row_pitch; (void)target_eye_aspect;
-#endif
     return r;
 }
 

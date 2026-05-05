@@ -386,7 +386,6 @@ bool WindowPresenter::CreateShaders()
 
 bool WindowPresenter::CreateSwapChain(Dx11Renderer& renderer)
 {
-#ifdef _WIN32
     ID3D11Device* dev = renderer.Device();
 
     ComPtr<IDXGIDevice> dxgi_dev;
@@ -425,13 +424,6 @@ bool WindowPresenter::CreateSwapChain(Dx11Renderer& renderer)
     swap_width_  = window_->Width();
     swap_height_ = window_->Height();
     return true;
-#else
-    (void)renderer;
-    // Linux swapchain: DXVK provides IDXGIFactory2::CreateSwapChainForHwnd with SDL's window
-    // via an HWND shim. Full bring-up is a v1.5 task.
-    LOG() << "WindowPresenter::CreateSwapChain is a v1.5 TODO on Linux";
-    return false;
-#endif
 }
 
 
@@ -453,7 +445,6 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
     const FramePackTimingSpec* fp_spec = is_framepack ? GetFramePackTimingSpec(mode_) : nullptr;
     framepack_offset_ = fp_spec ? fp_spec->gap_pixels : 0;
 
-#ifdef _WIN32
     // For FramePacked modes, attempt to switch the display to the custom timing.
     // This is non-fatal — if the modeset fails, we still create the window and
     // render TaB at the current desktop resolution (just without the HDMI 3D
@@ -468,16 +459,13 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
             LOG() << "WindowPresenter: display timing apply FAILED — rendering TaB at desktop res";
         }
     }
-#endif
 
     // Resolve target monitor(s) — reuses cfg.display_index. The dual-display
     // modes ask for a contiguous-right secondary so the window spans both.
     platform::MonitorInfo primary{}, secondary{};
     if (!platform::ResolveTargetMonitors(cfg.display_index, spans_two_monitors_, primary, secondary)) {
         LOG() << "WindowPresenter::Init: ResolveTargetMonitors failed";
-#ifdef _WIN32
         timing_helper_.Revert();
-#endif
         return false;
     }
 
@@ -715,12 +703,10 @@ void WindowPresenter::Shutdown()
     window_stop_.store(true);
     if (window_thread_.joinable()) window_thread_.join();
 
-#ifdef _WIN32
     // Revert display timing after the window is torn down so the desktop
     // returns to its original resolution. Safe to call even if Apply was
     // never called or failed.
     timing_helper_.Revert();
-#endif
 
     renderer_ = nullptr;
 }

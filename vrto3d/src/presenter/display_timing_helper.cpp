@@ -15,7 +15,6 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef _WIN32
 
 #include "display_timing_helper.h"
 #include "display_utils.h"
@@ -32,7 +31,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "platform/platform.h"
+#include "platform.h"
 #include "vrto3dlib/debug_log.hpp"
 
 // NVAPI include must be at file scope (before any C++ namespace) so its
@@ -577,4 +576,3 @@ void DisplayTimingHelper::RevertCruFallback()
 
 }  // namespace vrto3d
 
-#endif  // _WIN32

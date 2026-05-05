@@ -27,7 +27,7 @@
 #include <dxgi1_2.h>
 
 #include "openvr_driver.h"
-#include "platform/platform.h"
+#include "platform.h"
 #include "presenter/output_presenter.h"
 #include "vrto3dlib/stereo_config.h"
 
