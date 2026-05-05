@@ -24,7 +24,7 @@
 #include <d3d11.h>
 #include <dxgi1_2.h>
 
-#include "platform/platform.h"
+#include "platform.h"
 #include "presenter/display_timing_helper.h"
 #include "presenter/output_presenter.h"
 #include "vrto3dlib/stereo_config.h"
@@ -84,9 +84,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D11RasterizerState> rasterizer_;
     Microsoft::WRL::ComPtr<ID3D11BlendState>      blend_;
 
-#ifdef _WIN32
     DisplayTimingHelper                           timing_helper_;
-#endif
 
     std::thread                                   focus_thread_;
     std::atomic<bool>                             focus_stop_{false};

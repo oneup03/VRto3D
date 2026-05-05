@@ -17,10 +17,8 @@
 
 #include "dx11_renderer.h"
 
-#ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  include <windows.h>
-#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
 #include <cstdio>
 
@@ -35,12 +33,10 @@
 
 Dx11Renderer::Dx11Renderer()
 {
-#ifdef _WIN32
     LARGE_INTEGER f{};
     if (QueryPerformanceFrequency(&f) && f.QuadPart > 0) {
         qpc_freq_sec_ = 1.0 / static_cast<double>(f.QuadPart);
     }
-#endif
 }
 
 Dx11Renderer::~Dx11Renderer() { Shutdown(); }
@@ -58,9 +54,7 @@ bool Dx11Renderer::Init(LUID adapter_luid,
     DXGI_ADAPTER_DESC1 desc{};
     if (adapter_) adapter_->GetDesc1(&desc);
     char narrow[256] = {};
-#ifdef _WIN32
     WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, narrow, sizeof(narrow), nullptr, nullptr);
-#endif
     LOG() << "Dx11Renderer: adapter='" << narrow << "' LUID=" << desc.AdapterLuid.HighPart
           << ":" << desc.AdapterLuid.LowPart;
 
@@ -256,13 +250,11 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
     vr::VRServerDriverHost()->VsyncEvent(0.0);
 
     frame_counter_.fetch_add(1, std::memory_order_relaxed);
-#ifdef _WIN32
     LARGE_INTEGER q{};
     if (QueryPerformanceCounter(&q)) {
         last_vsync_qpc_sec_.store(static_cast<double>(q.QuadPart) * qpc_freq_sec_,
                                   std::memory_order_relaxed);
     }
-#endif
 
     return true;
 }

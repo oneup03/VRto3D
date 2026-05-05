@@ -65,8 +65,8 @@ bool CreateD3D11Device(LUID adapter_luid,
                        Microsoft::WRL::ComPtr<IDXGIAdapter1>& out_adapter);
 
 // Import a SteamVR-provided SharedTextureHandle_t into a D3D11 texture on the
-// given device. On Windows: OpenSharedResource1/OpenSharedResource. On Linux
-// via DXVK: ID3D11VkExtDevice::CreateTexture2DFromVkImage.
+// given device. Uses OpenSharedResource1 (NT handle) with a fallback to the
+// legacy OpenSharedResource path.
 bool ImportSharedTexture(ID3D11Device* device,
                          vr::SharedTextureHandle_t handle,
                          Microsoft::WRL::ComPtr<ID3D11Texture2D>& out_texture);
@@ -77,7 +77,7 @@ class PresentWindow {
 public:
     virtual ~PresentWindow() = default;
 
-    // Returns HWND on Windows, SDL_Window* on Linux (caller casts).
+    // Returns the underlying HWND (caller casts).
     virtual void* NativeHandle() const = 0;
 
     // Monitor geometry that was used to size the window.

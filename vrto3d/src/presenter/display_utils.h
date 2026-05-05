@@ -16,8 +16,6 @@
  */
 #pragma once
 
-#ifdef _WIN32
-
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -110,5 +108,3 @@ inline void WaitForModesetSettle(DWORD timeoutMs)
 
 }  // namespace display_utils
 }  // namespace vrto3d
-
-#endif  // _WIN32

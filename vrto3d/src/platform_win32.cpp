@@ -15,8 +15,6 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef _WIN32
-
 #define WIN32_LEAN_AND_MEAN
 #include "platform.h"
 
@@ -384,5 +382,3 @@ bool IsProcessRunning(uint32_t pid)
 }
 
 }  // namespace platform
-
-#endif  // _WIN32

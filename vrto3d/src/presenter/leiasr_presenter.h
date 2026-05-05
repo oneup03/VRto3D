@@ -16,7 +16,6 @@
  */
 #pragma once
 
-#ifdef _WIN32
 
 #include <atomic>
 #include <memory>
@@ -26,7 +25,7 @@
 #include <d3d11.h>
 #include <dxgi1_2.h>
 
-#include "platform/platform.h"
+#include "platform.h"
 #include "presenter/output_presenter.h"
 #include "vrto3dlib/stereo_config.h"
 
@@ -114,4 +113,3 @@ private:
 
 }  // namespace vrto3d
 
-#endif  // _WIN32

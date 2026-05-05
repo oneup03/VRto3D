@@ -15,7 +15,6 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef _WIN32
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -203,7 +202,7 @@ void WibbleWobblePresenter::PumpThreadLoop() {
         if (renderer_) renderer_->WaitAndDrawPending(33);
 
         // Drain this thread's Windows message queue so the WH_MOUSE_LL
-        // hook installed by osd_input_win32 (lazily, only while the OSD
+        // hook installed by osd_input (lazily, only while the OSD
         // menu is visible) can dispatch its callbacks.
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -376,4 +375,3 @@ void WibbleWobblePresenter::Shutdown() {
 
 }  // namespace vrto3d
 
-#endif  // _WIN32

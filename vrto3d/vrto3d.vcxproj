@@ -208,7 +208,7 @@
     <ClCompile Include="src\dx11_renderer.cpp" />
     <ClCompile Include="src\screenshot.cpp" />
     <ClCompile Include="src\vr_recenter.cpp" />
-    <ClCompile Include="src\platform\platform_win32.cpp" />
+    <ClCompile Include="src\platform_win32.cpp" />
     <ClCompile Include="src\presenter\presenter_factory.cpp" />
     <ClCompile Include="src\presenter\window_presenter.cpp" />
     <ClCompile Include="src\presenter\leiasr_presenter.cpp" />
@@ -217,8 +217,7 @@
     <ClCompile Include="src\presenter\display_timing_helper.cpp" />
     <ClCompile Include="src\osd\osd_renderer.cpp" />
     <ClCompile Include="src\osd\osd_menu.cpp" />
-    <ClCompile Include="src\osd\osd_input_win32.cpp" />
-    <ClCompile Include="src\osd\osd_keymap.cpp" />
+    <ClCompile Include="src\osd\osd_input.cpp" />
     <ClCompile Include="..\external\imgui\imgui.cpp" />
     <ClCompile Include="..\external\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\external\imgui\imgui_tables.cpp" />
@@ -233,7 +232,7 @@
     <ClInclude Include="src\dx11_renderer.h" />
     <ClInclude Include="src\screenshot.h" />
     <ClInclude Include="src\vr_recenter.h" />
-    <ClInclude Include="src\platform\platform.h" />
+    <ClInclude Include="src\platform.h" />
     <ClInclude Include="src\presenter\output_presenter.h" />
     <ClInclude Include="src\presenter\window_presenter.h" />
     <ClInclude Include="src\presenter\leiasr_presenter.h" />
@@ -244,7 +243,6 @@
     <ClInclude Include="src\osd\osd_renderer.h" />
     <ClInclude Include="src\osd\osd_menu.h" />
     <ClInclude Include="src\osd\osd_input.h" />
-    <ClInclude Include="src\osd\osd_keymap.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">

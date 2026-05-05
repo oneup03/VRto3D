@@ -24,7 +24,7 @@
 
 #include "osd/osd_input.h"
 #include "hmd_device_driver.h"
-#include "platform/platform.h"
+#include "platform.h"
 #include "vrto3dlib/stereo_config.h"
 #include "vrto3dlib/key_mappings.h"
 
@@ -48,7 +48,7 @@ struct OsdMenu::Impl {
     void RefreshMonitors();
 
     void DrawStereoTab();
-    void DrawUserHotkeysTab(IOsdInput& input);
+    void DrawUserHotkeysTab(OsdInput& input);
     void DrawTrackingTab();
     void DrawSystemTab();
     void DrawFooter();
@@ -82,7 +82,7 @@ bool OsdMenu::Visible() const          { return impl_->visible.load(); }
 void OsdMenu::SetVersion(std::string v)  { impl_->version  = std::move(v); }
 void OsdMenu::SetAppName(std::string a)  { impl_->app_name = std::move(a); }
 
-void OsdMenu::BuildUI(IOsdInput& input) {
+void OsdMenu::BuildUI(OsdInput& input) {
     auto& s = *impl_;
     if (!s.visible.load() || !s.component) return;
 
@@ -223,6 +223,7 @@ void OsdMenu::Impl::DrawStereoTab() {
     }
 
     if (callbacks.get_auto_depth_enabled && callbacks.set_auto_depth_enabled) {
+        ImGui::Separator();
         bool ad = callbacks.get_auto_depth_enabled();
         if (ImGui::Checkbox("Auto-Depth", &ad)) {
             callbacks.set_auto_depth_enabled(ad);
@@ -243,6 +244,7 @@ void OsdMenu::Impl::DrawStereoTab() {
             }
             ImGui::SameLine(); ImGui::TextDisabled("(higher = snappier)");
         }
+        ImGui::Separator();
     }
 
     bool eye_swap = cfg.eye_swap;
@@ -315,7 +317,7 @@ std::vector<float> CsvToFloats(const char* s) {
 // ---------------------------------------------------------------------------
 // User Hotkeys tab — editable rows + click-to-capture picker.
 // ---------------------------------------------------------------------------
-void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
+void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
     auto cfg = component->GetConfig();
     bool dirty = false;
 
@@ -338,14 +340,14 @@ void OsdMenu::Impl::DrawUserHotkeysTab(IOsdInput& input) {
         if (c.valid) {
             const size_t r = static_cast<size_t>(capture_row_);
             if (r < cfg.num_user_settings) {
-                cfg.user_load_str[r] = c.portable_name;
+                cfg.user_load_str[r] = c.key_name;
                 dirty = true;
             }
             capture_row_ = -1;
             capture_combo_pending_ = false;
             input.CancelCapture();
         }
-        if (input.WasPressed("Escape")) {
+        if (input.WasPressed(VK_ESCAPE)) {
             capture_row_ = -1;
             capture_combo_pending_ = false;
             input.CancelCapture();
@@ -529,7 +531,7 @@ void OsdMenu::Impl::DrawTrackingTab() {
         ImGui::TextDisabled("HMD pose persists with 'Save Default Cfg' in the footer.");
     }
 
-    if (ImGui::CollapsingHeader("Controller")) {
+    if (ImGui::CollapsingHeader("XInput (Xbox) Controller")) {
         if (ImGui::Checkbox("Pitch (right stick)", &cfg.pitch_enable)) dirty = true;
         if (ImGui::Checkbox("Yaw (right stick)",   &cfg.yaw_enable))   dirty = true;
         if (ImGui::SliderFloat("Pitch Radius",   &cfg.pitch_radius,    0.0f, 1.0f, "%.3f")) dirty = true;
@@ -634,7 +636,7 @@ void OsdMenu::Impl::DrawSystemTab() {
         // Mirror the OutputMode enum order. Keep in sync with stereo_config.h.
         static const char* modes[] = {
             "SbS", "TaB", "RowInterlaced", "ColInterlaced", "Checkerboard",
-            "LeiaSR", "NvidiaDX9", "VirtualDesktop",
+            "LeiaSR", "NvidiaDX9", "WibbleWobble", "VirtualDesktop",
             "FramePacked720p60", "FramePacked1080p24", "FramePacked1080p60", "FramePacked1080p60CVT",
             "DualDisplay", "DualDisplayFlip",
             "AnaglyphRedCyan", "AnaglyphRedCyanDubois", "AnaglyphRedCyanDeghosted", "AnaglyphRedCyanCompromise",
@@ -650,10 +652,12 @@ void OsdMenu::Impl::DrawSystemTab() {
 
         if (ImGui::InputInt("Render Width",  &cfg.render_width))  dirty = true;
         if (ImGui::InputInt("Render Height", &cfg.render_height)) dirty = true;
-        if (ImGui::Checkbox("Dashboard Enable", &cfg.dash_enable)) dirty = true;
+        if (ImGui::InputFloat("Display Frequency", &cfg.display_frequency, 0.0f, 0.0f, "%.2f")) dirty = true;
+        ImGui::SameLine(); ImGui::TextDisabled("(0.0 = use current)");
     }
 
     if (ImGui::CollapsingHeader("Misc")) {
+        if (ImGui::Checkbox("Dashboard Enable",   &cfg.dash_enable))  dirty = true;
         if (ImGui::Checkbox("Async Reprojection", &cfg.async_enable)) dirty = true;
         if (ImGui::Checkbox("Auto Focus",         &cfg.auto_focus))   dirty = true;
         char buf[512];
@@ -670,8 +674,6 @@ void OsdMenu::Impl::DrawSystemTab() {
             ImGui::Button("Download Latest Profiles")) {
             callbacks.download_latest_profiles();
         }
-        ImGui::SameLine();
-        ImGui::TextDisabled("(github.com/oneup03/VRto3D/releases/latest)");
         if (callbacks.open_config_folder) {
             if (ImGui::Button("Open Profile Folder")) {
                 callbacks.open_config_folder();

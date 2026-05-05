@@ -18,18 +18,16 @@
 #define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
 #include "dx11_renderer.h"
-#include "platform/platform.h"
+#include "platform.h"
 #include "vrto3dlib/key_mappings.h"
 #include "vrto3dlib/json_manager.h"
 #include "osd/osd_renderer.h"
 #include "osd/osd_menu.h"
 #include "vr_recenter.h"
 
-#ifdef _WIN32
-#  include <shellapi.h>
-#  include <urlmon.h>
-#  pragma comment(lib, "urlmon.lib")
-#endif
+#include <shellapi.h>
+#include <urlmon.h>
+#pragma comment(lib, "urlmon.lib")
 #include "vrto3dlib/app_id_mgr.h"
 #include "vrto3dlib/win32_helper.hpp"
 #include "vrmath.h"
@@ -500,15 +498,12 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 }).detach();
             };
             cb.open_config_folder = [this]() {
-#ifdef _WIN32
                 std::string steam = GetSteamInstallPath();
                 if (steam.empty()) return;
                 std::string path = steam + "\\config\\vrto3d";
                 ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-#endif
             };
             cb.download_latest_profiles = [this]() {
-#ifdef _WIN32
                 // Re-entrancy guard — ignore clicks while a previous download
                 // is still in flight.
                 static std::atomic<bool> in_flight{false};
@@ -554,7 +549,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                         return;
                     }
 
-                    toast("Extracting profiles…", std::chrono::milliseconds(30000));
+                    toast("Extracting profiles", std::chrono::milliseconds(30000));
 
                     // Use PowerShell's Expand-Archive to unpack — no extra
                     // dependency, available on every supported Windows.
@@ -594,7 +589,6 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                         toast("Profiles installed to config\\vrto3d");
                     }
                 }).detach();
-#endif
             };
 
             // The headset HWND is created by the presenter on its window

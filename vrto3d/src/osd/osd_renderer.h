@@ -28,7 +28,7 @@ class StereoDisplayComponent;
 namespace vrto3d::osd {
 
 class OsdMenu;
-class IOsdInput;
+class OsdInput;
 struct MenuCallbacks;
 
 // OsdRenderer owns the ImGui context, an offscreen RGBA render target sized
@@ -47,7 +47,7 @@ public:
 
     // Initialize ImGui + composite resources. `eye_w`/`eye_h` are the per-eye
     // dimensions of the SbS frame (i.e. width = full_sbs_width / 2).
-    // `headset_hwnd` is used for mouse coordinate mapping; may be null on Linux.
+    // `headset_hwnd` is used for mouse coordinate mapping.
     bool Init(ID3D11Device* device,
               ID3D11DeviceContext* context,
               UINT eye_w, UINT eye_h,
