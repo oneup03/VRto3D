@@ -12,10 +12,12 @@
 AppId={{A6F4D9E2-7C3B-4A2E-9F1B-1B3E2D7C8F40}
 AppName={#AppName}
 AppVersion=1.0
+AppVerName={#AppName}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
 DefaultDirName={autopf}\VRto3D
+DisableWelcomePage=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=no
@@ -27,6 +29,7 @@ WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 SolidCompression=yes
 Compression=lzma2
+ArchiveExtraction=full
 ShowLanguageDialog=no
 CloseApplications=no
 
@@ -51,7 +54,6 @@ var
 
   SteamPage:     TInputDirWizardPage;
   WWPage:        TInputDirWizardPage;
-  WelcomeInfo:   TNewStaticText;
 
 { ============================================================ }
 { Logging                                                       }
@@ -303,21 +305,27 @@ procedure FetchLatestRelease;
 var
   WinHttp: Variant;
   Body: String;
+  Status: Integer;
 begin
   ReleaseTag := '';
   ReleaseTitle := '';
+  LogLine('FetchLatestRelease: GET releases/latest');
   try
     WinHttp := CreateOleObject('WinHttp.WinHttpRequest.5.1');
-    WinHttp.SetTimeouts(5000, 5000, 5000, 5000);
-    WinHttp.Open('GET', 'https://api.github.com/repos/oneup03/VRto3D/releases/tags/latest', False);
+    WinHttp.SetTimeouts(10000, 10000, 10000, 10000);
+    WinHttp.Open('GET', 'https://api.github.com/repos/oneup03/VRto3D/releases/latest', False);
     WinHttp.SetRequestHeader('User-Agent', 'VRto3D-Installer');
     WinHttp.SetRequestHeader('Accept', 'application/vnd.github+json');
     WinHttp.Send('');
-    if WinHttp.Status = 200 then
+    Status := WinHttp.Status;
+    LogLine('FetchLatestRelease: HTTP ' + IntToStr(Status));
+    if Status = 200 then
     begin
       Body := WinHttp.ResponseText;
+      LogLine('FetchLatestRelease: body length ' + IntToStr(Length(Body)));
       ReleaseTag := ExtractJsonString(Body, 'tag_name');
       ReleaseTitle := ExtractJsonString(Body, 'name');
+      LogLine('FetchLatestRelease: tag="' + ReleaseTag + '" title="' + ReleaseTitle + '"');
     end;
   except
     LogLine('FetchLatestRelease error: ' + GetExceptionMessage);
@@ -405,6 +413,30 @@ begin
   Result := ExtractFilePath(ExpandConstant('{srcexe}'));
 end;
 
+{ In-place text patch on a small ASCII file. }
+procedure PatchTextFile(const Path, Find, Replace: String);
+var
+  Raw: AnsiString;
+  S: String;
+begin
+  if not FileExists(Path) then
+  begin
+    LogLine('PatchTextFile: missing file ' + Path);
+    Exit;
+  end;
+  if not LoadStringFromFile(Path, Raw) then
+  begin
+    LogLine('PatchTextFile: load failed for ' + Path);
+    Exit;
+  end;
+  S := String(Raw);
+  StringChangeEx(S, Find, Replace, True);
+  if SaveStringToFile(Path, AnsiString(S), False) then
+    LogLine('Patched ' + Path)
+  else
+    LogLine('PatchTextFile: save failed for ' + Path);
+end;
+
 { ============================================================ }
 { Download / extract                                            }
 { ============================================================ }
@@ -468,7 +500,7 @@ begin
 
   ExtractDir := ExpandConstant('{tmp}\vrto3d_extract');
   ForceDirectories(ExtractDir);
-  Extract7ZipArchive(ZipPath, ExtractDir, True, nil);
+  ExtractArchive(ZipPath, ExtractDir, '', True, nil);
 
   SrcDir := PathCombine(ExtractDir, 'drivers\vrto3d');
   if not DirExists(SrcDir) then
@@ -618,7 +650,7 @@ end;
 
 procedure TaskInstallWibbleWobble;
 var
-  ZipPath, ExtractDir, SrcDir, DestRoot, DestDir, RegBat, LegacyDriver: String;
+  ZipPath, ExtractDir, SrcDir, DestDir, RegBat, LegacyDriver: String;
   ResultCode: Integer;
 begin
   if SteamVRPath <> '' then
@@ -642,7 +674,7 @@ begin
 
   ExtractDir := ExpandConstant('{tmp}\ww_extract');
   ForceDirectories(ExtractDir);
-  Extract7ZipArchive(ZipPath, ExtractDir, True, nil);
+  ExtractArchive(ZipPath, ExtractDir, '', True, nil);
 
   SrcDir := PathCombine(ExtractDir, 'WibbleWobble');
   if not DirExists(SrcDir) then
@@ -653,10 +685,9 @@ begin
   end;
 
   if WWPage = nil then
-    DestRoot := 'C:\WibbleWobble'
+    DestDir := 'C:\Apps\WibbleWobble'
   else
-    DestRoot := WWPage.Values[0];
-  DestDir := PathCombine(DestRoot, 'WibbleWobble');
+    DestDir := RemoveBackslashUnlessRoot(Trim(WWPage.Values[0]));
 
   if DirExists(DestDir) then
   begin
@@ -671,7 +702,7 @@ begin
     DeleteFolderRecursive(DestDir);
   end;
 
-  ForceDirectories(DestRoot);
+  ForceDirectories(DestDir);
   CopyFolderRecursive(SrcDir, DestDir);
 
   RegBat := PathCombine(DestDir, 'WibbleWobbleClient\Register.bat');
@@ -684,6 +715,12 @@ begin
       mbError, MB_OK);
     Exit;
   end;
+
+  { Strip the interactive prompts so Register.bat and its child PowerShell run unattended. }
+  PatchTextFile(RegBat, #13#10 + 'pause', '');
+  PatchTextFile(RegBat, '"%install_path%\"' + #13#10, '"%install_path%\" /f' + #13#10);
+  PatchTextFile(PathCombine(DestDir, 'WibbleWobbleClient\SetRealtimePrivilege.ps1'),
+                'Read-Host "Press Enter to exit"', '');
 
   LogLine('Running Register.bat (installer is already elevated): ' + RegBat);
   if not Exec(ExpandConstant('{cmd}'),
@@ -780,9 +817,7 @@ end;
 procedure InitializeWizard;
 var
   WelcomeText: String;
-  ParentLabel: TNewStaticText;
 begin
-  ParentLabel := WizardForm.WelcomeLabel2;
   if ReleaseTag <> '' then
     WelcomeText := 'Latest VRto3D release: ' + ReleaseTag
   else
@@ -791,15 +826,11 @@ begin
     WelcomeText := WelcomeText + #13#10 + ReleaseTitle;
   WelcomeText := WelcomeText + LocalZipNote;
 
-  WelcomeInfo := TNewStaticText.Create(WizardForm);
-  WelcomeInfo.Parent := ParentLabel.Parent;
-  WelcomeInfo.AutoSize := False;
-  WelcomeInfo.Left := ParentLabel.Left;
-  WelcomeInfo.Top := ParentLabel.Top + ParentLabel.Height + 16;
-  WelcomeInfo.Width := ParentLabel.Width;
-  WelcomeInfo.Height := 90;
-  WelcomeInfo.WordWrap := True;
-  WelcomeInfo.Caption := WelcomeText;
+  WizardForm.WelcomeLabel2.Caption :=
+    WizardForm.WelcomeLabel2.Caption + #13#10 + #13#10 + WelcomeText;
+
+  if ReleaseTag <> '' then
+    WizardForm.Caption := 'Setup - VRto3D ' + ReleaseTag;
 
   SteamPage := CreateInputDirPage(wpWelcome,
     'SteamVR Location',
@@ -817,17 +848,17 @@ begin
   WWPage := CreateInputDirPage(wpSelectTasks,
     'WibbleWobble Location',
     'Choose where WibbleWobble will be installed.',
-    'A "WibbleWobble" subfolder will be created here.',
+    'WibbleWobble files will be extracted directly into this folder.',
     False, '');
-  WWPage.Add('WibbleWobble parent folder:');
-  WWPage.Values[0] := 'C:\WibbleWobble';
+  WWPage.Add('WibbleWobble install folder:');
+  WWPage.Values[0] := 'C:\Apps\WibbleWobble';
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
   if (WWPage <> nil) and (PageID = WWPage.ID) then
-    Result := not IsTaskSelected('wibblewobble');
+    Result := not WizardIsTaskSelected('wibblewobble');
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -861,18 +892,18 @@ var
   S: String;
 begin
   S := 'SteamVR root:' + NewLine + Space + SteamVRPath + NewLine + NewLine;
-  if IsTaskSelected('install') then
+  if WizardIsTaskSelected('install') then
     S := S + 'Install / update VRto3D driver:' + NewLine +
          Space + SteamVRPath + '\drivers\vrto3d' + NewLine + NewLine;
-  if IsTaskSelected('wibblewobble') and (WWPage <> nil) then
+  if WizardIsTaskSelected('wibblewobble') and (WWPage <> nil) then
     S := S + 'Install WibbleWobble:' + NewLine +
-         Space + WWPage.Values[0] + '\WibbleWobble' + NewLine +
+         Space + WWPage.Values[0] + NewLine +
          Space + '(legacy ' + SteamVRPath + '\drivers\WibbleWobbleVR will be removed if present)' + NewLine + NewLine;
-  if IsTaskSelected('cleanreshade') then
+  if WizardIsTaskSelected('cleanreshade') then
     S := S + 'Remove ReShade from:' + NewLine +
          Space + SteamVRPath + '\bin\win64' + NewLine +
          Space + '(only files identified as ReShade will be deleted)' + NewLine + NewLine;
-  if IsTaskSelected('cleandrivers') then
+  if WizardIsTaskSelected('cleandrivers') then
   begin
     S := S + 'Remove third-party SteamVR drivers under:' + NewLine +
          Space + SteamVRPath + '\drivers' + NewLine +
@@ -881,7 +912,7 @@ begin
       S := S + Space + 'Also delete: ' + SteamPath + '\config\steamvr.vrsettings' + NewLine;
     S := S + NewLine;
   end;
-  if IsTaskSelected('launchsteamvr') then
+  if WizardIsTaskSelected('launchsteamvr') then
     S := S + 'Launch SteamVR after install completes' + NewLine;
   Result := S;
 end;
@@ -892,7 +923,7 @@ begin
 
   WizardForm.StatusLabel.Caption := 'Running selected tasks...';
 
-  if IsTaskSelected('install') then
+  if WizardIsTaskSelected('install') then
   begin
     WizardForm.StatusLabel.Caption := 'Installing VRto3D driver...';
     try
@@ -902,7 +933,7 @@ begin
     end;
   end;
 
-  if IsTaskSelected('wibblewobble') then
+  if WizardIsTaskSelected('wibblewobble') then
   begin
     WizardForm.StatusLabel.Caption := 'Installing WibbleWobble...';
     try
@@ -912,7 +943,7 @@ begin
     end;
   end;
 
-  if IsTaskSelected('cleanreshade') then
+  if WizardIsTaskSelected('cleanreshade') then
   begin
     WizardForm.StatusLabel.Caption := 'Cleaning up legacy ReShade...';
     try
@@ -922,7 +953,7 @@ begin
     end;
   end;
 
-  if IsTaskSelected('cleandrivers') then
+  if WizardIsTaskSelected('cleandrivers') then
   begin
     WizardForm.StatusLabel.Caption := 'Removing third-party SteamVR drivers...';
     try
@@ -937,7 +968,7 @@ procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID = wpFinished then
   begin
-    if IsTaskSelected('launchsteamvr') then
+    if WizardIsTaskSelected('launchsteamvr') then
       TaskLaunchSteamVR;
   end;
 end;
