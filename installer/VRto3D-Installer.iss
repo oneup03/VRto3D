@@ -20,8 +20,7 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=no
 Uninstallable=no
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequired=admin
 OutputDir=Output
 OutputBaseFilename=VRto3D-Installer
 WizardStyle=modern
@@ -469,7 +468,7 @@ begin
 
   ExtractDir := ExpandConstant('{tmp}\vrto3d_extract');
   ForceDirectories(ExtractDir);
-  Extract7ZipArchive(ZipPath, ExtractDir, False, nil);
+  Extract7ZipArchive(ZipPath, ExtractDir, True, nil);
 
   SrcDir := PathCombine(ExtractDir, 'drivers\vrto3d');
   if not DirExists(SrcDir) then
@@ -643,7 +642,7 @@ begin
 
   ExtractDir := ExpandConstant('{tmp}\ww_extract');
   ForceDirectories(ExtractDir);
-  Extract7ZipArchive(ZipPath, ExtractDir, False, nil);
+  Extract7ZipArchive(ZipPath, ExtractDir, True, nil);
 
   SrcDir := PathCombine(ExtractDir, 'WibbleWobble');
   if not DirExists(SrcDir) then
@@ -686,15 +685,15 @@ begin
     Exit;
   end;
 
-  LogLine('Launching elevated Register.bat: ' + RegBat);
-  if not ShellExec('runas', ExpandConstant('{cmd}'),
-                   '/C ""' + RegBat + '""',
-                   ExtractFilePath(RegBat),
-                   SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode) then
+  LogLine('Running Register.bat (installer is already elevated): ' + RegBat);
+  if not Exec(ExpandConstant('{cmd}'),
+              '/C ""' + RegBat + '""',
+              ExtractFilePath(RegBat),
+              SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode) then
   begin
-    LogLine('ShellExec(runas) failed for Register.bat');
+    LogLine('Exec failed for Register.bat');
     MsgBox(
-      'Failed to launch Register.bat with elevation. You can run it manually as administrator from:' #13#10 +
+      'Failed to launch Register.bat. You can run it manually as administrator from:' #13#10 +
       RegBat,
       mbError, MB_OK);
   end
@@ -718,12 +717,22 @@ function InitializeSetup: Boolean;
 var
   Resp: Integer;
   ResultCode: Integer;
+  LogDir: String;
 begin
   Result := True;
-  LogPath := ExpandConstant('{tmp}\VRto3D-Installer.log');
-  LogLine('--- VRto3D Installer started ---');
-
   SteamPath := DetectSteamPath;
+
+  if SteamPath <> '' then
+  begin
+    LogDir := PathCombine(SteamPath, 'logs');
+    ForceDirectories(LogDir);
+    LogPath := PathCombine(LogDir, 'VRto3D-Installer.log');
+  end
+  else
+    LogPath := ExpandConstant('{tmp}\VRto3D-Installer.log');
+
+  LogLine('--- VRto3D Installer started ---');
+  LogLine('Steam path: ' + SteamPath);
   if SteamPath = '' then
   begin
     Resp := MsgBox(
@@ -934,10 +943,6 @@ begin
 end;
 
 procedure DeinitializeSetup;
-var
-  Docs: String;
 begin
-  Docs := ExpandConstant('{userdocs}\VRto3D-Installer.log');
-  if FileExists(LogPath) then
-    FileCopy(LogPath, Docs, False);
+  LogLine('--- VRto3D Installer finished ---');
 end;
