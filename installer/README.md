@@ -40,4 +40,4 @@ Built in CI by `.github/workflows/Build.yml` and uploaded as a separate release 
 
 ## Logs
 
-Every action is appended to `%TEMP%\VRto3D-Installer.log` and copied to `%USERPROFILE%\Documents\VRto3D-Installer.log` when the installer exits. Useful for diagnosing skipped tasks (e.g. "SteamVR path not set, skipping").
+Every action is appended to `<SteamPath>\logs\VRto3D-Installer.log` (e.g. `C:\Program Files (x86)\Steam\logs\VRto3D-Installer.log`). If Steam isn't detected, the log falls back to `%TEMP%\VRto3D-Installer.log`. Useful for diagnosing skipped tasks (e.g. "SteamVR path not set, skipping").
