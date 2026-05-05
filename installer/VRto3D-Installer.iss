@@ -41,9 +41,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "install";              Description: "Install / update VRto3D driver";                                   GroupDescription: "Actions:";              Flags: checkedonce
 Name: "install\release";      Description: "Latest official release";                                          Flags: exclusive
 Name: "install\prerelease";   Description: "Latest pre-release";                                               Flags: exclusive unchecked
-Name: "wibblewobble";         Description: "Install WibbleWobble for Frame Sequential 3D";                    GroupDescription: "Actions:";              Flags: unchecked
+Name: "install\local";        Description: "Local VRto3D.zip (next to installer)";                             Flags: exclusive unchecked
 Name: "cleanreshade";         Description: "Remove legacy ReShade from SteamVR\bin\win64";                    GroupDescription: "Cleanup (recommended):"
 Name: "cleandrivers";         Description: "Remove third-party SteamVR drivers and reset steamvr.vrsettings"; GroupDescription: "Cleanup (recommended):"
+Name: "wibblewobble";         Description: "Install WibbleWobble for Frame Sequential 3D";                    GroupDescription: "Optional:"; Flags: unchecked
+Name: "addleiasrpath";        Description: "Add LeiaSR Platform\bin to PATH (Requires Reboot)";              GroupDescription: "Optional:"; Flags: unchecked
 Name: "launchsteamvr";        Description: "Launch SteamVR when finished";                                    GroupDescription: "Finish:"
 
 [Code]
@@ -423,6 +425,23 @@ begin
   Result := ExtractFilePath(ExpandConstant('{srcexe}'));
 end;
 
+{ Look for a local VRto3D zip next to the installer .exe (either case variant). }
+function FindLocalVRto3DZip: String;
+var
+  Candidate: String;
+begin
+  Result := '';
+  Candidate := PathCombine(InstallerDir, 'vrto3d.zip');
+  if FileExists(Candidate) then
+  begin
+    Result := Candidate;
+    Exit;
+  end;
+  Candidate := PathCombine(InstallerDir, 'VRto3D.zip');
+  if FileExists(Candidate) then
+    Result := Candidate;
+end;
+
 { In-place text patch on a small ASCII file. }
 procedure PatchTextFile(const Path, Find, Replace: String);
 var
@@ -471,11 +490,19 @@ begin
     LogLine('Download failed for ' + FileName + ': ' + GetExceptionMessage);
   end;
 
-  LocalZip := PathCombine(InstallerDir, FileName);
-  if FileExists(LocalZip) then
+  if LowerCase(FileName) = 'vrto3d.zip' then
+    LocalZip := FindLocalVRto3DZip
+  else
+  begin
+    LocalZip := PathCombine(InstallerDir, FileName);
+    if not FileExists(LocalZip) then
+      LocalZip := '';
+  end;
+
+  if LocalZip <> '' then
   begin
     ZipPath := LocalZip;
-    LogLine('Using local ' + FileName + ': ' + LocalZip);
+    LogLine('Using local zip: ' + LocalZip);
     Result := True;
     Exit;
   end;
@@ -489,7 +516,7 @@ end;
 
 procedure TaskInstallVRto3D;
 var
-  ZipPath, ExtractDir, SrcDir, DestDir, ChannelUrl, Channel: String;
+  ZipPath, ExtractDir, SrcDir, DestDir, ChannelUrl, Channel, LocalZip: String;
 begin
   if SteamVRPath = '' then
   begin
@@ -497,27 +524,46 @@ begin
     Exit;
   end;
 
-  if WizardIsTaskSelected('install\prerelease') then
+  if WizardIsTaskSelected('install\local') then
   begin
-    ChannelUrl := '{#VRto3DPreReleaseUrl}';
-    Channel := 'pre-release';
+    Channel := 'local';
+    LocalZip := FindLocalVRto3DZip;
+    if LocalZip = '' then
+    begin
+      LogLine('TaskInstallVRto3D: local zip not found next to installer.');
+      MsgBox(
+        'No vrto3d.zip / VRto3D.zip found next to this installer.' #13#10 #13#10 +
+        'Place the zip next to VRto3D-Installer.exe and re-run, or pick a different channel.',
+        mbError, MB_OK);
+      Exit;
+    end;
+    ZipPath := LocalZip;
+    LogLine('TaskInstallVRto3D: channel=local using ' + ZipPath);
   end
   else
   begin
-    ChannelUrl := '{#VRto3DReleaseUrl}';
-    Channel := 'release';
-  end;
-  LogLine('TaskInstallVRto3D: channel=' + Channel + ' url=' + ChannelUrl);
+    if WizardIsTaskSelected('install\prerelease') then
+    begin
+      ChannelUrl := '{#VRto3DPreReleaseUrl}';
+      Channel := 'pre-release';
+    end
+    else
+    begin
+      ChannelUrl := '{#VRto3DReleaseUrl}';
+      Channel := 'release';
+    end;
+    LogLine('TaskInstallVRto3D: channel=' + Channel + ' url=' + ChannelUrl);
 
-  if not ResolveZip(ChannelUrl, 'vrto3d.zip', ZipPath) then
-  begin
-    MsgBox(
-      'Could not download vrto3d.zip and no local copy was found next to the installer.' #13#10 #13#10 +
-      'Reconnect to the internet, or download vrto3d.zip from:' #13#10 +
-      '  https://github.com/oneup03/VRto3D/releases/latest' #13#10 +
-      'and place it next to this installer, then re-run.',
-      mbError, MB_OK);
-    Exit;
+    if not ResolveZip(ChannelUrl, 'vrto3d.zip', ZipPath) then
+    begin
+      MsgBox(
+        'Could not download vrto3d.zip and no local copy was found next to the installer.' #13#10 #13#10 +
+        'Reconnect to the internet, or download vrto3d.zip from:' #13#10 +
+        '  https://github.com/oneup03/VRto3D/releases/latest' #13#10 +
+        'and place it next to this installer, then re-run.',
+        mbError, MB_OK);
+      Exit;
+    end;
   end;
 
   ExtractDir := ExpandConstant('{tmp}\vrto3d_extract');
@@ -760,6 +806,27 @@ begin
     LogLine('Register.bat exited with code ' + IntToStr(ResultCode));
 end;
 
+procedure TaskAddLeiaSRPath;
+var
+  LeiaPath, CurrentPath: String;
+  ResultCode: Integer;
+begin
+  LeiaPath := 'C:\Program Files\LeiaSR\Platform\bin';
+  CurrentPath := GetEnv('PATH');
+  if Pos(LowerCase(LeiaPath), LowerCase(CurrentPath)) > 0 then
+  begin
+    LogLine('TaskAddLeiaSRPath: ' + LeiaPath + ' already on PATH, skipping.');
+    Exit;
+  end;
+  LogLine('TaskAddLeiaSRPath: prepending ' + LeiaPath + ' to user PATH (reboot required)');
+  if not Exec(ExpandConstant('{cmd}'),
+              '/C setx PATH "' + LeiaPath + ';%PATH%"',
+              '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    LogLine('setx exec failed')
+  else
+    LogLine('setx exited with code ' + IntToStr(ResultCode));
+end;
+
 procedure TaskLaunchSteamVR;
 var
   ResultCode: Integer;
@@ -830,8 +897,8 @@ begin
 
   FetchLatestRelease;
 
-  if FileExists(PathCombine(InstallerDir, 'vrto3d.zip')) then
-    LocalZipNote := #13#10 + 'Local vrto3d.zip detected: ' + PathCombine(InstallerDir, 'vrto3d.zip')
+  if FindLocalVRto3DZip <> '' then
+    LocalZipNote := #13#10 + 'Local zip detected: ' + FindLocalVRto3DZip
   else
     LocalZipNote := '';
 end;
@@ -919,7 +986,9 @@ begin
   begin
     S := S + 'Install / update VRto3D driver:' + NewLine +
          Space + SteamVRPath + '\drivers\vrto3d' + NewLine;
-    if WizardIsTaskSelected('install\prerelease') then
+    if WizardIsTaskSelected('install\local') then
+      S := S + Space + 'Channel: local zip next to installer' + NewLine
+    else if WizardIsTaskSelected('install\prerelease') then
       S := S + Space + 'Channel: pre-release (' + PreReleaseTag + ')' + NewLine
     else
       S := S + Space + 'Channel: official release (' + ReleaseTag + ')' + NewLine;
@@ -942,6 +1011,9 @@ begin
       S := S + Space + 'Also delete: ' + SteamPath + '\config\steamvr.vrsettings' + NewLine;
     S := S + NewLine;
   end;
+  if WizardIsTaskSelected('addleiasrpath') then
+    S := S + 'Add to user PATH (Requires Reboot):' + NewLine +
+         Space + 'C:\Program Files\LeiaSR\Platform\bin' + NewLine + NewLine;
   if WizardIsTaskSelected('launchsteamvr') then
     S := S + 'Launch SteamVR after install completes' + NewLine;
   Result := S;
@@ -990,6 +1062,16 @@ begin
       TaskCleanDrivers;
     except
       LogLine('cleandrivers task error: ' + GetExceptionMessage);
+    end;
+  end;
+
+  if WizardIsTaskSelected('addleiasrpath') then
+  begin
+    WizardForm.StatusLabel.Caption := 'Adding LeiaSR Platform\bin to PATH...';
+    try
+      TaskAddLeiaSRPath;
+    except
+      LogLine('addleiasrpath task error: ' + GetExceptionMessage);
     end;
   end;
 end;
