@@ -9,17 +9,129 @@
 - Windows-only solution, but there are other solutions on Linux like Monado XR.
 
 
-## Compatible 3D Displays
-- 3D TVs & Projectors - use one of `SbS`, `TaB`, or `FramePacked*` [Output Modes](#output-modes)
-- Passive/Interlaced 3D displays - use one of `RowInterlaced` (most common), `ColInterlaced`, or `Checkerboard` [Output Modes](#output-modes)
-- AR Glasses (Rokid, Xreal, Viture, RayNeo) - use the `SbS` [Output Mode](#output-modes). If you don't have a USBC port with DP-Alt mode on your PC, they require a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support. A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended. <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> can be used for 6DoF or 3DoF Head Tracking
-- Lume Pad - use the `SbS` [Output Mode](#output-modes), requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a>
-- SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D) - use the `LeiaSR` [Output Mode](#output-modes). 6DoF head tracking is built into VRto3D
-- 3D Vision/Frame Sequential - use the `WibbleWobble` [Output Mode](#output-modes) (requires the WibbleWobbleClient) or `NvidiaDX9` (unstable)
-- VR headset - use the `VirtualDesktop` [Output Mode](#output-modes), see [additional setup](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop)
-- Dual Display setups (Dual Projector or Monitor) - use the `DualDisplay` or `DualDisplayFlip` [Output Modes](#output-modes)
-- All flavors of Anaglyph 3D
- 
+## Compatible 3D Displays & Output Modes
+
+VRto3D renders one canonical 2W x H side-by-side frame internally and the active Output Mode repacks it for your display. Pick the matching `output_mode` either in `default_config.json` or from the OSD `System` tab (`Ctrl + Home`). Most modes only need the [Regular Installation](#installation); the few that need extra software or display setup are called out below.
+
+Find your display type and use the listed Output Mode(s):
+
+<details markdown="1">
+  <summary markdown="span">3D TVs & Projectors (HDMI SbS / TaB)</summary>
+
+- **Output Modes:** `SbS`, `TaB`, or one of the `FramePacked*` modes
+- Pick `SbS` or `TaB` based on what your TV / projector accepts as a stereo input
+- `FramePacked*` modes target HDMI 1.4 frame-packed 3D - VRto3D will attempt to engage the custom resolution, but it still relies on your display accepting it and allowing you to engage 3D:
+    - `FramePacked720p60` - 1280x1470 @60Hz, 30px gap
+    - `FramePacked1080p24` - 1920x2205 @24Hz, 45px gap (most universal)
+    - `FramePacked1080p60` - 1920x2205 @60Hz, 45px gap, 371.25 MHz pixel clock (HDMI 2.0+)
+    - `FramePacked1080p60CVT` - 1920x2205 @60Hz with CVT reduced blanking, 45px gap, 280.8 MHz pixel clock (HDMI 2.0)
+- For FramePacked, you can also try manually creating one of these Custom Resolutions in Nvidia Control Panel or CRU first:
+    - **frame_packed_720p** - 1280x1470, 60Hz
+        - horizontal: 1280 active; 110 front, 40 sync, 220 back (1650 total)
+        - vertical: 1470 active; 5 front, 5 sync, 20 back (1500 total)
+    - **frame_packed_1080p** - 1920x2205, 24Hz / 60Hz
+        - horizontal: 1920 active; 638 front, 44 sync, 148 back (2750 total)
+        - vertical: 2205 active; 4 front, 5 sync, 36 back (2250 total)
+    - May need to use CVT reduced blank specs for success with 1080 60Hz, but 60Hz is not standard and may not work at all
+        - horizontal: 1920 active; 48 front, 32 sync, 80 back (2080 total)
+        - vertical: 2205 active; 4 front, 5 sync, 36 back (2250 total)
+    - It may be necessary to remove other resolutions with CRU to avoid games changing the resolution. Hopefully running them in windowed mode (required for VRto3D) will prevent issues though
+    - More instructions and discussion are in <a href="https://www.mtbs3d.com/phpbb/viewtopic.php?t=26494" target="_blank" rel="noopener noreferrer">this forum thread</a>
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">Passive / Interlaced 3D Displays</summary>
+
+- **Output Modes:** `RowInterlaced` (most common), `ColInterlaced`, or `Checkerboard`
+- `RowInterlaced` covers the vast majority of passive 3D TVs and monitors
+- `ColInterlaced` is for column-interlaced passive panels
+- `Checkerboard` is for DLP-link 3D projectors and the older Mitsubishi / Samsung DLP 3D TVs (`(x+y)%2` eye selection)
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">AR Glasses (Rokid, Xreal, Viture, RayNeo)</summary>
+
+- **Output Mode:** `SbS` (switch the glasses to Full-SbS mode first)
+- If you don't have a USBC port with DP-Alt mode on your PC, you'll need a <a href="https://docs.google.com/spreadsheets/d/15ub-YF9NU5KQ4r3UsiJlasdu6mH9fk_Xd-C37OcWQgc/edit?usp=sharing" target="_blank" rel="noopener noreferrer">compatible adapter</a> - choose one with SBS and audio support
+- A <a href="https://a.co/d/90y4CaY" target="_blank" rel="noopener noreferrer">USBC extension</a> is also recommended
+- Optional: install <a href="https://vertoxr.com/" target="_blank" rel="noopener noreferrer">VertoXR</a> for 6DoF or 3DoF Head Tracking
+    - Open VertoXR and connect to the AR glasses
+    - Select `Game Mode`, place the glasses on a flat surface looking straight ahead, and click `Start Calibrate`. Calibration may need to be redone if misalignment occurs
+    - Edit `OpenTrack Configuration` and disable `Enable Roll` if needed
+    - `Start` the OpenTrack VertoXR plugin
+    - Open the VRto3D OSD (`Ctrl + Home`) and on the `Tracking` tab tick `Enable OpenTrack` under `OpenTrack`, then set `UDP Port` to match VertoXR's OpenTrack port (restart SteamVR after a port change)
+    - On the OSD `System` tab, set `Launch Script` to `start vertoxr://steamvr` so VertoXR auto-starts with OpenTrack active every time you start SteamVR
+    - Click `Save Default Cfg` in the OSD footer to persist the changes
+    - Use the `Recenter` button in VertoXR as needed
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">Lume Pad, 3DS, Other Wireless 3D Displays</summary>
+
+- **Output Mode:** `SbS`
+- Lume Pad Requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a> to stream the SbS output to the device
+- 3DS Requires <a href="https://github.com/zoeyjodon/moonlight-N3DS/releases" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a> with a custom resolution
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">SR Displays (Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D)</summary>
+
+- **Output Mode:** `LeiaSR` (SR Display Weaver)
+- Install Samsung Odyssey 3D Hub or Acer TrueGame first
+- Check the `Add LeiaSR to PATH` option in the VRto3D installer
+  - Or Manually: Open Windows Run with `Win + R`, Paste this command: `cmd /k setx PATH "C:\Program Files\LeiaSR\Platform\bin;%PATH%"` Exit the terminal and reboot
+- 6DoF head tracking is built in - just enable Open Track in the OSD `Tracking` tab. Tune the LeiaSR head-tracking and filter sliders on the same tab
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">3D Vision / Frame Sequential (Shutter Glasses)</summary>
+
+- **Output Modes:** `WibbleWobble` (preferred) or `NvidiaDX9` (legacy / unstable)
+- `WibbleWobble` requires the WibbleWobbleClient - the VRto3D installer can deploy it. Follow the [WibbleWobbleVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup) (skip the WibbleWobbleVR copy step, but do the rest). If performance is bad, will have eye flickering
+- `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">VR Headset (via Virtual Desktop)</summary>
+
+- **Output Mode:** `VirtualDesktop`
+- Half-height Full-SbS in a 2W x 2H window with black bars. See the [Virtual Desktop setup wiki](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop) for required additional configuration
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">Dual Display Setups (Dual Projector / Dual Monitor)</summary>
+
+- **Output Modes:** `DualDisplay` or `DualDisplayFlip`
+- `DualDisplay` puts the left eye on monitor 1 and the right eye on monitor 2 (starting from `display_index`)
+- `DualDisplayFlip` is the same as `DualDisplay` but the left eye is flipped vertically - useful for mirror-based dual-monitor 3D rigs
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">Anaglyph 3D (Color-Filter Glasses)</summary>
+
+- **Output Modes:** any of the `Anaglyph*` modes - works on any 2D display
+- Red / Cyan glasses: `AnaglyphRedCyan` (simple R \| GB split), `AnaglyphRedCyanDubois` (Dubois - best general-purpose), `AnaglyphRedCyanDeghosted`, `AnaglyphRedCyanCompromise`
+- Green / Magenta glasses: `AnaglyphGreenMagenta` (simple G \| RB split), `AnaglyphGreenMagentaDubois`, `AnaglyphGreenMagentaDeghosted`
+- Blue / Amber (ColorCode 3D) glasses: `AnaglyphBlueAmber`
+
+</details>
+
+<details markdown="1">
+  <summary markdown="span">2D / Mono Display</summary>
+
+- **Output Mode:** `Mono`
+- Single-eye view on any normal 2D display. Toggle `eye_swap` to render the right eye instead of the left
+
+</details>
+
 
 ## Compatible VR Games & Mods
 Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatibility-List) to see if a game has been tested
@@ -64,38 +176,6 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 - If game controls & audio aren't working, use `Alt + Tab` to switch to the game window
 - To quit, exit the game and try to `Alt + Tab` out
     - If the 3D window remains in the foreground, press `Ctrl + F8` to toggle the foregrounding off, and then `Alt + Tab` out
-
-
-## Output Modes
-
-VRto3D renders one canonical 2W x H side-by-side frame internally and the active Output Mode repacks it for your display. Pick the matching `output_mode` either in `default_config.json` or from the OSD `System` tab (`Ctrl + Home`). Most modes only need the [Base Installation](#installation); the few that need extra software or display setup are called out in the Notes column.
-
-| Output Mode             | Compatible Displays                                                                  | Notes                                                                                                                            |
-|-------------------------|--------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
-| `SbS`                   | 3D TVs / projectors in side-by-side mode, AR Glasses (Rokid, Xreal, Viture, RayNeo), Lume Pad | Default. 2W x H native side-by-side. AR glasses must be switched to Full-SbS. Lume Pad needs Sunshine/Gamestream + Moonlight. |
-| `TaB`                   | 3D TVs / projectors in top-and-bottom mode                                           | W x 2H top/bottom output. Loses vertical resolution instead of horizontal.                                                       |
-| `RowInterlaced`         | Passive / interlaced 3D TVs and monitors (most passive sets)                         | Alternating rows.                                                                                                                |
-| `ColInterlaced`         | Column-interlaced passive 3D displays                                                | Alternating columns.                                                                                                             |
-| `Checkerboard`          | DLP-link 3D projectors / Mitsubishi & Samsung DLP 3D TVs                             | `(x+y)%2` eye selection.                                                                                                         |
-| `LeiaSR`                | Acer Spatial Labs / Asus Spatial Vision / Samsung Odyssey 3D                         | SR Display Weaver. Install Samsung Odyssey 3D Hub or Acer TrueGame first. Check the `Add LeiaSR to PATH` option in the installer. Built-in 6DoF head tracking - just enable Open Track in the OSD. Tune the LeiaSR head-tracking and filter sliders on the OSD `Tracking` tab. |
-| `NvidiaDX9`             | Nvidia 3D Vision (legacy)                                                            | Requires [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native). Unstable - may freeze or crash, requiring hard reset. Prefer `WibbleWobble` for new setups.                                                                       |
-| `WibbleWobble`          | 3D Vision and other shutter-glasses / frame-sequential displays                      | Requires the WibbleWobbleClient - the VRto3D installer can deploy it. See the [WibbleWobbleVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup). Skip the WibbleWobbleVR copy, but do the rest. |
-| `VirtualDesktop`        | VR headsets via Virtual Desktop                                                      | Half-height Full-SbS in a 2W x 2H window with black bars. See [Virtual Desktop setup](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop). |
-| `DualDisplay`           | Two contiguous identical monitors                                                    | Left eye on monitor 1, right eye on monitor 2 (starting from `display_index`).                                                   |
-| `DualDisplayFlip`       | Two contiguous identical monitors                                                    | Same as `DualDisplay` but the left eye is flipped vertically (for mirror-based dual-monitor 3D rigs).                            |
-| `FramePacked720p60`     | HDMI 1.4 frame-packed 3D TVs / projectors at 720p                                    | `1280x1470 @60Hz` (30px gap). VRto3D will attempt to engage the resolution, but it still relies on your display accepting it and allowing you to engage 3D. |
-| `FramePacked1080p24`    | HDMI 1.4 frame-packed 3D TVs / projectors at 1080p (most universal)                  | `1920x2205 @24Hz` (45px gap). VRto3D will attempt to engage the resolution, but it still relies on your display accepting it and allowing you to engage 3D. |
-| `FramePacked1080p60`    | HDMI 2.0+ frame-packed 3D TVs / projectors at 1080p                                  | `1920x2205 @60Hz` (45px gap, 371.25 MHz pixel clock). VRto3D will attempt to engage the resolution, but it still relies on your display accepting it and allowing you to engage 3D. |
-| `FramePacked1080p60CVT` | HDMI 2.0 frame-packed 3D TVs / projectors at 1080p with reduced blanking             | `1920x2205 @60Hz` with CVT reduced blanking (45px gap, 280.8 MHz pixel clock). VRto3D will attempt to engage the resolution, but it still relies on your display accepting it and allowing you to engage 3D. |
-| `AnaglyphRedCyan`            | Any display with red/cyan glasses     | Simple R \| GB split.                                                                                       |
-| `AnaglyphRedCyanDubois`      | Any display with red/cyan glasses     | Dubois optimized R/C - best general-purpose anaglyph.                                                       |
-| `AnaglyphRedCyanDeghosted`   | Any display with red/cyan glasses     | Deghosted R/C variant.                                                                                      |
-| `AnaglyphRedCyanCompromise`  | Any display with red/cyan glasses     | Compromise R/C variant.                                                                                     |
-| `AnaglyphGreenMagenta`       | Any display with green/magenta glasses| Simple G \| RB split.                                                                                       |
-| `AnaglyphGreenMagentaDubois` | Any display with green/magenta glasses| Dubois optimized G/M.                                                                                       |
-| `AnaglyphGreenMagentaDeghosted` | Any display with green/magenta glasses | Deghosted G/M variant.                                                                                  |
-| `AnaglyphBlueAmber`          | Any display with blue/amber (ColorCode 3D) glasses | ColorCode-style B/A.                                                                            |
-| `Mono`                       | Any 2D display                        | Single-eye view (left eye by default; toggle `eye_swap` for the right eye).                                 |
 
 
 ## Configuration
