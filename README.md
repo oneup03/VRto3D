@@ -105,7 +105,8 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 ## Base Installation
 
 - Install <a href="https://store.steampowered.com/app/250820/SteamVR/" target="_blank" rel="noopener noreferrer">SteamVR</a>
-- Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder from inside the VRto3D.zip to your `Steam\steamapps\common\SteamVR\drivers` folder
+- **Recommended**: Download [`VRto3D-Installer.exe`](https://github.com/oneup03/VRto3D/releases/latest/download/VRto3D-Installer.exe) from the latest release and run it. The installer auto-detects your Steam library, installs/updates the VRto3D driver, and offers optional cleanup of legacy ReShade and third-party SteamVR drivers. It can also install WibbleWobble and launch SteamVR for you.
+    - **Manual alternative**: Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder from inside the VRto3D.zip to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate the `default_config.json` and you should see a 1080p SbS `Headset Window` upscaled to fullscreen
 - Close SteamVR
 - Edit the `Steam\config\vrto3d\default_config.json` as needed - [see what each setting does](#configuration)
