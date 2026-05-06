@@ -441,6 +441,8 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
                                         platform::MonitorInfo primary,
                                         platform::MonitorInfo secondary)
 {
+    platform::EnablePerMonitorV2DpiAwareness();
+
     window_ = platform::CreatePresentWindow(
         primary,
         (secondary.width > 0 ? &secondary : nullptr),
@@ -692,6 +694,10 @@ void LeiaSrPresenter::FocusThreadLoop()
                 window_->BringToTop();
                 if (lens_hint_) lens_hint_->enable();
                 if (vr_hwnd) {
+                    // WS_EX_LAYERED stays on for the window's lifetime once
+                    // set; only WS_EX_TRANSPARENT is toggled. Tearing down the
+                    // layered surface on a DPI-scaled display can leave it
+                    // recreated at virtualized dimensions.
                     LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
                     SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
                                       ex | WS_EX_LAYERED | WS_EX_TRANSPARENT);
@@ -719,7 +725,7 @@ void LeiaSrPresenter::FocusThreadLoop()
                 if (vr_hwnd) {
                     LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
                     SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
-                                      ex & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT));
+                                      ex & ~WS_EX_TRANSPARENT);
                 }
             }
             was_on_top = want_on_top;

@@ -480,6 +480,8 @@ bool NvStereoDx9Presenter::Init(Dx11Renderer& renderer,
 
 void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::MonitorInfo primary)
 {
+    platform::EnablePerMonitorV2DpiAwareness();
+
     monitor_w_ = primary.width;
     monitor_h_ = primary.height;
 

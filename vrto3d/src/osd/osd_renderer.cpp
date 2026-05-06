@@ -170,16 +170,17 @@ struct OsdRenderer::Impl {
         if (now_visible == prev_menu_visible) return;
         HWND hwnd = DiscoverHwnd();
         if (!hwnd) { prev_menu_visible = now_visible; return; }
+        // Only toggle WS_EX_TRANSPARENT; WS_EX_LAYERED stays set for the
+        // window's lifetime to avoid DWM rebuilding the layered surface.
+        // SWP_FRAMECHANGED is intentionally omitted — it can trigger
+        // WM_DPICHANGED, which would rescale the window on non-100% displays.
         if (now_visible && !styles_overridden) {
             saved_ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-            const LONG_PTR clear = WS_EX_LAYERED | WS_EX_TRANSPARENT;
-            if (saved_ex_style & clear) {
-                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, saved_ex_style & ~clear);
-                // Force the window manager to re-evaluate hit-testing /
-                // click-through routing.
+            if (saved_ex_style & WS_EX_TRANSPARENT) {
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, saved_ex_style & ~WS_EX_TRANSPARENT);
                 SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                             SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                             SWP_NOACTIVATE);
             }
             styles_overridden = true;
             styled_hwnd = hwnd;
@@ -189,7 +190,7 @@ struct OsdRenderer::Impl {
                 SetWindowLongPtrW(target, GWL_EXSTYLE, saved_ex_style);
                 SetWindowPos(target, nullptr, 0, 0, 0, 0,
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                             SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                             SWP_NOACTIVATE);
             }
             styles_overridden = false;
             styled_hwnd = nullptr;
