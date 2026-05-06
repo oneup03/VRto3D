@@ -241,6 +241,15 @@ LRESULT CALLBACK PresentWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         case WM_ERASEBKGND:
             return 1;  // we paint everything via D3D
+
+        // Eat DPI-resize messages. Our swap chain is sized at window creation
+        // and we never want Windows to grow our client rect to a DPI-scaled
+        // suggested size — DefWindowProc would do that on Per-Monitor-V2
+        // windows and the swap chain would be stretched off the visible
+        // monitor.
+        case 0x02E0:  // WM_DPICHANGED
+        case 0x02E4:  // WM_GETDPISCALEDSIZE
+            return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -368,6 +377,18 @@ std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
     LOG() << "Win32: present window created hwnd=" << hwnd
           << " rect=(" << x << "," << y << " " << w << "x" << h << ")";
     return std::make_unique<Win32PresentWindow>(hwnd, w, h);
+}
+
+
+void EnablePerMonitorV2DpiAwareness()
+{
+    using SetThreadDpiAwarenessContextFn = DPI_AWARENESS_CONTEXT (WINAPI*)(DPI_AWARENESS_CONTEXT);
+    if (HMODULE user32 = GetModuleHandleW(L"user32.dll")) {
+        if (auto set_ctx = reinterpret_cast<SetThreadDpiAwarenessContextFn>(
+                GetProcAddress(user32, "SetThreadDpiAwarenessContext"))) {
+            set_ctx(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        }
+    }
 }
 
 

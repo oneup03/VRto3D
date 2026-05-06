@@ -102,6 +102,12 @@ std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
                                                    const MonitorInfo* secondary_for_multi_display,
                                                    const char* title);
 
+// Pin the calling thread to Per-Monitor V2 DPI awareness for its lifetime so
+// any window it creates is V2-aware regardless of vrserver.exe's process-level
+// awareness. Call from each presenter's window thread before CreatePresentWindow.
+// No-op on pre-Win10-1607.
+void EnablePerMonitorV2DpiAwareness();
+
 
 // Lightweight process helpers (for focus-thread's "is the tracked app still running?" check).
 bool IsProcessRunning(uint32_t pid);

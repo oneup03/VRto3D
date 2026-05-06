@@ -32,6 +32,18 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 {
     global_mtx_ = CreateMutex(NULL, TRUE, kVRto3DMutexName);
 
+    // Best-effort process-level DPI elevation. Usually fails because vrserver
+    // already locked its awareness, in which case the per-thread elevation in
+    // LeiaSrPresenter::WindowThreadLoop and the WM_DPICHANGED handler in
+    // PresentWndProc cover us.
+    using SetProcessDpiAwarenessContextFn = BOOL (WINAPI*)(DPI_AWARENESS_CONTEXT);
+    if (HMODULE user32 = GetModuleHandleW(L"user32.dll")) {
+        if (auto set_proc_ctx = reinterpret_cast<SetProcessDpiAwarenessContextFn>(
+                GetProcAddress(user32, "SetProcessDpiAwarenessContext"))) {
+            set_proc_ctx(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        }
+    }
+
     // We need to initialise our driver context to make calls to the server.
     // OpenVR provides a macro to do this for us.
     VR_INIT_SERVER_DRIVER_CONTEXT( pDriverContext );

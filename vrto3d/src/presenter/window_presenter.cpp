@@ -527,6 +527,8 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
                                         platform::MonitorInfo primary,
                                         platform::MonitorInfo secondary)
 {
+    platform::EnablePerMonitorV2DpiAwareness();
+
     window_ = platform::CreatePresentWindow(
         primary,
         (secondary.width > 0 ? &secondary : nullptr),
@@ -800,9 +802,13 @@ void WindowPresenter::FocusThreadLoop()
             } else {
                 window_->ReleaseTopmost();
                 if (vr_hwnd) {
+                    // WS_EX_LAYERED stays on for the window's lifetime; only
+                    // WS_EX_TRANSPARENT toggles. Tearing down the layered
+                    // surface on a DPI-scaled display can leave it recreated
+                    // at virtualized dimensions.
                     LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
                     SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
-                                      ex & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT));
+                                      ex & ~WS_EX_TRANSPARENT);
                 }
             }
             was_on_top = want_on_top;
