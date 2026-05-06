@@ -159,7 +159,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 ## Installation
 
 - Install <a href="https://store.steampowered.com/app/250820/SteamVR/" target="_blank" rel="noopener noreferrer">SteamVR</a>
-- **Recommended**: Download [`VRto3D-Installer.exe`](https://github.com/oneup03/VRto3D/releases/latest/download/VRto3D-Installer.exe) from the latest release and run it. The installer auto-detects your Steam library, installs/updates the VRto3D driver, and offers optional cleanup of legacy ReShade and third-party SteamVR drivers. It can also install WibbleWobble and launch SteamVR for you.
+- **Recommended**: Download [`VRto3D-Installer.exe`](https://github.com/oneup03/VRto3D/releases/download/latest/VRto3D-Installer.exe) from the latest release and run it. The installer auto-detects your Steam library, installs/updates the VRto3D driver, and offers optional cleanup of legacy ReShade and third-party SteamVR drivers. It can also install WibbleWobble and launch SteamVR for you.
     - **Manual alternative**: Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder from inside the VRto3D.zip to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate `default_config.json` and you should see a 1080p SbS `VRto3D` window upscaled to fullscreen
 - Open the OSD menu with `Ctrl + Home` and use the `System` tab to pick `Display Index`, `Output Mode`, and render resolution for your display - see the [Output Modes](#compatible-3d-displays--output-modes) table for which mode to choose
