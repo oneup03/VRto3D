@@ -469,6 +469,14 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                         renderer_->Osd()->SetText("LeiaSR head pose calibrated");
                 }
             };
+            cb.recenter_pose = [this]() {
+                // Raise the flag; XInputUpdateThread picks it up on its next
+                // 8ms tick and ConsumePoseReset zeros pitch/yaw + OT state
+                // and dispatches the deferred OpenVR ResetZeroPose.
+                stereo_display_component_->RequestPoseReset();
+                if (renderer_ && renderer_->Osd())
+                    renderer_->Osd()->SetText("Recentered");
+            };
             cb.toggle_always_on_top = [this]() {
                 is_on_top_  = !is_on_top_;
                 man_on_top_ = is_on_top_.load();
@@ -819,7 +827,7 @@ void MockControllerDeviceDriver::XInputUpdateThread()
         {
             current_pitch = 0.0f;
             current_yaw_quat = HmdQuaternion_Identity;
-            stereo_display_component_->SetReset();
+            ConsumePoseReset();
         }
 
         const float pitch_radians = DEG_TO_RAD(current_pitch);
@@ -1349,6 +1357,33 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
             }
         }).detach();
     }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Consume the pose-reset signal. Zeros the cached OpenTrack
+// attitude/position so stale UDP-derived bias can't bleed into the pose the
+// next time it's consumed (e.g. when use_open_track is toggled back on, or
+// when the user pressed the reset hotkey while OpenTrack was active), then
+// clears the flag and asks SteamVR to take the cleaned HMD pose as the new
+// seated/standing zero. The TriggerOpenVRRecenter dispatch is deferred to a
+// detached thread so PoseUpdateThread has a tick to publish the cleaned pose
+// — otherwise SteamVR's snapshot would bake in the stale bias we just
+// cleared. Single consumption point for both the pose-reset hotkey and the
+// OSD recenter-on-disable toggle paths.
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::ConsumePoseReset()
+{
+    {
+        std::lock_guard<std::mutex> lock(trk_mutex_);
+        open_track_att_ = HmdQuaternion_Identity;
+        open_track_pos_ = { 0.0, 0.0, 0.0 };
+    }
+    stereo_display_component_->SetReset();
+    std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        vrto3d::TriggerOpenVRRecenter();
+    }).detach();
 }
 
 
@@ -1944,6 +1979,16 @@ void StereoDisplayComponent::SetReset()
 {
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_.pose_reset = false;
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Toggle Reset on
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::RequestPoseReset()
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    config_.pose_reset = true;
 }
 
 

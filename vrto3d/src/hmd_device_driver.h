@@ -84,6 +84,10 @@ public:
     void AdjustTrackFilterZoomSmoothing(float delta);
     void AdjustTrackFilterMaxZoom(float delta);
     void SetReset();
+    // Raise the reset flag so the next XInputUpdateThread tick consumes it
+    // (zeros pitch/yaw, OpenTrack state, and clears the flag via
+    // MockControllerDeviceDriver::ConsumePoseReset).
+    void RequestPoseReset();
     void LoadSettings(StereoDisplayDriverConfiguration& config);
     void ResetProjection();
     void Init(uint32_t device_index);
@@ -151,6 +155,14 @@ public:
 
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
     void SetAsync(bool enable);
+
+    // Pose-reset consumption point. Called by XInputUpdateThread (and the
+    // OSD Recenter button path) once the XInput-derived pitch/yaw have been
+    // zeroed: also zeros the cached OpenTrack attitude/position so disabling
+    // OpenTrack — or pressing the pose-reset hotkey while it's on — doesn't
+    // leave stale UDP-derived bias to be re-applied later. Finally clears the
+    // pose_reset flag via StereoDisplayComponent::SetReset().
+    void ConsumePoseReset();
 
     // Accessors used by VirtualDisplayDevice to reach shared config / focus
     // state without duplicating it.
