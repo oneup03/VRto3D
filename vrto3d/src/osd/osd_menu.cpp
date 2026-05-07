@@ -539,6 +539,13 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
     auto cfg = component->GetConfig();
     bool dirty = false;
 
+    // Helper: trigger a recenter on a true→false checkbox transition so
+    // stale pitch / yaw / OpenTrack accumulation doesn't bleed into the
+    // pose the next time tracking is enabled or composed.
+    auto recenter_on_disable = [&](bool was_on, bool now_on) {
+        if (was_on && !now_on && callbacks.recenter_pose) callbacks.recenter_pose();
+    };
+
     if (ImGui::CollapsingHeader("HMD Pose", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::DragFloat("Origin X",      &cfg.hmd_x,      0.01f, -10.0f, 10.0f, "%.2f")) dirty = true;
         if (ImGui::DragFloat("Origin Y (fwd)",&cfg.hmd_y,      0.01f, -10.0f, 10.0f, "%.2f")) dirty = true;
@@ -548,8 +555,16 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
     }
 
     if (ImGui::CollapsingHeader("XInput (Xbox) Controller")) {
-        if (ImGui::Checkbox("Pitch (right stick)", &cfg.pitch_enable)) dirty = true;
-        if (ImGui::Checkbox("Yaw (right stick)",   &cfg.yaw_enable))   dirty = true;
+        const bool was_pitch = cfg.pitch_enable;
+        if (ImGui::Checkbox("Pitch (right stick)", &cfg.pitch_enable)) {
+            dirty = true;
+            recenter_on_disable(was_pitch, cfg.pitch_enable);
+        }
+        const bool was_yaw = cfg.yaw_enable;
+        if (ImGui::Checkbox("Yaw (right stick)",   &cfg.yaw_enable))   {
+            dirty = true;
+            recenter_on_disable(was_yaw, cfg.yaw_enable);
+        }
         if (ImGui::SliderFloat("Pitch Radius",   &cfg.pitch_radius,    0.0f, 1.0f, "%.3f")) dirty = true;
         if (ImGui::SliderFloat("Sensitivity",    &cfg.ctrl_sensitivity,0.0f, 5.0f, "%.2f")) dirty = true;
         if (ImGui::SliderFloat("Stick Deadzone", &cfg.ctrl_deadzone,   0.0f, 1.0f, "%.3f")) dirty = true;
@@ -623,6 +638,7 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
     }
 
     if (ImGui::CollapsingHeader("OpenTrack")) {
+        const bool was_open_track = cfg.use_open_track;
         if (ImGui::Checkbox("Enable OpenTrack",  &cfg.use_open_track)) {
             // LeiaSR's pose pipeline depends on the AccelaHamilton track
             // filter being active; the startup loader auto-enables it for
@@ -633,6 +649,7 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
                 cfg.use_track_filter = true;
             }
             dirty = true;
+            recenter_on_disable(was_open_track, cfg.use_open_track);
         }
         if (ImGui::InputInt("UDP Port",          &cfg.open_track_port)) dirty = true;
         ImGui::SameLine(); ImGui::TextDisabled("(Requires Restart)");

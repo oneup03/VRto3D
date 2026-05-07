@@ -45,6 +45,11 @@ struct MenuCallbacks {
     // Snap the current LeiaSR head pose as the neutral zero. No-op when the
     // active presenter isn't LeiaSR.
     std::function<void()> calibrate_leiasr_head;
+    // Mirror of the pose-reset hotkey: zero XInput pitch/yaw, clear the
+    // cached OpenTrack pose, then ask SteamVR to take the cleaned HMD pose
+    // as the new seated/standing zero. Surfaced as the Recenter button at
+    // the top of the Tracking tab.
+    std::function<void()> recenter_pose;
     // Toggle "always on top" (mirrors Ctrl+F8).
     std::function<void()> toggle_always_on_top;
     // True iff the headset window is currently always-on-top.
