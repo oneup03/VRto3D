@@ -222,7 +222,6 @@ void WibbleWobblePresenter::FocusThreadLoop() {
     // Plus: feed the discovered HWND to Dx11Renderer so the OSD's cursor
     // coord mapping works against the actual lightfield surface rect.
     HWND ww_hwnd = nullptr;
-    bool was_on_top = false;
     int  reassert_counter = 0;
     uint32_t last_auto_focused_pid = 0;
 
@@ -234,7 +233,6 @@ void WibbleWobblePresenter::FocusThreadLoop() {
                 LOG() << "WibbleWobblePresenter: located WibbleWobble window hwnd=0x"
                       << std::hex << reinterpret_cast<uintptr_t>(ww_hwnd);
             }
-            was_on_top = false;
         }
 
         if (ww_hwnd) {
@@ -261,14 +259,23 @@ void WibbleWobblePresenter::FocusThreadLoop() {
                 want_on_top = true;
             }
 
-            if (want_on_top != was_on_top) {
+            // Reconcile against the window's actual WS_EX_TOPMOST style each
+            // tick — the WibbleWobbleClient sets topmost on its window
+            // asynchronously after creation, so a transition-based check
+            // (was_on_top vs want_on_top) misses the WW client flipping the
+            // bit on us. Reading the live style means we always converge.
+            const LONG_PTR ex = GetWindowLongPtrW(ww_hwnd, GWL_EXSTYLE);
+            const bool actually_topmost = (ex & WS_EX_TOPMOST) != 0;
+
+            if (actually_topmost != want_on_top) {
                 SetWindowPos(ww_hwnd,
                              want_on_top ? HWND_TOPMOST : HWND_NOTOPMOST,
                              0, 0, 0, 0,
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-                was_on_top = want_on_top;
                 reassert_counter = 0;
             } else if (want_on_top && ++reassert_counter >= 20) {
+                // Periodic re-assert pushes us above any newer topmost
+                // windows (dialogs, dashboards) inside the topmost group.
                 reassert_counter = 0;
                 SetWindowPos(ww_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
