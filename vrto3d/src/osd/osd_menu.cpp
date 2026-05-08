@@ -221,9 +221,9 @@ void OsdMenu::Impl::DrawStereoTab() {
     }
     ImGui::SameLine(); ImGui::TextDisabled("(Ctrl+F5 / Ctrl+F6)");
 
-    float fov = component->GetFoV();
-    if (ImGui::SliderFloat("FoV", &fov, 40.0f, 120.0f, "%.1f")) {
-        component->AdjustFoV(fov);
+    int fov = static_cast<int>(component->GetFoV() + 0.5f);
+    if (ImGui::SliderInt("FoV", &fov, 30, 120)) {
+        component->AdjustFoV(static_cast<float>(fov));
     }
 
     if (callbacks.get_auto_depth_enabled && callbacks.set_auto_depth_enabled) {
@@ -772,9 +772,13 @@ void OsdMenu::Impl::DrawSystemTab() {
                             &cfg.disable_hotkeys)) {
             dirty = true;
         }
-        if (callbacks.download_latest_profiles &&
-            ImGui::Button("Download Latest Profiles")) {
-            callbacks.download_latest_profiles();
+        if (callbacks.download_latest_profiles) {
+            if (ImGui::Button("Download Latest Profiles")) {
+                callbacks.download_latest_profiles();
+            }
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 0.85f, 0.2f, 1),
+                               "Warning: overwrites existing profiles");
         }
         if (callbacks.open_config_folder) {
             if (ImGui::Button("Open Profile Folder")) {
