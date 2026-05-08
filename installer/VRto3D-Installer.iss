@@ -45,7 +45,7 @@ Name: "install\local";        Description: "Local VRto3D.zip (next to installer)
 Name: "cleanreshade";         Description: "Remove legacy ReShade from SteamVR\bin\win64";                    GroupDescription: "Cleanup (recommended):"
 Name: "cleandrivers";         Description: "Remove third-party SteamVR drivers and reset steamvr.vrsettings"; GroupDescription: "Cleanup (recommended):"
 Name: "wibblewobble";         Description: "Install WibbleWobble for Frame Sequential 3D";                    GroupDescription: "Optional:"; Flags: unchecked
-Name: "addleiasrpath";        Description: "Add LeiaSR Platform\bin to PATH (Requires Reboot)";              GroupDescription: "Optional:"; Flags: unchecked
+Name: "addleiasrpath";        Description: "Fix LeiaSR library loading (requires restart)";                  GroupDescription: "Optional:"; Flags: unchecked
 Name: "launchsteamvr";        Description: "Launch SteamVR when finished";                                    GroupDescription: "Finish:"
 
 [Code]
@@ -1012,8 +1012,8 @@ begin
     S := S + NewLine;
   end;
   if WizardIsTaskSelected('addleiasrpath') then
-    S := S + 'Add to user PATH (Requires Reboot):' + NewLine +
-         Space + 'C:\Program Files\LeiaSR\Platform\bin' + NewLine + NewLine;
+    S := S + 'Fix LeiaSR library loading (requires restart):' + NewLine +
+         Space + 'Add C:\Program Files\LeiaSR\Platform\bin to user PATH' + NewLine + NewLine;
   if WizardIsTaskSelected('launchsteamvr') then
     S := S + 'Launch SteamVR after install completes' + NewLine;
   Result := S;
