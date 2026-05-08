@@ -121,7 +121,7 @@ void MyDeviceProvider::RunFrame()
             auto lowerAppName = appName;
             std::transform(lowerAppName.begin(), lowerAppName.end(), lowerAppName.begin(), ::tolower);
             
-            if (Skip_Processes.find(appName) == Skip_Processes.end() &&
+            if (Skip_Processes.find(lowerAppName) == Skip_Processes.end() &&
                 lowerAppName.find("exe") != std::string::npos)
             {
                 app_name_ = appName;
