@@ -44,7 +44,7 @@ Find your display type and use the listed Output Mode(s):
 <details markdown="1">
   <summary markdown="span">Passive / Interlaced 3D Displays</summary>
 
-- **Output Modes:** `RowInterlaced` (most common), `ColInterlaced`, or `Checkerboard`
+- **Output Modes:** `RowInterlaced`, `ColInterlaced`, or `Checkerboard`
 - `RowInterlaced` covers the vast majority of passive 3D TVs and monitors
 - `ColInterlaced` is for column-interlaced passive panels
 - `Checkerboard` is for DLP-link 3D projectors and the older Mitsubishi / Samsung DLP 3D TVs (`(x+y)%2` eye selection)
@@ -83,9 +83,9 @@ Find your display type and use the listed Output Mode(s):
 
 - **Output Mode:** `LeiaSR` (SR Display Weaver)
 - Install Samsung Odyssey 3D Hub or Acer TrueGame first
-- Check the `Add LeiaSR to PATH` option in the VRto3D installer
+- Check the `Fix LeiaSR library loading (requires restart)` option in the VRto3D installer
   - Or Manually: Open Windows Run with `Win + R`, Paste this command: `cmd /k setx PATH "C:\Program Files\LeiaSR\Platform\bin;%PATH%"` Exit the terminal and reboot
-- 6DoF head tracking is built in - just enable Open Track in the OSD `Tracking` tab. Tune the LeiaSR head-tracking and filter sliders on the same tab
+- 6DoF head tracking is built in - just enable Open Track in the OSD `Tracking` tab. Tune the LeiaSR head-tracking and track filter sliders on the same tab
 
 </details>
 
@@ -93,8 +93,8 @@ Find your display type and use the listed Output Mode(s):
   <summary markdown="span">3D Vision / Frame Sequential (Shutter Glasses)</summary>
 
 - **Output Modes:** `WibbleWobble` (preferred) or `NvidiaDX9` (legacy / unstable)
-- `WibbleWobble` requires the WibbleWobbleClient - the VRto3D installer can deploy it. Follow the [WibbleWobble SteamVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup) (skip the `VR Config` step, but do the rest). When framerate is low, you will have eye flickering
-- `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset
+- `WibbleWobble` requires the WibbleWobbleClient - select `Install WibbleWobble for Frame Sequential 3D` in the VRto3D Installer. Follow the [WibbleWobble SteamVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup) (skip the `VR Config` step, but do the rest). When framerate is low, you will have eye flickering
+- `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset. Should be more stable on single-display setups.
 - For both of these modes, it is recommended to start SteamVR before starting the game, as they change monitor modes, which might break games
 
 </details>
@@ -111,7 +111,8 @@ Find your display type and use the listed Output Mode(s):
   <summary markdown="span">Dual Display Setups (Dual Projector / Dual Monitor)</summary>
 
 - **Output Modes:** `DualDisplay` or `DualDisplayFlip`
-- `DualDisplay` puts the left eye on monitor 1 and the right eye on monitor 2 (starting from `display_index`)
+- This assumes you have two displays with the same resolution that are aligned vertically. You can also use Nvidia Surround
+- `DualDisplay` puts the left eye on the `display_index` and the right eye on the display to the right of it
 - `DualDisplayFlip` is the same as `DualDisplay` but the left eye is flipped vertically - useful for mirror-based dual-monitor 3D rigs
 
 </details>
