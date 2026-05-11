@@ -6,7 +6,7 @@
 #define AppURL        "https://github.com/oneup03/VRto3D"
 #define VRto3DReleaseUrl    "https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip"
 #define VRto3DPreReleaseUrl "https://github.com/oneup03/VRto3D/releases/download/latest/VRto3D.zip"
-#define WWZipUrl      "https://github.com/user-attachments/files/27381158/WibbleWobbleBeta7.zip"
+#define WWZipUrl      "https://github.com/user-attachments/files/27577149/WibbleWobbleBeta7.2.zip"
 #define SteamVRAppId  "250820"
 
 [Setup]
@@ -731,10 +731,10 @@ begin
     end;
   end;
 
-  if not ResolveZip('{#WWZipUrl}', 'WibbleWobbleBeta7.zip', ZipPath) then
+  if not ResolveZip('{#WWZipUrl}', 'WibbleWobbleBeta7.2.zip', ZipPath) then
   begin
     MsgBox(
-      'Could not download WibbleWobbleBeta7.zip and no local copy was found next to the installer.' #13#10 #13#10 +
+      'Could not download WibbleWobbleBeta7.2.zip and no local copy was found next to the installer.' #13#10 #13#10 +
       'Skipping WibbleWobble install. The legacy WibbleWobbleVR driver (if present) was still removed.',
       mbInformation, MB_OK);
     Exit;
