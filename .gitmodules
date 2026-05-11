@@ -17,3 +17,6 @@
 	path = external/imgui
 	url = https://github.com/ocornut/imgui.git
 	branch = master
+[submodule "external/LeiaSR"]
+	path = external/LeiaSR
+	url = https://github.com/oneup03/LeiaSR64.git
