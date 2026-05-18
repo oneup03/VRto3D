@@ -762,6 +762,7 @@ void OsdMenu::Impl::DrawSystemTab() {
         if (ImGui::Checkbox("Dashboard Enable",   &cfg.dash_enable))  dirty = true;
         if (ImGui::Checkbox("Async Reprojection", &cfg.async_enable)) dirty = true;
         if (ImGui::Checkbox("Auto Focus",         &cfg.auto_focus))   dirty = true;
+        if (ImGui::Checkbox("Auto Exit SteamVR",  &cfg.auto_exit)) dirty = true;
         char buf[512];
         std::snprintf(buf, sizeof(buf), "%s", cfg.launch_script.c_str());
         if (ImGui::InputText("Launch Script", buf, sizeof(buf))) {

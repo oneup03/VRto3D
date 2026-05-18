@@ -16,13 +16,72 @@
  */
 
 #define WIN32_LEAN_AND_MEAN
-#include <algorithm> 
+#include <algorithm>
+#include <thread>
 #include <Windows.h>
 #include <psapi.h>
 #include <tchar.h>
 
 #include "vrto3dlib/win32_helper.hpp"
 #include "device_provider.h"
+
+namespace {
+
+// Ask SteamVR to shut down. `taskkill /IM vrmonitor.exe` (no /F) posts
+// WM_CLOSE — the same graceful path the SteamVR tray's "Exit VR" takes.
+// vrserver follows once its UI host exits. /F is a safety net if the
+// polite close is ignored; harmless if vrmonitor is already gone.
+void DoSteamVRShutdown()
+{
+    auto run = [](std::string cmdline, const std::string& tag) {
+        STARTUPINFOA si{};
+        si.cb = sizeof(si);
+        si.dwFlags = STARTF_USESHOWWINDOW;
+        si.wShowWindow = SW_HIDE;
+        PROCESS_INFORMATION pi{};
+        std::vector<char> mut(cmdline.begin(), cmdline.end());
+        mut.push_back('\0');
+        BOOL ok = CreateProcessA(nullptr, mut.data(), nullptr, nullptr,
+                                  FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
+                                  &si, &pi);
+        if (!ok) {
+            LOG() << "auto_exit: " << tag.c_str()
+                  << " CreateProcess failed (err=" << GetLastError() << ")";
+            return;
+        }
+        WaitForSingleObject(pi.hProcess, 10000);
+        DWORD exit_code = 0;
+        GetExitCodeProcess(pi.hProcess, &exit_code);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        LOG() << "auto_exit: " << tag.c_str() << " exit=" << exit_code;
+    };
+
+    run("taskkill /IM vrmonitor.exe", "taskkill vrmonitor");
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    run("taskkill /F /IM vrmonitor.exe", "taskkill /F vrmonitor");
+}
+
+// Sample the PID a few seconds after disconnect — most games take a moment
+// to fully exit after their SteamVR connection drops. If the PID is gone,
+// shut SteamVR down; otherwise the user still has the app running and we
+// leave SteamVR alone.
+void ScheduleAutoExitCheck(uint32_t pid)
+{
+    std::thread([pid]() {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        if (IsProcessRunning(pid)) {
+            LOG() << "auto_exit: pid " << pid
+                  << " still running after 5s, leaving SteamVR alone";
+            return;
+        }
+        LOG() << "auto_exit: pid " << pid
+              << " is gone, shutting down SteamVR";
+        DoSteamVRShutdown();
+    }).detach();
+}
+
+}  // namespace
 
 //-----------------------------------------------------------------------------
 // Purpose: This is called by vrserver after it receives a pointer back from HmdDriverFactory.
@@ -137,10 +196,22 @@ void MyDeviceProvider::RunFrame()
                  !app_name_.empty() && vrEvent.data.process.pid == app_pid_ && wait_count_ == 0)
         {
             LOG() << "Unload = " << app_name_.c_str();
+            // Sample auto_exit + pid before LoadSettings / app_pid_ reset.
+            // The actual liveness check + shutdown happens on a delayed
+            // thread (ScheduleAutoExitCheck) so the game has time to fully
+            // terminate after the SteamVR disconnect fires.
+            const bool want_auto_exit =
+                my_hmd_device_->GetStereoComponent() &&
+                my_hmd_device_->GetStereoComponent()->GetConfig().auto_exit;
+            const uint32_t pid_snapshot = app_pid_;
             my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessDisconnected);
             app_name_ = "";
             app_pid_ = 0;
             wait_count_ = 500;
+            if (want_auto_exit) {
+                LOG() << "auto_exit: scheduling check for pid " << pid_snapshot;
+                ScheduleAutoExitCheck(pid_snapshot);
+            }
         }
     }
 }
