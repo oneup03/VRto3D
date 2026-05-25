@@ -26,6 +26,9 @@
 #include <cstring>
 
 #include "vrto3dlib/debug_log.hpp"
+#include "vrto3dlib/win32_helper.hpp"
+
+#include <thread>
 
 namespace platform {
 
@@ -235,8 +238,17 @@ LRESULT CALLBACK PresentWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
         case WM_CLOSE: {
-            // Mark requested-close via window prop.
+            // Alt+F4 (or the window's "X" button) on our present window
+            // routes here. If a game is currently connected to SteamVR,
+            // post WM_CLOSE to it first so SteamVR doesn't prompt "an
+            // application is using SteamVR, are you sure?" — then wait for
+            // the game process to exit before tearing SteamVR down. With
+            // nothing connected, exits SteamVR immediately. Detached so
+            // the poll loops inside the helper don't stall this pump.
+            const uint32_t pid = g_current_app_pid.load();
+            LOG() << "VRto3D window WM_CLOSE — pid=" << pid;
             SetPropW(hwnd, L"vrto3d_close", reinterpret_cast<HANDLE>(1));
+            std::thread([pid]{ RequestSteamVRShutdownWithApp(pid); }).detach();
             return 0;
         }
         case WM_ERASEBKGND:

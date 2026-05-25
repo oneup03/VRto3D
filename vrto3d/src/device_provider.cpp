@@ -27,41 +27,6 @@
 
 namespace {
 
-// Ask SteamVR to shut down. `taskkill /IM vrmonitor.exe` (no /F) posts
-// WM_CLOSE — the same graceful path the SteamVR tray's "Exit VR" takes.
-// vrserver follows once its UI host exits. /F is a safety net if the
-// polite close is ignored; harmless if vrmonitor is already gone.
-void DoSteamVRShutdown()
-{
-    auto run = [](std::string cmdline, const std::string& tag) {
-        STARTUPINFOA si{};
-        si.cb = sizeof(si);
-        si.dwFlags = STARTF_USESHOWWINDOW;
-        si.wShowWindow = SW_HIDE;
-        PROCESS_INFORMATION pi{};
-        std::vector<char> mut(cmdline.begin(), cmdline.end());
-        mut.push_back('\0');
-        BOOL ok = CreateProcessA(nullptr, mut.data(), nullptr, nullptr,
-                                  FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
-                                  &si, &pi);
-        if (!ok) {
-            LOG() << "auto_exit: " << tag.c_str()
-                  << " CreateProcess failed (err=" << GetLastError() << ")";
-            return;
-        }
-        WaitForSingleObject(pi.hProcess, 10000);
-        DWORD exit_code = 0;
-        GetExitCodeProcess(pi.hProcess, &exit_code);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        LOG() << "auto_exit: " << tag.c_str() << " exit=" << exit_code;
-    };
-
-    run("taskkill /IM vrmonitor.exe", "taskkill vrmonitor");
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    run("taskkill /F /IM vrmonitor.exe", "taskkill /F vrmonitor");
-}
-
 // Sample the PID a few seconds after disconnect — most games take a moment
 // to fully exit after their SteamVR connection drops. If the PID is gone,
 // shut SteamVR down; otherwise the user still has the app running and we
@@ -77,7 +42,7 @@ void ScheduleAutoExitCheck(uint32_t pid)
         }
         LOG() << "auto_exit: pid " << pid
               << " is gone, shutting down SteamVR";
-        DoSteamVRShutdown();
+        RequestSteamVRShutdown();
     }).detach();
 }
 
@@ -185,6 +150,7 @@ void MyDeviceProvider::RunFrame()
             {
                 app_name_ = appName;
                 app_pid_ = vrEvent.data.process.pid;
+                g_current_app_pid.store(app_pid_);
                 LOG() << "AppName = " << app_name_.c_str();
                 my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessConnected);
                 wait_count_ = 500;
@@ -207,6 +173,7 @@ void MyDeviceProvider::RunFrame()
             my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessDisconnected);
             app_name_ = "";
             app_pid_ = 0;
+            g_current_app_pid.store(0);
             wait_count_ = 500;
             if (want_auto_exit) {
                 LOG() << "auto_exit: scheduling check for pid " << pid_snapshot;
