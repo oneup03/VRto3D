@@ -25,8 +25,11 @@
 #include <chrono>
 #include <string>
 
+#include <thread>
+
 #include "dx11_renderer.h"
 #include "vrto3dlib/debug_log.hpp"
+#include "vrto3dlib/win32_helper.hpp"
 
 using Microsoft::WRL::ComPtr;
 
@@ -78,6 +81,59 @@ std::wstring ReadInstallPathFromRegistry() {
         path.push_back(L'\\');
     }
     return path;
+}
+
+// ---------------------------------------------------------------------------
+// WibbleWobble window WndProc subclass — intercepts WM_CLOSE (Alt+F4 or X
+// button on the WW window) and triggers the same SteamVR shutdown path that
+// our own present window uses. WM_CLOSE is passed through to the original
+// WndProc so the WW window still closes normally.
+//
+// Single static slot — there's only ever one WW window at a time, and only
+// one WibbleWobblePresenter instance.
+// ---------------------------------------------------------------------------
+WNDPROC g_ww_orig_wndproc = nullptr;
+HWND    g_ww_subclassed_hwnd = nullptr;
+
+LRESULT CALLBACK WwSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_CLOSE) {
+        // If a game is connected, ask it to close first so SteamVR doesn't
+        // prompt — same flow as our own present window's WM_CLOSE.
+        const uint32_t pid = g_current_app_pid.load();
+        LOG() << "WibbleWobble window WM_CLOSE — pid=" << pid;
+        std::thread([pid]{ RequestSteamVRShutdownWithApp(pid); }).detach();
+    }
+    WNDPROC orig = g_ww_orig_wndproc;
+    if (!orig) return DefWindowProcW(hwnd, msg, wp, lp);
+    return CallWindowProcW(orig, hwnd, msg, wp, lp);
+}
+
+void InstallWwSubclass(HWND hwnd) {
+    if (!hwnd || g_ww_subclassed_hwnd == hwnd) return;
+    g_ww_orig_wndproc = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC,
+                          reinterpret_cast<LONG_PTR>(WwSubclassProc)));
+    if (g_ww_orig_wndproc) {
+        g_ww_subclassed_hwnd = hwnd;
+        LOG() << "WibbleWobblePresenter: installed WM_CLOSE subclass on WW window";
+    } else {
+        LOG() << "WibbleWobblePresenter: SetWindowLongPtrW failed GLE="
+              << GetLastError() << " — Alt+F4 on WW window won't quit SteamVR";
+    }
+}
+
+void RemoveWwSubclass() {
+    if (!g_ww_subclassed_hwnd || !g_ww_orig_wndproc) return;
+    // Only restore if our proc is still in place — the WW client could have
+    // re-subclassed us, in which case touching it would corrupt the chain.
+    auto current = reinterpret_cast<WNDPROC>(
+        GetWindowLongPtrW(g_ww_subclassed_hwnd, GWLP_WNDPROC));
+    if (current == WwSubclassProc && IsWindow(g_ww_subclassed_hwnd)) {
+        SetWindowLongPtrW(g_ww_subclassed_hwnd, GWLP_WNDPROC,
+                          reinterpret_cast<LONG_PTR>(g_ww_orig_wndproc));
+    }
+    g_ww_subclassed_hwnd = nullptr;
+    g_ww_orig_wndproc = nullptr;
 }
 
 }  // namespace
@@ -232,6 +288,7 @@ void WibbleWobblePresenter::FocusThreadLoop() {
                 renderer_->SetOsdHeadsetHwnd(ww_hwnd);
                 LOG() << "WibbleWobblePresenter: located WibbleWobble window hwnd=0x"
                       << std::hex << reinterpret_cast<uintptr_t>(ww_hwnd);
+                InstallWwSubclass(ww_hwnd);
             }
         }
 
@@ -359,6 +416,7 @@ void WibbleWobblePresenter::Shutdown() {
     if (pump_thread_.joinable())  pump_thread_.join();
     if (focus_thread_.joinable()) focus_thread_.join();
     if (renderer_) renderer_->SetOsdHeadsetHwnd(nullptr);
+    RemoveWwSubclass();
 
     if (impl_) {
         if (impl_->client_handle && impl_->pDestroy) {
