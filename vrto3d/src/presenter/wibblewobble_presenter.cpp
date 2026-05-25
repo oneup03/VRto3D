@@ -280,6 +280,7 @@ void WibbleWobblePresenter::FocusThreadLoop() {
     HWND ww_hwnd = nullptr;
     int  reassert_counter = 0;
     uint32_t last_auto_focused_pid = 0;
+    bool was_on_top = false;
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!ww_hwnd || !IsWindow(ww_hwnd)) {
@@ -322,7 +323,8 @@ void WibbleWobblePresenter::FocusThreadLoop() {
             // (was_on_top vs want_on_top) misses the WW client flipping the
             // bit on us. Reading the live style means we always converge.
             const LONG_PTR ex = GetWindowLongPtrW(ww_hwnd, GWL_EXSTYLE);
-            const bool actually_topmost = (ex & WS_EX_TOPMOST) != 0;
+            const bool actually_topmost     = (ex & WS_EX_TOPMOST)     != 0;
+            const bool actually_transparent = (ex & WS_EX_TRANSPARENT) != 0;
 
             if (actually_topmost != want_on_top) {
                 SetWindowPos(ww_hwnd,
@@ -337,6 +339,44 @@ void WibbleWobblePresenter::FocusThreadLoop() {
                 SetWindowPos(ww_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                              SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
             }
+
+            // Mirror WindowPresenter / LeiaSrPresenter input semantics:
+            // click-through while on-top (so input falls through to the
+            // game window underneath) and solid otherwise. The WW client
+            // window ships with WS_EX_TRANSPARENT set, so we have to
+            // clear it on first contact to make it solid by default.
+            // Like the topmost reconciliation above, this runs every tick
+            // to override any async re-asserts from the WW client.
+            if (actually_transparent != want_on_top) {
+                SetWindowLongPtrW(ww_hwnd, GWL_EXSTYLE,
+                                  want_on_top
+                                      ? (ex |  WS_EX_TRANSPARENT)
+                                      : (ex & ~WS_EX_TRANSPARENT));
+            }
+
+            // On the rising edge of want_on_top, spawn the same 15-iteration
+            // ForceFocus watchdog that WindowPresenter / LeiaSrPresenter use.
+            // The WW window being WS_EX_TOPMOST isn't enough — the game also
+            // needs to be the foreground window so keyboard/mouse input
+            // reaches it. When SteamVR is launched by the game the game
+            // window may not exist yet at the first transition, and
+            // SteamVR's bring-up (vrmonitor / status window) can grab
+            // foreground after the first attempt — re-asserting once per
+            // second for 15s handles both cases.
+            if (want_on_top && !was_on_top && pid != 0) {
+                std::thread([pid]() {
+                    for (int i = 0; i < 15; ++i) {
+                        HWND game_hwnd = GetHWNDFromPID(pid);
+                        if (game_hwnd && GetForegroundWindow() != game_hwnd) {
+                            ForceFocus(game_hwnd,
+                                       GetCurrentThreadId(),
+                                       GetWindowThreadProcessId(game_hwnd, nullptr));
+                        }
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                }).detach();
+            }
+            was_on_top = want_on_top;
         }
 
         Sleep(50);
