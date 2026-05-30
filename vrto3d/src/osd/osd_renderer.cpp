@@ -292,8 +292,12 @@ bool OsdRenderer::Init(ID3D11Device* device,
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-    // Scale fonts up for HMD eye resolution. Default 13px is too small at 1080p.
-    io.FontGlobalScale = (std::max)(1.0f, static_cast<float>(eye_h) / 720.0f);
+    // Scale fonts to the eye height. Default 13px is too small at 1080p,
+    // and conversely 1.0 is too large when the SbS surface is itself small
+    // (low render-res or non-standard output modes) — let the scale shrink
+    // below 1.0 down to a 0.75 floor so the menu still fits the window.
+    io.FontGlobalScale = std::clamp(static_cast<float>(eye_h) / 720.0f,
+                                     0.75f, 3.0f);
     io.DisplaySize = ImVec2(static_cast<float>(eye_w), static_cast<float>(eye_h));
 
     if (!ImGui_ImplDX11_Init(device, context)) {
@@ -327,7 +331,8 @@ void OsdRenderer::OnResize(UINT eye_w, UINT eye_h) {
     if (s.imgui_ctx) {
         ImGui::SetCurrentContext(s.imgui_ctx);
         ImGui::GetIO().DisplaySize = ImVec2(static_cast<float>(eye_w), static_cast<float>(eye_h));
-        ImGui::GetIO().FontGlobalScale = (std::max)(1.0f, static_cast<float>(eye_h) / 720.0f);
+        ImGui::GetIO().FontGlobalScale =
+            std::clamp(static_cast<float>(eye_h) / 720.0f, 0.75f, 3.0f);
     }
 }
 
@@ -489,16 +494,29 @@ void OsdRenderer::RenderFrame(ID3D11Texture2D* out_sbs) {
                                            ImGuiWindowFlags_NoInputs |
                                            ImGuiWindowFlags_NoBackground;
             const float pad_x = 50.0f;
+            const float pad_y = 30.0f;
             // Toast text is 2x the menu font so it's legible at headset
             // distance even when the menu chrome is hidden.
             const float toast_scale = 2.0f;
-            const float line_h = ImGui::GetFontSize() * toast_scale;
-            ImGui::SetNextWindowPos(ImVec2(pad_x, static_cast<float>(s.eye_h) - line_h - 30.0f));
+            // Bound the toast width so long messages wrap instead of running
+            // past the right edge of the eye, and anchor by the bottom-left
+            // pivot so wrapped multi-line toasts grow upward into the screen
+            // rather than falling off the bottom.
+            const float max_w = (std::max)(64.0f, static_cast<float>(s.eye_w) - 2.0f * pad_x);
+            ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
+                                                 ImVec2(max_w, FLT_MAX));
+            ImGui::SetNextWindowPos(
+                ImVec2(pad_x, static_cast<float>(s.eye_h) - pad_y),
+                ImGuiCond_Always,
+                ImVec2(0.0f, 1.0f));
             if (ImGui::Begin("##vrto3d_toast", nullptr, flags)) {
                 ImGui::SetWindowFontScale(toast_scale);
+                // Wrap at the window's content-region right edge.
+                ImGui::PushTextWrapPos(0.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
                 ImGui::TextUnformatted(msg.c_str());
                 ImGui::PopStyleColor();
+                ImGui::PopTextWrapPos();
             }
             ImGui::End();
         }
