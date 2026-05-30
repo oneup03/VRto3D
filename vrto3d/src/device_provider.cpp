@@ -84,19 +84,9 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
         return vr::VRInitError_Driver_Unknown;
     }
 
-    // Register the SAME object with the SAME serial number as a DisplayRedirect
-    // device too. This is how SteamVR wires IVRVirtualDisplay::Present — the
-    // compositor only routes composited frames through the DR class when it
-    // finds a DR sibling that shares the active HMD's serial. Two separate
-    // objects with different serials do not work (see WibbleWobbleVR for the
-    // working reference pattern).
-    // SteamVR returns false here because the serial is already registered,
-    // but the DisplayRedirect class binding still takes effect — frames will
-    // route through IVRVirtualDisplay::Present. Don't treat the false return
-    // as an error.
-    vr::VRServerDriverHost()->TrackedDeviceAdded(kSerialNumber,
-                                                 vr::TrackedDeviceClass_DisplayRedirect,
-                                                 my_hmd_device_.get());
+    // No DisplayRedirect sibling needed in direct mode — game eye textures
+    // arrive via IVRDriverDirectModeComponent::SubmitLayer / Present rather
+    // than IVRVirtualDisplay::Present.
 
     return vr::VRInitError_None;
 }

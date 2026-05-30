@@ -206,6 +206,7 @@
     <ClCompile Include="src\hmd_driver_factory.cpp" />
     <ClCompile Include="src\auto_depth.cpp" />
     <ClCompile Include="src\dx11_renderer.cpp" />
+    <ClCompile Include="src\direct_mode_component.cpp" />
     <ClCompile Include="src\screenshot.cpp" />
     <ClCompile Include="src\vr_recenter.cpp" />
     <ClCompile Include="src\platform_win32.cpp" />
@@ -230,6 +231,7 @@
     <ClInclude Include="src\focus_context.h" />
     <ClInclude Include="src\auto_depth.h" />
     <ClInclude Include="src\dx11_renderer.h" />
+    <ClInclude Include="src\direct_mode_component.h" />
     <ClInclude Include="src\screenshot.h" />
     <ClInclude Include="src\vr_recenter.h" />
     <ClInclude Include="src\platform.h" />
