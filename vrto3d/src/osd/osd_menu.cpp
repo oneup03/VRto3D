@@ -16,6 +16,7 @@
  */
 #include "osd/osd_menu.h"
 
+#include <algorithm>
 #include <atomic>
 #include <string>
 #include <utility>
@@ -62,6 +63,11 @@ struct OsdMenu::Impl {
     // 0 = none, 1 = pose_reset, 2 = ctrl_toggle.
     int  tracking_capture_target_ = 0;
     bool tracking_capture_combo_  = false;
+
+    // Footer height measured on the previous frame, used to reserve the
+    // pinned bottom strip on the current frame. Zero on the first frame —
+    // BuildUI falls back to a one-row estimate until we have a real number.
+    float footer_h_measured = 0.0f;
 };
 
 OsdMenu::OsdMenu(StereoDisplayComponent* component, MenuCallbacks callbacks)
@@ -90,8 +96,22 @@ void OsdMenu::BuildUI(OsdInput& input) {
     auto& s = *impl_;
     if (!s.visible.load() || !s.component) return;
 
-    ImGui::SetNextWindowSizeConstraints(ImVec2(720, 520), ImVec2(FLT_MAX, FLT_MAX));
-    ImGui::SetNextWindowPos(ImVec2(80, 80), ImGuiCond_FirstUseEver);
+    // Adapt the menu bounds to the OSD surface — eye_w/eye_h can be smaller
+    // than the comfortable 720x520 target on low-res sources, in which case
+    // the window would otherwise spill past the SbS half and get clipped.
+    // (std::clamp)/(std::max) paren-wraps suppress windows.h min/max macros.
+    const ImVec2 disp = ImGui::GetIO().DisplaySize;
+    const float kPad = 20.0f;
+    const float kFloorW = 320.0f;
+    const float kFloorH = 240.0f;
+    const float min_w = (std::clamp)(disp.x - 2 * kPad, kFloorW, 720.0f);
+    const float min_h = (std::clamp)(disp.y - 2 * kPad, kFloorH, 520.0f);
+    const float max_w = (std::max)(disp.x, min_w);
+    const float max_h = (std::max)(disp.y, min_h);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(min_w, min_h), ImVec2(max_w, max_h));
+    const float init_x = (std::clamp)(80.0f, 0.0f, (std::max)(0.0f, disp.x - min_w));
+    const float init_y = (std::clamp)(80.0f, 0.0f, (std::max)(0.0f, disp.y - min_h));
+    ImGui::SetNextWindowPos(ImVec2(init_x, init_y), ImGuiCond_FirstUseEver);
 
     const std::string title = "VRto3D " + s.version + "###vrto3d_menu";
     ImGuiWindowFlags wflags = ImGuiWindowFlags_NoCollapse;
@@ -105,15 +125,45 @@ void OsdMenu::BuildUI(OsdInput& input) {
 
     s.DrawTitleChrome();
 
+    // Reserve space at the bottom so the footer action buttons stay pinned
+    // when a tab's content overflows the viewport. The footer wraps across
+    // 1–2 rows depending on window width, so use the previous frame's
+    // measured height and fall back to a one-row estimate on the first
+    // frame. Snap to a small minimum so the very first frame doesn't render
+    // with the child eating the entire window.
+    const float footer_h_fallback = ImGui::GetFrameHeightWithSpacing() +
+                                     ImGui::GetStyle().ItemSpacing.y;
+    const float footer_h = s.footer_h_measured > 0.0f
+                            ? s.footer_h_measured
+                            : footer_h_fallback;
+
     if (ImGui::BeginTabBar("##vrto3d_tabs")) {
-        if (ImGui::BeginTabItem("Stereo"))       { s.DrawStereoTab();         ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("User Hotkeys")) { s.DrawUserHotkeysTab(input); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Tracking"))     { s.DrawTrackingTab(input);  ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("System"))       { s.DrawSystemTab();        ImGui::EndTabItem(); }
+        auto draw_tab = [&](const char* label, const char* child_id, auto&& fn) {
+            if (ImGui::BeginTabItem(label)) {
+                // Per-tab child so scroll state is preserved independently
+                // and the tab content can scroll without dragging the tab
+                // bar or footer along with it.
+                ImGui::BeginChild(child_id, ImVec2(0, -footer_h), false,
+                                   ImGuiWindowFlags_HorizontalScrollbar);
+                fn();
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+            }
+        };
+        draw_tab("Stereo",       "##scroll_stereo", [&]{ s.DrawStereoTab(); });
+        draw_tab("User Hotkeys", "##scroll_user",   [&]{ s.DrawUserHotkeysTab(input); });
+        draw_tab("Tracking",     "##scroll_track",  [&]{ s.DrawTrackingTab(input); });
+        draw_tab("System",       "##scroll_system", [&]{ s.DrawSystemTab(); });
         ImGui::EndTabBar();
     }
 
+    // Measure the footer's actual rendered height for next frame's
+    // reservation. Captured around DrawFooter so it includes the leading
+    // separator and any wrap-induced extra rows.
+    const float footer_top = ImGui::GetCursorPosY();
     s.DrawFooter();
+    s.footer_h_measured = ImGui::GetCursorPosY() - footer_top;
+
     ImGui::End();
 }
 
@@ -145,10 +195,21 @@ void OsdMenu::Impl::DrawTitleChrome() {
     ImGui::TextUnformatted(app_name.empty() ? "(default)" : app_name.c_str());
 
     if (callbacks.always_on_top && callbacks.toggle_always_on_top) {
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 200.0f);
+        const char* label = "Always on Top";
+        const float box_w = ImGui::CalcTextSize(label).x +
+                             ImGui::GetFrameHeight() +
+                             ImGui::GetStyle().ItemInnerSpacing.x;
+        const float target_x = ImGui::GetWindowWidth() - box_w -
+                                ImGui::GetStyle().WindowPadding.x;
+        // Only right-align when there's room past the current cursor. On
+        // narrow windows the profile name plus checkbox overlap; let the
+        // checkbox fall to its own line in that case.
+        if (target_x > ImGui::GetCursorPosX()) {
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(target_x);
+        }
         bool on = callbacks.always_on_top();
-        if (ImGui::Checkbox("Always on Top", &on)) {
+        if (ImGui::Checkbox(label, &on)) {
             callbacks.toggle_always_on_top();
         }
     }
@@ -161,36 +222,54 @@ void OsdMenu::Impl::DrawTitleChrome() {
 void OsdMenu::Impl::DrawFooter() {
     ImGui::Separator();
 
-    const float btn_h = 0.0f;  // default height
     const bool have_app = !app_name.empty();
+    bool first = true;
+
+    // SameLine before the next button only when it actually fits in the
+    // remaining content region — otherwise let the default vertical layout
+    // wrap it to a new row. Without this, narrow OSD surfaces clip the
+    // rightmost footer buttons.
+    auto try_sameline = [&](const char* next_label) {
+        if (first) { first = false; return; }
+        const float btn_w = ImGui::CalcTextSize(next_label).x +
+                             ImGui::GetStyle().FramePadding.x * 2.0f;
+        const float needed = btn_w + ImGui::GetStyle().ItemSpacing.x;
+        if (ImGui::GetContentRegionAvail().x >= needed) {
+            ImGui::SameLine();
+        }
+    };
 
     if (callbacks.save_game_profile) {
-        ImGui::BeginDisabled(!have_app);
         const std::string label = have_app
             ? "Save " + app_name + "_config.json"
             : std::string("Save Game Cfg");
-        if (ImGui::Button(label.c_str(), ImVec2(0, btn_h))) {
+        try_sameline(label.c_str());
+        ImGui::BeginDisabled(!have_app);
+        if (ImGui::Button(label.c_str())) {
             callbacks.save_game_profile("Saved " + app_name + "_config.json");
         }
         ImGui::EndDisabled();
-        ImGui::SameLine();
     }
     if (callbacks.save_default_profile) {
-        if (ImGui::Button("Save Default Cfg")) {
+        const char* label = "Save Default Cfg";
+        try_sameline(label);
+        if (ImGui::Button(label)) {
             callbacks.save_default_profile("Saved default_config.json");
         }
-        ImGui::SameLine();
     }
     if (callbacks.reload_game_profile) {
+        const char* label = "Reload Game Cfg";
+        try_sameline(label);
         ImGui::BeginDisabled(!have_app);
-        if (ImGui::Button("Reload Game Cfg")) {
+        if (ImGui::Button(label)) {
             callbacks.reload_game_profile("Reloaded " + app_name + "_config.json");
         }
         ImGui::EndDisabled();
-        ImGui::SameLine();
     }
     if (callbacks.reload_default_profile) {
-        if (ImGui::Button("Reload Default Cfg")) {
+        const char* label = "Reload Default Cfg";
+        try_sameline(label);
+        if (ImGui::Button(label)) {
             callbacks.reload_default_profile("Reloaded default_config.json");
         }
     }
