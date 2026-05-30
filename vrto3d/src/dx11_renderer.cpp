@@ -113,16 +113,22 @@ void Dx11Renderer::EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming)
 }
 
 
-void Dx11Renderer::OnPresent(const vr::PresentInfo_t& info)
+void Dx11Renderer::OnDirectModeFrame(ID3D11Texture2D* left_eye_texture,
+                                     ID3D11Texture2D* right_eye_texture,
+                                     vr::SharedTextureHandle_t sync_handle)
 {
     if (!initialized_) return;
 
-    // Stash the handle and wake the window thread. Do NOT touch the immediate
-    // context here — the window thread owns it (and the swapchain).
+    // Stash the pair + sync handle and wake the window thread. Do NOT touch
+    // the immediate context here — the window thread owns it (and the
+    // swapchain). AddRef the textures so they outlive a racing
+    // DestroySwapTextureSet between stash and drain.
     {
         std::lock_guard<std::mutex> lk(pending_mutex_);
-        pending_handle_ = info.backbufferTextureHandle;
-        pending_ready_  = true;
+        pending_left_        = left_eye_texture;
+        pending_right_       = right_eye_texture;
+        pending_sync_handle_ = sync_handle;
+        pending_ready_       = true;
     }
     pending_cv_.notify_one();
 }
@@ -132,58 +138,106 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
 {
     if (!initialized_ || !device_) return false;
 
-    vr::SharedTextureHandle_t handle = 0;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> left;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> right;
+    vr::SharedTextureHandle_t               sync_handle = 0;
     {
         std::unique_lock<std::mutex> lk(pending_mutex_);
         pending_cv_.wait_for(lk, std::chrono::milliseconds(timeout_ms),
                              [&]{ return pending_ready_; });
         if (!pending_ready_) return false;
-        handle = pending_handle_;
+        left  = std::move(pending_left_);
+        right = std::move(pending_right_);
+        sync_handle = pending_sync_handle_;
+        pending_sync_handle_ = 0;
         pending_ready_ = false;
     }
-    if (!handle) return false;
+    if (!left || !right) return false;
 
-    // Look up cached opened texture for this handle, or open + cache.
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> incoming;
-    auto it = shared_texture_cache_.find(handle);
-    if (it != shared_texture_cache_.end()) {
-        incoming = it->second;
-    } else {
-        if (!platform::ImportSharedTexture(device_.Get(), handle, incoming) || !incoming) {
-            return false;
+    // Open + cache the sync texture (SteamVR reuses it across frames).
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> sync_tex;
+    if (sync_handle) {
+        auto it = shared_texture_cache_.find(sync_handle);
+        if (it != shared_texture_cache_.end()) {
+            sync_tex = it->second;
+        } else if (platform::ImportSharedTexture(device_.Get(), sync_handle, sync_tex) && sync_tex) {
+            shared_texture_cache_.emplace(sync_handle, sync_tex);
+            LOG() << "Dx11Renderer: cached sync texture handle=0x" << std::hex << sync_handle;
         }
-        shared_texture_cache_.emplace(handle, incoming);
-        LOG() << "Dx11Renderer: cached new shared texture handle=0x" << std::hex << handle
-              << " (cache size=" << std::dec << shared_texture_cache_.size() << ")";
     }
 
-    D3D11_TEXTURE2D_DESC incoming_desc{};
-    incoming->GetDesc(&incoming_desc);
-    EnsureOutputTexture(incoming_desc);
+    // Size out_sbs_ from the left eye texture's dimensions (eye_w x eye_h,
+    // doubled in width for SbS).
+    D3D11_TEXTURE2D_DESC eye_desc{};
+    left->GetDesc(&eye_desc);
+    D3D11_TEXTURE2D_DESC sbs_desc = eye_desc;
+    sbs_desc.Width = eye_desc.Width * 2;
+    // Strip the sRGB type from the SbS scratch buffer. Apps typically allocate
+    // their eye textures as *_UNORM_SRGB so their RTV auto-encodes on write —
+    // by the time we receive them the bytes are already sRGB-encoded. If we
+    // keep the SbS texture sRGB-typed, the presenter's SRV would auto-decode
+    // to linear and then write those linear values to the non-sRGB swap
+    // chain, producing a gamma-2.2-dark image. UNORM keeps the SRV
+    // pass-through behavior the existing presenter expects. CopySubresourceRegion
+    // is allowed across formats inside the same TYPELESS family.
+    auto strip_srgb = [](DXGI_FORMAT f) -> DXGI_FORMAT {
+        switch (f) {
+            case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:   return DXGI_FORMAT_R8G8B8A8_UNORM;
+            case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:   return DXGI_FORMAT_B8G8R8A8_UNORM;
+            case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:   return DXGI_FORMAT_B8G8R8X8_UNORM;
+            case DXGI_FORMAT_BC1_UNORM_SRGB:        return DXGI_FORMAT_BC1_UNORM;
+            case DXGI_FORMAT_BC2_UNORM_SRGB:        return DXGI_FORMAT_BC2_UNORM;
+            case DXGI_FORMAT_BC3_UNORM_SRGB:        return DXGI_FORMAT_BC3_UNORM;
+            case DXGI_FORMAT_BC7_UNORM_SRGB:        return DXGI_FORMAT_BC7_UNORM;
+            default: return f;
+        }
+    };
+    sbs_desc.Format = strip_srgb(eye_desc.Format);
+    EnsureOutputTexture(sbs_desc);
     if (!out_sbs_) return false;
 
-    // Acquire keyed-mutex sync before reading. The compositor releases with
-    // key 0 after writing each frame; we acquire with key 0, copy, and release
-    // back. Without this the compositor's GPU work may not be flushed before
-    // our CopyResource reads, leading to all-zero (black) reads.
+    // Acquire keyed-mutex sync on the SteamVR sync texture before reading the
+    // per-eye textures. The compositor releases with key 0 after submitting
+    // each frame's GPU work; we acquire with key 0 to ensure that work has
+    // landed, then release after our copies. Without this the per-eye copies
+    // can race the compositor's renders and produce stale/black reads.
     Microsoft::WRL::ComPtr<IDXGIKeyedMutex> mutex;
-    HRESULT mhr = incoming.As(&mutex);
-    bool   acquired = false;
-    if (SUCCEEDED(mhr) && mutex) {
-        HRESULT ahr = mutex->AcquireSync(0, 10);
-        if (ahr == S_OK) {
-            acquired = true;
-        } else {
-            static std::atomic<bool> logged_acq{false};
-            bool e = false;
-            if (logged_acq.compare_exchange_strong(e, true)) {
-                LOG() << "Dx11Renderer: AcquireSync(0,10) returned 0x" << std::hex << ahr
-                      << " — proceeding without sync (may yield stale/black reads)";
+    bool acquired = false;
+    if (sync_tex) {
+        HRESULT mhr = sync_tex.As(&mutex);
+        if (SUCCEEDED(mhr) && mutex) {
+            HRESULT ahr = mutex->AcquireSync(0, 10);
+            if (ahr == S_OK) {
+                acquired = true;
+            } else {
+                static std::atomic<bool> logged_acq{false};
+                bool e = false;
+                if (logged_acq.compare_exchange_strong(e, true)) {
+                    LOG() << "Dx11Renderer: AcquireSync(0,10) returned 0x" << std::hex << ahr
+                          << " — proceeding without sync (may yield stale/black reads)";
+                }
             }
         }
     }
 
-    context_->CopyResource(out_sbs_.Get(), incoming.Get());
+    // Copy the left eye into the left half of out_sbs_, right into the right.
+    // Full-extent copies; we ignore VRTextureBounds_t for v1 (games typically
+    // submit bounds {0,0,1,1}).
+    D3D11_BOX src_full{};
+    src_full.left   = 0;
+    src_full.top    = 0;
+    src_full.front  = 0;
+    src_full.right  = eye_desc.Width;
+    src_full.bottom = eye_desc.Height;
+    src_full.back   = 1;
+    context_->CopySubresourceRegion(out_sbs_.Get(),    0,
+                                    0, 0, 0,
+                                    left.Get(),        0,
+                                    &src_full);
+    context_->CopySubresourceRegion(out_sbs_.Get(),    0,
+                                    eye_desc.Width, 0, 0,
+                                    right.Get(),       0,
+                                    &src_full);
 
     if (acquired) {
         mutex->ReleaseSync(0);

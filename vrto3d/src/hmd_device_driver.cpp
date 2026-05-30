@@ -17,6 +17,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
+#include "direct_mode_component.h"
 #include "dx11_renderer.h"
 #include "platform.h"
 #include "vrto3dlib/key_mappings.h"
@@ -129,21 +130,9 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 //-----------------------------------------------------------------------------
 vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 {
-    // SteamVR calls Activate twice — once for TrackedDeviceClass_HMD and once
-    // for TrackedDeviceClass_DisplayRedirect (same object, same serial). On the
-    // second call we only need to stash the index and set the minimal property
-    // the compositor reads on the DR device.
-    if (is_active_.exchange(true)) {
-        display_redirect_index_ = unObjectId;
-        auto* vrp = vr::VRProperties();
-        vr::PropertyContainerHandle_t dr_container = vrp->TrackedDeviceToPropertyContainer(unObjectId);
-        LUID luid = platform::PrimaryAdapterLuid();
-        uint64_t luid_u64 = (static_cast<uint64_t>(luid.HighPart) << 32) | luid.LowPart;
-        vrp->SetUint64Property(dr_container, vr::Prop_GraphicsAdapterLuid_Uint64, luid_u64);
-        LOG() << "MockControllerDeviceDriver::Activate (DisplayRedirect) object_id=" << unObjectId;
-        return vr::VRInitError_None;
-    }
-
+    // Direct mode registers the HMD once; no sibling DisplayRedirect object
+    // needs activating.
+    is_active_.store(true);
     device_index_ = unObjectId;
     is_on_top_ = false;
     man_on_top_ = false;
@@ -219,7 +208,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
     vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
     vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
-    vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, true);
 
     // Direct-mode virtual-display integration: advertise our adapter LUID so
     // the compositor composites on the same GPU the renderer will use, and
@@ -376,17 +365,18 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         LOG() << "Failed to set thread priority: " << GetLastError();
     }
 
-    // Direct-mode virtual-display: build the DX11 renderer + selected presenter
-    // on the same adapter LUID we advertised on the HMD's property container.
-    // The compositor will hand composited frames to our Present() override once
-    // it has the matching DisplayRedirect registration (same serial, class 5).
+    // Direct mode: build the DX11 renderer + selected presenter on the same
+    // adapter LUID we advertised on the HMD's property container, then stand
+    // up the IVRDriverDirectModeComponent that hands per-eye game textures
+    // through to the renderer.
     {
         LUID luid = platform::PrimaryAdapterLuid();
         renderer_ = std::make_unique<Dx11Renderer>();
         if (!renderer_->Init(luid, stereo_display_component_->GetConfig(), GetFocusContext())) {
-            LOG() << "Dx11Renderer::Init failed; IVRVirtualDisplay path will be inactive";
+            LOG() << "Dx11Renderer::Init failed; direct-mode path will be inactive";
             renderer_.reset();
         } else {
+            direct_mode_component_ = std::make_unique<DirectModeComponent>(renderer_.get());
             // Wire OSD callbacks. The OsdRenderer is lazy-initialized on the
             // window thread when the first frame arrives.
             vrto3d::osd::MenuCallbacks cb;
@@ -621,50 +611,12 @@ void *MockControllerDeviceDriver::GetComponent( const char *pchComponentNameAndV
     {
         return stereo_display_component_.get();
     }
-    if ( strcmp( pchComponentNameAndVersion, vr::IVRVirtualDisplay_Version ) == 0 )
+    if ( strcmp( pchComponentNameAndVersion, vr::IVRDriverDirectModeComponent_Version ) == 0 )
     {
-        return static_cast<vr::IVRVirtualDisplay*>(this);
+        return direct_mode_component_.get();
     }
 
     return nullptr;
-}
-
-//-----------------------------------------------------------------------------
-// IVRVirtualDisplay — compositor hands us the composited SBS backbuffer each
-// frame. We forward to Dx11Renderer which copies to our internal texture and
-// invokes the selected presenter.
-//-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::Present( const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize )
-{
-    if ( !pPresentInfo || unPresentInfoSize < sizeof(vr::PresentInfo_t) || !renderer_ ) return;
-
-    static std::atomic<bool> first_present{ true };
-    bool expected = true;
-    if ( first_present.compare_exchange_strong(expected, false) ) {
-        LOG() << "IVRVirtualDisplay::Present first call, handle=0x"
-              << std::hex << pPresentInfo->backbufferTextureHandle
-              << " frameId=" << std::dec << pPresentInfo->nFrameId;
-    }
-    renderer_->OnPresent(*pPresentInfo);
-}
-
-void MockControllerDeviceDriver::WaitForPresent()
-{
-    // v1: return immediately. Pacing comes from VsyncEvent fired by Dx11Renderer
-    // after the presenter returns.
-}
-
-bool MockControllerDeviceDriver::GetTimeSinceLastVsync( float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter )
-{
-    if ( !renderer_ ) return false;
-
-    LARGE_INTEGER f{}, q{};
-    if ( !QueryPerformanceFrequency(&f) || !QueryPerformanceCounter(&q) ) return false;
-    const double now  = static_cast<double>(q.QuadPart) / static_cast<double>(f.QuadPart);
-    const double last = renderer_->LastVsyncQpcSec();
-    if ( pfSecondsSinceLastVsync ) *pfSecondsSinceLastVsync = static_cast<float>(now - last);
-    if ( pulFrameCounter ) *pulFrameCounter = renderer_->FrameCounter();
-    return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -1431,6 +1383,10 @@ void MockControllerDeviceDriver::Deactivate()
         if (track_thread_.joinable()) {
             track_thread_.join();
         }
+        // Direct-mode component holds a raw Dx11Renderer*; destroy it first
+        // so any in-flight SubmitLayer/Present can no longer reach the
+        // renderer before the renderer is torn down.
+        direct_mode_component_.reset();
         if (renderer_) {
             renderer_->Shutdown();
             renderer_.reset();
@@ -1439,7 +1395,6 @@ void MockControllerDeviceDriver::Deactivate()
 
     // unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
     device_index_ = vr::k_unTrackedDeviceIndexInvalid;
-    display_redirect_index_ = vr::k_unTrackedDeviceIndexInvalid;
 }
 
 MockControllerDeviceDriver::~MockControllerDeviceDriver() = default;
@@ -1489,10 +1444,8 @@ void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, 
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Canonical SbS output for the compositor. Each eye occupies half
-// the horizontal extent of the 2W x H backbuffer; the presenter repacks into
-// TaB / interlaced / anaglyph / etc. downstream based on cfg.output_mode.
-// eye_swap is applied in the presenter, not here.
+// Canonical SbS eye viewport. Never called by the compositor in direct mode
+// but kept functional to satisfy the IVRDisplayComponent pure-virtual contract.
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pnX, uint32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
@@ -1541,7 +1494,9 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Don't distort any coordinates for Stereo3D
+// IVRDisplayComponent distortion / window-bounds members. Never called by the
+// compositor in direct mode but kept functional to satisfy the interface's
+// pure-virtual contract.
 //-----------------------------------------------------------------------------
 vr::DistortionCoordinates_t StereoDisplayComponent::ComputeDistortion( vr::EVREye eEye, float fU, float fV )
 {
@@ -1557,13 +1512,9 @@ vr::DistortionCoordinates_t StereoDisplayComponent::ComputeDistortion( vr::EVREy
 bool StereoDisplayComponent::ComputeInverseDistortion(vr::HmdVector2_t* pResult, vr::EVREye eEye, uint32_t unChannel, float fU, float fV)
 { return false; }
 
-//-----------------------------------------------------------------------------
-// Purpose: To inform vrcompositor what the window bounds for this virtual HMD are.
-//-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    // Backbuffer is canonical 2W x H SbS. Presenter repacks downstream.
     *pnX = 0;
     *pnY = 0;
     *pnWidth  = static_cast<uint32_t>(config_.render_width)  * 2u;

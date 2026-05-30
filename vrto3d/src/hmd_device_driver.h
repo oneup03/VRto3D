@@ -32,6 +32,7 @@ struct _XINPUT_STATE;
 typedef _XINPUT_STATE XINPUT_STATE;
 
 class Dx11Renderer;
+class DirectModeComponent;
 
 
 class StereoDisplayComponent : public vr::IVRDisplayComponent
@@ -40,6 +41,10 @@ public:
     explicit StereoDisplayComponent( const StereoDisplayDriverConfiguration &config );
 
     // ----- Functions to override vr::IVRDisplayComponent -----
+    // IVRDisplayComponent's distortion / viewport / bounds members are pure
+    // virtuals and must be overridden for the class to be instantiable, but
+    // in direct mode the compositor never calls them — the overrides below
+    // are stubs.
     bool IsDisplayOnDesktop() override;
     bool IsDisplayRealDisplay() override;
     void GetRecommendedRenderTargetSize( uint32_t *pnWidth, uint32_t *pnHeight ) override;
@@ -121,14 +126,14 @@ private:
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Represents a Mock HMD in the system. Also implements
-// IVRVirtualDisplay so the same object can be registered twice with the
-// same serial — once as TrackedDeviceClass_HMD and once as
-// TrackedDeviceClass_DisplayRedirect. This matches the working WibbleWobbleVR
-// pattern; registering two separate objects does not route composited frames.
+// Purpose: Virtual HMD operating in SteamVR direct mode. The
+// IVRDriverDirectModeComponent (held by direct_mode_component_) takes ownership
+// of the per-eye texture exchange — game eye textures flow in via SubmitLayer
+// rather than the compositor's IVRVirtualDisplay::Present path. Direct mode is
+// what lets us bypass the compositor's lens-distortion / panel-mask pass that
+// would otherwise carve black corners out of every frame.
 //-----------------------------------------------------------------------------
-class MockControllerDeviceDriver : public vr::ITrackedDeviceServerDriver,
-                                    public vr::IVRVirtualDisplay
+class MockControllerDeviceDriver : public vr::ITrackedDeviceServerDriver
 {
 public:
     MockControllerDeviceDriver();
@@ -141,11 +146,6 @@ public:
     void DebugRequest( const char *pchRequest, char *pchResponseBuffer, uint32_t unResponseBufferSize ) override;
     vr::DriverPose_t GetPose() override;
     void Deactivate() override;
-
-    // IVRVirtualDisplay
-    void Present( const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize ) override;
-    void WaitForPresent() override;
-    bool GetTimeSinceLastVsync( float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter ) override;
 
     void OpenTrackThread();
     void XInputUpdateThread();
@@ -184,9 +184,9 @@ private:
     std::atomic< bool > no_profile_;
 
     std::atomic< bool > is_active_;
-    std::atomic< uint32_t > device_index_;         // HMD class object id (first Activate)
-    std::atomic< uint32_t > display_redirect_index_{ vr::k_unTrackedDeviceIndexInvalid };
+    std::atomic< uint32_t > device_index_;         // HMD object id (from Activate)
     std::unique_ptr< Dx11Renderer > renderer_;
+    std::unique_ptr< DirectModeComponent > direct_mode_component_;
     std::atomic< bool > is_on_top_;
     std::atomic< bool > man_on_top_;
     std::atomic< bool > launch_script_executed_;

@@ -54,9 +54,16 @@ public:
               const StereoDisplayDriverConfiguration& cfg,
               const vrto3d::FocusContext& focus);
 
-    // Called from IVRVirtualDisplay::Present (compositor thread). Stashes the
-    // incoming handle and signals the render thread; performs no context work.
-    void OnPresent(const vr::PresentInfo_t& info);
+    // Called from IVRDriverDirectModeComponent::Present (compositor thread).
+    // Stashes the per-eye + sync handles and signals the window thread; does
+    // no immediate-context work itself. left_handle / right_handle are handles
+    // we previously returned from CreateSwapTextureSet and looked up against
+    // the DirectModeComponent's handle map (so the texture pointers passed in
+    // are device-resident on our device); sync_handle is the SteamVR-supplied
+    // shared sync texture we acquire to fence the compositor's writes.
+    void OnDirectModeFrame(ID3D11Texture2D* left_eye_texture,
+                           ID3D11Texture2D* right_eye_texture,
+                           vr::SharedTextureHandle_t sync_handle);
 
     // Called from the presenter's window thread. Blocks up to timeout_ms for a
     // pending frame, then opens the shared texture, copies to out_sbs_, and
@@ -108,7 +115,8 @@ public:
     uint32_t                SbsWidth()  const { return sbs_width_;  }
     uint32_t                SbsHeight() const { return sbs_height_; }
 
-    // Telemetry consumed by IVRVirtualDisplay::GetTimeSinceLastVsync.
+    // Frame counter + last-vsync timestamp (QPC seconds), updated each time
+    // the window thread completes a present.
     uint64_t FrameCounter()    const { return frame_counter_.load(std::memory_order_relaxed); }
     double   LastVsyncQpcSec() const { return last_vsync_qpc_sec_.load(std::memory_order_relaxed); }
 
@@ -131,16 +139,20 @@ private:
     double                 qpc_freq_sec_        {0.0};
 
     // Compositor -> window-thread frame handoff. Only the latest pending
-    // handle is kept; if the window thread can't keep up, older frames are
-    // dropped (matches the compositor's expected pacing).
-    std::mutex                pending_mutex_;
-    std::condition_variable   pending_cv_;
-    vr::SharedTextureHandle_t pending_handle_      = 0;
-    bool                      pending_ready_       = false;
+    // stereo pair is kept; if the window thread can't keep up, older frames
+    // are dropped (matches the compositor's expected pacing). The per-eye
+    // texture pointers are AddRef'd ComPtrs so the textures stay alive even
+    // if DestroySwapTextureSet fires between the stash and the drain.
+    std::mutex                                pending_mutex_;
+    std::condition_variable                   pending_cv_;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>   pending_left_;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>   pending_right_;
+    vr::SharedTextureHandle_t                 pending_sync_handle_ = 0;
+    bool                                      pending_ready_       = false;
 
     // Cache of shared textures opened from the compositor, keyed by handle.
-    // The compositor cycles a small pool (typically 3 swap textures); reopening
-    // a fresh COM wrapper every frame loses DXGI's internal keyed-mutex state.
+    // The compositor reuses sync texture handles across frames; reopening a
+    // fresh COM wrapper every frame loses DXGI's internal keyed-mutex state.
     std::unordered_map<vr::SharedTextureHandle_t, Microsoft::WRL::ComPtr<ID3D11Texture2D>>
                               shared_texture_cache_;
 
