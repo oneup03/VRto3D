@@ -21,6 +21,7 @@
 #include <windows.h>
 
 #include <cstdio>
+#include <vector>
 
 #include "vrto3dlib/debug_log.hpp"
 
@@ -416,10 +417,34 @@ void Dx11Renderer::CaptureScreenshot(const std::string& app_name)
         target_eye_aspect = osd_component_->GetConfig().aspect_ratio;
     }
 
+    // Build an opaque copy of the staging bytes. In direct mode the per-eye
+    // textures arrive with whatever alpha the game's pixel shader wrote
+    // (typically 0 — real HMDs don't sample alpha). The live presenter doesn't
+    // care because the swap chain is opaque, but PNG preserves alpha AND
+    // WIC's cubic-interpolation scaler used during aspect-ratio scaling
+    // does premultiplied-alpha math, which zeros the RGB contribution of
+    // alpha-0 pixels and produces a HUD-on-black output. Forcing alpha=0xFF
+    // on the source bytes before WIC processes them keeps the scene RGB
+    // intact through scaling. Staging is MAP_READ so we copy into a writable
+    // buffer rather than modify the mapping in place.
+    std::vector<BYTE> opaque_buf(static_cast<size_t>(mapped.RowPitch) * desc.Height);
+    {
+        const BYTE* src_row = static_cast<const BYTE*>(mapped.pData);
+        BYTE*       dst_row = opaque_buf.data();
+        for (UINT y = 0; y < desc.Height; ++y) {
+            memcpy(dst_row, src_row, mapped.RowPitch);
+            for (UINT x = 0; x < desc.Width; ++x) {
+                dst_row[x * 4 + 3] = 0xFF;
+            }
+            src_row += mapped.RowPitch;
+            dst_row += mapped.RowPitch;
+        }
+    }
+
     auto r = vrto3d::screenshot::SaveStereoPair(app_name,
                                                 desc.Width, desc.Height,
                                                 desc.Format,
-                                                mapped.pData, mapped.RowPitch,
+                                                opaque_buf.data(), mapped.RowPitch,
                                                 target_eye_aspect);
     context_->Unmap(staging.Get(), 0);
 
