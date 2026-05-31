@@ -98,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -125,7 +125,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -152,7 +152,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -179,7 +179,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>

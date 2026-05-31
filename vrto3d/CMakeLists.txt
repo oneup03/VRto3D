@@ -48,6 +48,7 @@ target_include_directories(driver_vrto3d PRIVATE
     ${ROOT}/external/LeiaSR/include
     ${ROOT}/external/LeiaSR/third_party/OpenCV/include
     ${ROOT}/external/nvapi
+    ${ROOT}/external/adl_sdk/include
     ${ROOT}/utils/vrmath
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
