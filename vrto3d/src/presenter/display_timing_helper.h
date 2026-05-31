@@ -33,6 +33,11 @@ namespace vrto3d {
 //   2. AMD     — ADL_Display_ModeTimingOverride_Set  (delay-loaded)
 //   3. Fallback — ChangeDisplaySettingsExW  (for CRU pre-configured modes)
 //
+// Intel is intentionally not implemented: IGCL's ctlGetSetCustomMode only
+// takes (width, height) and leaves timing derivation to the driver, so it
+// can't produce HDMI 1.4 frame-pack timing on its own. Intel users should
+// pre-configure via CRU and hit the CRU fallback.
+//
 // All three paths are non-fatal — if the modeset fails the caller can still
 // create a window at the current desktop resolution and render TaB into it
 // (the user just won't get the HDMI 3D InfoFrame).
@@ -72,8 +77,8 @@ private:
     Backend  backend_ = Backend::None;
 
     // Saved state for revert — backend-specific opaque storage.
-    // NVIDIA: display IDs used with TryCustomDisplay.
-    // AMD: adapter/display indices.
+    // NVIDIA: display IDs used with TryCustomDisplay + original DEVMODE.
+    // AMD: adapter/display indices + original DEVMODE.
     // CRU fallback: device name + original DEVMODE.
     struct NvidiaState;
     struct AmdState;

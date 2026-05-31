@@ -557,6 +557,24 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
     // is_on_top_ / man_on_top_ / auto_focus path triggers.
     window_ready_.store(true);
 
+    // For frame-packed modes started without a tracked app, take the
+    // foreground ourselves so Alt+F4 reaches our WndProc (which then
+    // tears the modeset down via timing_helper_.Revert()). Other modes
+    // are typically driven by an app that needs the foreground, so we
+    // only do this for the framepack case.
+    const bool is_framepack = IsFramePackedMode(mode_);
+    const uint32_t startup_pid = focus_.app_pid ? focus_.app_pid->load() : 0;
+    if (is_framepack && startup_pid == 0) {
+        HWND self_hwnd = static_cast<HWND>(window_->NativeHandle());
+        if (self_hwnd) {
+            ForceFocus(self_hwnd,
+                       GetCurrentThreadId(),
+                       GetWindowThreadProcessId(self_hwnd, nullptr));
+            LOG() << "WindowPresenter: forced focus to our window for "
+                     "standalone frame-pack mode (Alt+F4 will quit)";
+        }
+    }
+
     // This thread owns the window message pump AND drives rendering. Win32
     // requires the same thread that created the window to service its message
     // queue, and DXGI DISCARD swap effect requires Present to be issued by

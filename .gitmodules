@@ -20,3 +20,6 @@
 [submodule "external/LeiaSR"]
 	path = external/LeiaSR
 	url = https://github.com/oneup03/LeiaSR64.git
+[submodule "external/adl_sdk"]
+	path = external/adl_sdk
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/display-library

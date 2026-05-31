@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 #include <unordered_map>
@@ -38,6 +39,11 @@
 // typedefs (NvU32, NvAPI_Status, …) land in the global namespace, not in
 // vrto3d. This mirrors how nvstereo_dx9_presenter.cpp includes the header.
 #include "nvapi.h"
+
+// AMD ADL — pure C headers, no extra namespace concerns.
+#include "adl_sdk.h"
+#include "adl_structures.h"
+#include "adl_defines.h"
 
 namespace vrto3d {
 
@@ -71,6 +77,43 @@ std::wstring ResolveDeviceName(int32_t display_index)
     return wide;
 }
 
+// Snapshot the current DEVMODE so we can force the desktop back to its
+// original resolution after a backend revert. NVAPI's RevertCustomDisplayTrial
+// usually does this on its own, but if the user reboots / kills the process
+// between Apply and Revert we want a stable fallback for next launch too.
+bool SnapshotCurrentMode(const std::wstring& device_name, DEVMODEW& out_mode)
+{
+    out_mode = {};
+    out_mode.dmSize = sizeof(out_mode);
+    return EnumDisplaySettingsExW(device_name.c_str(), ENUM_CURRENT_SETTINGS, &out_mode, 0) != 0;
+}
+
+// Restore desktop to a saved DEVMODE. Returns true on success or no-op.
+bool RestoreSavedMode(const std::wstring& device_name, DEVMODEW& saved_mode)
+{
+    if (device_name.empty() || saved_mode.dmSize == 0) return false;
+
+    DEVMODEW current{};
+    current.dmSize = sizeof(current);
+    if (EnumDisplaySettingsExW(device_name.c_str(), ENUM_CURRENT_SETTINGS, &current, 0)) {
+        // Skip the modeset if we're already back at the saved mode.
+        if (current.dmPelsWidth        == saved_mode.dmPelsWidth
+         && current.dmPelsHeight       == saved_mode.dmPelsHeight
+         && current.dmDisplayFrequency == saved_mode.dmDisplayFrequency) {
+            return true;
+        }
+    }
+
+    LONG result = ChangeDisplaySettingsExW(
+        device_name.c_str(), &saved_mode, nullptr, CDS_FULLSCREEN, nullptr);
+    if (result != DISP_CHANGE_SUCCESSFUL) {
+        LOG() << "RestoreSavedMode: ChangeDisplaySettingsExW failed result=" << result
+              << " — falling back to driver default";
+        ChangeDisplaySettingsExW(device_name.c_str(), nullptr, nullptr, 0, nullptr);
+    }
+    return result == DISP_CHANGE_SUCCESSFUL;
+}
+
 // Compute pixel clock in 10 kHz units from timing spec.
 uint32_t ComputePixelClock10kHz(const FramePackTimingSpec& spec)
 {
@@ -90,13 +133,15 @@ uint32_t ComputePixelClock10kHz(const FramePackTimingSpec& spec)
 
 struct DisplayTimingHelper::NvidiaState {
     std::vector<NvU32> display_ids;
+    std::wstring       device_name;
+    DEVMODEW           original_mode{};
 };
 
 struct DisplayTimingHelper::AmdState {
-    int adapter_index = -1;
-    int display_index = -1;
-    // Original timing override data would go here; for now we just track
-    // that we set a timing so Revert can clear it.
+    int          adapter_index  = -1;
+    int          display_index  = -1;
+    std::wstring device_name;
+    DEVMODEW     original_mode{};
 };
 
 struct DisplayTimingHelper::CruState {
@@ -167,8 +212,8 @@ void DisplayTimingHelper::Revert()
           << static_cast<int>(backend_) << ")";
 
     switch (backend_) {
-        case Backend::Nvidia:     RevertNvidia();      break;
-        case Backend::Amd:        RevertAmd();         break;
+        case Backend::Nvidia:      RevertNvidia();      break;
+        case Backend::Amd:         RevertAmd();         break;
         case Backend::CruFallback: RevertCruFallback(); break;
         default: break;
     }
@@ -264,6 +309,12 @@ bool DisplayTimingHelper::TryNvidia(const FramePackTimingSpec& spec,
         }
     }
 
+    // Snapshot the desktop mode before we touch anything so Revert can force
+    // a return to it even if the NVAPI trial revert leaves the desktop in an
+    // intermediate state.
+    DEVMODEW original_mode{};
+    SnapshotCurrentMode(w_name, original_mode);
+
     // Fetch the live timing so we can merge polarity and interlaced flags.
     NV_TIMING live_timing = {};
     {
@@ -331,6 +382,8 @@ bool DisplayTimingHelper::TryNvidia(const FramePackTimingSpec& spec,
 
     auto* state = new NvidiaState();
     state->display_ids.push_back(displayId);
+    state->device_name   = w_name;
+    state->original_mode = original_mode;
     backend_state_ = state;
 
     LOG() << "DisplayTimingHelper::TryNvidia: succeeded displayId=" << displayId;
@@ -355,6 +408,15 @@ void DisplayTimingHelper::RevertNvidia()
                                         static_cast<NvU32>(state->display_ids.size()));
 
     WaitForModesetSettle(500);
+
+    // Force the desktop back to the original mode if the trial revert left it
+    // somewhere else (e.g. the driver picked a fallback mode after dropping
+    // the custom timing).
+    if (!state->device_name.empty()) {
+        RestoreSavedMode(state->device_name, state->original_mode);
+        WaitForModesetSettle(300);
+    }
+
     RestoreDisplayPositions(posSnapshot);
 }
 
@@ -365,17 +427,23 @@ void DisplayTimingHelper::RevertNvidia()
 
 namespace {
 
-// ADL function typedefs for delay-loading atiadlxx.dll / atiadlxy.dll.
-using ADL_MAIN_CONTROL_CREATE_t  = int (__cdecl *)(void* (*)(int), int);
-using ADL_MAIN_CONTROL_DESTROY_t = int (__cdecl *)();
-using ADL_ADAPTER_NUMBEROFADAPTERS_GET_t = int (__cdecl *)(int*);
+// ADL entry points we resolve at runtime. Names match the exports of
+// atiadlxx.dll / atiadlxy.dll exactly. The DLL uses default (cdecl) calling
+// convention for its exports; only the malloc callback is __stdcall.
+using ADL_MAIN_CONTROL_CREATE_t          = int (*)(ADL_MAIN_MALLOC_CALLBACK, int);
+using ADL_MAIN_CONTROL_DESTROY_t         = int (*)();
+using ADL_ADAPTER_NUMBEROFADAPTERS_GET_t = int (*)(int*);
+using ADL_ADAPTER_ADAPTERINFO_GET_t      = int (*)(LPAdapterInfo, int);
+using ADL_DISPLAY_DISPLAYINFO_GET_t      = int (*)(int, int*, ADLDisplayInfo**, int);
+using ADL_DISPLAY_MODETIMINGOVERRIDE_SET_t =
+    int (*)(int iAdapterIndex, int iDisplayIndex,
+            ADLDisplayModeInfo* lpMode, int iForceUpdate);
+using ADL_DISPLAY_MODETIMINGOVERRIDE_DELETE_t =
+    int (*)(int iAdapterIndex, int iDisplayIndex,
+            ADLDisplayMode* lpMode, int iForceUpdate);
 
-// ADL_Display_ModeTimingOverride_Set signature:
-//   int ADL_Display_ModeTimingOverride_Set(int iAdapterIndex, int iDisplayIndex,
-//                                          ADLDisplayModeX2* lpMode,
-//                                          int iForceUpdate);
-// We'd need the ADLDisplayModeX2 struct definition here. For now, we treat
-// AMD as a future implementation placeholder.
+// ADL's required malloc callback. __stdcall on Windows.
+void* __stdcall AdlMallocCallback(int sz) { return malloc(static_cast<size_t>(sz)); }
 
 HMODULE LoadAdlLibrary()
 {
@@ -384,79 +452,283 @@ HMODULE LoadAdlLibrary()
     return hmod;
 }
 
+// RAII wrapper for an ADL session so we always destroy on scope exit.
+class AdlSession {
+public:
+    AdlSession() = default;
+    ~AdlSession() {
+        if (destroy_) destroy_();
+        if (dll_)     FreeLibrary(dll_);
+    }
+
+    bool Init() {
+        dll_ = LoadAdlLibrary();
+        if (!dll_) return false;
+
+        auto pfnCreate = reinterpret_cast<ADL_MAIN_CONTROL_CREATE_t>(
+            GetProcAddress(dll_, "ADL_Main_Control_Create"));
+        destroy_ = reinterpret_cast<ADL_MAIN_CONTROL_DESTROY_t>(
+            GetProcAddress(dll_, "ADL_Main_Control_Destroy"));
+        if (!pfnCreate || !destroy_) {
+            FreeLibrary(dll_); dll_ = nullptr;
+            return false;
+        }
+        if (pfnCreate(AdlMallocCallback, 1) != ADL_OK) {
+            destroy_ = nullptr;
+            FreeLibrary(dll_); dll_ = nullptr;
+            return false;
+        }
+
+        num_adapters_get_ = reinterpret_cast<ADL_ADAPTER_NUMBEROFADAPTERS_GET_t>(
+            GetProcAddress(dll_, "ADL_Adapter_NumberOfAdapters_Get"));
+        adapter_info_get_ = reinterpret_cast<ADL_ADAPTER_ADAPTERINFO_GET_t>(
+            GetProcAddress(dll_, "ADL_Adapter_AdapterInfo_Get"));
+        display_info_get_ = reinterpret_cast<ADL_DISPLAY_DISPLAYINFO_GET_t>(
+            GetProcAddress(dll_, "ADL_Display_DisplayInfo_Get"));
+        timing_set_       = reinterpret_cast<ADL_DISPLAY_MODETIMINGOVERRIDE_SET_t>(
+            GetProcAddress(dll_, "ADL_Display_ModeTimingOverride_Set"));
+        timing_delete_    = reinterpret_cast<ADL_DISPLAY_MODETIMINGOVERRIDE_DELETE_t>(
+            GetProcAddress(dll_, "ADL_Display_ModeTimingOverride_Delete"));
+
+        return num_adapters_get_ && adapter_info_get_
+            && display_info_get_ && timing_set_;
+    }
+
+    int NumAdapters(int* out) const { return num_adapters_get_(out); }
+    int AdapterInfoGet(LPAdapterInfo info, int size) const { return adapter_info_get_(info, size); }
+    int DisplayInfoGet(int adapter, int* num, ADLDisplayInfo** info, int force) const {
+        return display_info_get_(adapter, num, info, force);
+    }
+    int TimingSet(int adapter, int display, ADLDisplayModeInfo* mode, int force) const {
+        return timing_set_(adapter, display, mode, force);
+    }
+    int TimingDelete(int adapter, int display, ADLDisplayMode* mode, int force) const {
+        return timing_delete_ ? timing_delete_(adapter, display, mode, force) : ADL_ERR;
+    }
+    bool HasDelete() const { return timing_delete_ != nullptr; }
+
+private:
+    HMODULE dll_ = nullptr;
+    ADL_MAIN_CONTROL_DESTROY_t          destroy_           = nullptr;
+    ADL_ADAPTER_NUMBEROFADAPTERS_GET_t  num_adapters_get_  = nullptr;
+    ADL_ADAPTER_ADAPTERINFO_GET_t       adapter_info_get_  = nullptr;
+    ADL_DISPLAY_DISPLAYINFO_GET_t       display_info_get_  = nullptr;
+    ADL_DISPLAY_MODETIMINGOVERRIDE_SET_t    timing_set_    = nullptr;
+    ADL_DISPLAY_MODETIMINGOVERRIDE_DELETE_t timing_delete_ = nullptr;
+};
+
+// Resolve (adapter_index, display_logical_index) for the target Windows
+// display. AdapterInfo.iOSDisplayIndex is generated from EnumDisplayDevices,
+// so display_index 1 (= "\\.\DISPLAY1") corresponds to iOSDisplayIndex 0.
+bool FindAdlAdapterDisplay(const AdlSession& adl,
+                           int32_t target_display_index,
+                           int& out_adapter,
+                           int& out_display)
+{
+    int num_adapters = 0;
+    if (adl.NumAdapters(&num_adapters) != ADL_OK || num_adapters <= 0) {
+        LOG() << "FindAdlAdapterDisplay: no ADL adapters";
+        return false;
+    }
+
+    std::vector<AdapterInfo> adapters(static_cast<size_t>(num_adapters));
+    std::memset(adapters.data(), 0, adapters.size() * sizeof(AdapterInfo));
+    if (adl.AdapterInfoGet(adapters.data(),
+                           static_cast<int>(adapters.size() * sizeof(AdapterInfo))) != ADL_OK) {
+        LOG() << "FindAdlAdapterDisplay: AdapterInfo_Get failed";
+        return false;
+    }
+
+    const int target_os_index = target_display_index - 1;   // 1-based → 0-based
+
+    // First pass: prefer an adapter whose iOSDisplayIndex matches our target.
+    // Fall back to the first present adapter so single-GPU systems still work
+    // when the OS index isn't populated.
+    int adapter_index = -1;
+    for (const auto& a : adapters) {
+        if (!a.iPresent) continue;
+        if (a.iOSDisplayIndex == target_os_index) {
+            adapter_index = a.iAdapterIndex;
+            break;
+        }
+    }
+    if (adapter_index < 0) {
+        for (const auto& a : adapters) {
+            if (a.iPresent) { adapter_index = a.iAdapterIndex; break; }
+        }
+    }
+    if (adapter_index < 0) {
+        LOG() << "FindAdlAdapterDisplay: no present adapter (likely no AMD GPU)";
+        return false;
+    }
+
+    // Enumerate displays on that adapter; pick the first connected+mapped one.
+    int             num_displays = 0;
+    ADLDisplayInfo* display_info = nullptr;
+    if (adl.DisplayInfoGet(adapter_index, &num_displays, &display_info, 0) != ADL_OK
+        || num_displays <= 0 || !display_info) {
+        LOG() << "FindAdlAdapterDisplay: DisplayInfo_Get failed for adapter " << adapter_index;
+        return false;
+    }
+
+    int display_index = -1;
+    constexpr int kMappedMask =
+        ADL_DISPLAY_DISPLAYINFO_DISPLAYCONNECTED |
+        ADL_DISPLAY_DISPLAYINFO_DISPLAYMAPPED;
+    for (int i = 0; i < num_displays; ++i) {
+        if ((display_info[i].iDisplayInfoValue & kMappedMask) == kMappedMask) {
+            display_index = display_info[i].displayID.iDisplayLogicalIndex;
+            break;
+        }
+    }
+    free(display_info);   // allocated by AdlMallocCallback
+
+    if (display_index < 0) {
+        LOG() << "FindAdlAdapterDisplay: no mapped display on adapter " << adapter_index;
+        return false;
+    }
+
+    out_adapter = adapter_index;
+    out_display = display_index;
+    return true;
+}
+
+// Build an ADLDisplayModeInfo from our timing spec.
+void FillAdlModeInfo(const FramePackTimingSpec& spec, ADLDisplayModeInfo& out)
+{
+    out = {};
+    out.iTimingStandard  = ADL_DL_MODETIMING_STANDARD_CUSTOM;
+    out.iPossibleStandard = 0;
+    out.iRefreshRate     = static_cast<int>(spec.refresh_hz + 0.5f);
+    out.iPelsWidth       = spec.active_w;
+    out.iPelsHeight      = spec.active_h;
+
+    ADLDetailedTiming& dt = out.sDetailedTiming;
+    dt.iSize         = sizeof(dt);
+    dt.sTimingFlags  = 0;  // progressive, no double-scan, polarity default (+,+)
+    dt.sHTotal       = static_cast<short>(spec.h_total);
+    dt.sHDisplay     = static_cast<short>(spec.active_w);
+    dt.sHSyncStart   = static_cast<short>(spec.h_front_porch);  // offset from active end
+    dt.sHSyncWidth   = static_cast<short>(spec.h_sync_width);
+    dt.sVTotal       = static_cast<short>(spec.v_total);
+    dt.sVDisplay     = static_cast<short>(spec.active_h);
+    dt.sVSyncStart   = static_cast<short>(spec.v_front_porch);
+    dt.sVSyncWidth   = static_cast<short>(spec.v_sync_width);
+    dt.sPixelClock   = static_cast<short>(ComputePixelClock10kHz(spec));
+}
+
 }  // namespace
 
 
 bool DisplayTimingHelper::TryAmd(const FramePackTimingSpec& spec,
                                   int32_t display_index)
 {
-    HMODULE hAdl = LoadAdlLibrary();
-    if (!hAdl) {
-        LOG() << "DisplayTimingHelper::TryAmd: ADL library not found (not AMD GPU)";
+    AdlSession adl;
+    if (!adl.Init()) {
+        LOG() << "DisplayTimingHelper::TryAmd: ADL not available (not AMD GPU?)";
         return false;
     }
 
-    LOG() << "DisplayTimingHelper::TryAmd: ADL library loaded";
-
-    auto pfnCreate = reinterpret_cast<ADL_MAIN_CONTROL_CREATE_t>(
-        GetProcAddress(hAdl, "ADL_Main_Control_Create"));
-    auto pfnDestroy = reinterpret_cast<ADL_MAIN_CONTROL_DESTROY_t>(
-        GetProcAddress(hAdl, "ADL_Main_Control_Destroy"));
-
-    if (!pfnCreate || !pfnDestroy) {
-        LOG() << "DisplayTimingHelper::TryAmd: ADL entry points not found";
-        FreeLibrary(hAdl);
+    int adapter = -1, ddisplay = -1;
+    if (!FindAdlAdapterDisplay(adl, display_index, adapter, ddisplay)) {
         return false;
     }
 
-    // Initialize ADL with malloc callback.
-    auto adl_malloc = [](int size) -> void* { return malloc(size); };
-    int adl_status = pfnCreate(adl_malloc, 1);
-    if (adl_status != 0) {
-        LOG() << "DisplayTimingHelper::TryAmd: ADL_Main_Control_Create failed status="
-              << adl_status;
-        FreeLibrary(hAdl);
+    std::wstring w_name = ResolveDeviceName(display_index);
+    DEVMODEW original_mode{};
+    SnapshotCurrentMode(w_name, original_mode);
+
+    ADLDisplayModeInfo mode_info{};
+    FillAdlModeInfo(spec, mode_info);
+
+    LOG() << "DisplayTimingHelper::TryAmd: applying timing override "
+          << spec.active_w << "x" << spec.active_h << "@" << spec.refresh_hz << "Hz"
+          << " adapter=" << adapter << " display=" << ddisplay
+          << " HTotal=" << mode_info.sDetailedTiming.sHTotal
+          << " VTotal=" << mode_info.sDetailedTiming.sVTotal
+          << " pclk(10kHz)=" << static_cast<unsigned>(static_cast<uint16_t>(mode_info.sDetailedTiming.sPixelClock));
+
+    auto posSnapshot = SnapshotDisplayPositions();
+    WaitForModesetSettle(100);
+
+    int rc = adl.TimingSet(adapter, ddisplay, &mode_info, /*iForceUpdate=*/1);
+    if (rc != ADL_OK && rc != ADL_OK_WARNING && rc != ADL_OK_MODE_CHANGE) {
+        LOG() << "DisplayTimingHelper::TryAmd: ADL_Display_ModeTimingOverride_Set failed rc="
+              << rc;
         return false;
     }
 
-    // Look up ADL_Display_ModeTimingOverride_Set.
-    using ADL_Display_ModeTimingOverride_Set_t =
-        int (__cdecl *)(int iAdapterIndex, int iDisplayIndex,
-                        void* lpMode, int iForceUpdate);
-
-    auto pfnSetTiming = reinterpret_cast<ADL_Display_ModeTimingOverride_Set_t>(
-        GetProcAddress(hAdl, "ADL_Display_ModeTimingOverride_Set"));
-
-    if (!pfnSetTiming) {
-        LOG() << "DisplayTimingHelper::TryAmd: ADL_Display_ModeTimingOverride_Set not found "
-              << "— this ADL version may not support custom timing overrides";
-        pfnDestroy();
-        FreeLibrary(hAdl);
-        return false;
+    // ADL_Display_ModeTimingOverride_Set adds the timing to the driver's
+    // override list but doesn't necessarily switch into it; trigger the
+    // modeset via the OS.
+    if (!w_name.empty()) {
+        DEVMODEW dm{};
+        dm.dmSize             = sizeof(dm);
+        dm.dmPelsWidth        = spec.active_w;
+        dm.dmPelsHeight       = spec.active_h;
+        dm.dmDisplayFrequency = static_cast<DWORD>(spec.refresh_hz + 0.5f);
+        dm.dmBitsPerPel       = 32;
+        dm.dmFields           = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;
+        ChangeDisplaySettingsExW(w_name.c_str(), &dm, nullptr, CDS_FULLSCREEN, nullptr);
     }
 
-    // AMD users should pre-configure via CRU (Custom Resolution Utility).
-    // Full ADLDisplayModeX2 implementation is a future task.
-    LOG() << "DisplayTimingHelper::TryAmd: AMD timing override not yet fully implemented. "
-          << "Use CRU (Custom Resolution Utility) to pre-add the frame-pack resolution.";
+    WaitForModesetSettle(500);
+    RestoreDisplayPositions(posSnapshot);
 
-    pfnDestroy();
-    FreeLibrary(hAdl);
-    return false;
+    auto* state = new AmdState();
+    state->adapter_index = adapter;
+    state->display_index = ddisplay;
+    state->device_name   = w_name;
+    state->original_mode = original_mode;
+    backend_state_ = state;
+
+    LOG() << "DisplayTimingHelper::TryAmd: succeeded (adapter=" << adapter
+          << " display=" << ddisplay << ")";
+    return true;
 }
 
 
 void DisplayTimingHelper::RevertAmd()
 {
     if (!backend_state_) return;
-
-    LOG() << "DisplayTimingHelper::RevertAmd: reverting AMD timing override";
-
-    // TODO: Load ADL, call ADL_Display_ModeTimingOverride_Delete or reset to
-    // the original timing.
-
     auto* state = static_cast<AmdState*>(backend_state_);
-    (void)state;  // suppress unused warning until implemented
+
+    LOG() << "DisplayTimingHelper::RevertAmd: reverting (adapter="
+          << state->adapter_index << " display=" << state->display_index << ")";
+
+    auto posSnapshot = SnapshotDisplayPositions();
+
+    // Restore the OS-side mode first so the desktop is back at the user's
+    // original resolution by the time we tear the override out.
+    if (!state->device_name.empty()) {
+        RestoreSavedMode(state->device_name, state->original_mode);
+        WaitForModesetSettle(300);
+    }
+
+    // Now remove our override from the driver's list. Best effort; both
+    // Delete and a STANDARD_DRIVER_DEFAULT Set are valid revert strokes
+    // depending on the ADL version.
+    AdlSession adl;
+    if (adl.Init()) {
+        if (adl.HasDelete()) {
+            ADLDisplayMode mode{};
+            mode.iPelsWidth        = state->original_mode.dmPelsWidth;
+            mode.iPelsHeight       = state->original_mode.dmPelsHeight;
+            mode.iDisplayFrequency = state->original_mode.dmDisplayFrequency;
+            mode.iBitsPerPel       = 32;
+            adl.TimingDelete(state->adapter_index, state->display_index, &mode, 1);
+        }
+        ADLDisplayModeInfo info{};
+        info.iTimingStandard = ADL_DL_MODETIMING_STANDARD_DRIVER_DEFAULT;
+        info.iPelsWidth      = state->original_mode.dmPelsWidth;
+        info.iPelsHeight     = state->original_mode.dmPelsHeight;
+        info.iRefreshRate    = state->original_mode.dmDisplayFrequency;
+        info.sDetailedTiming.iSize = sizeof(info.sDetailedTiming);
+        adl.TimingSet(state->adapter_index, state->display_index, &info, 1);
+    }
+
+    WaitForModesetSettle(300);
+    RestoreDisplayPositions(posSnapshot);
 }
 
 
@@ -556,23 +828,10 @@ void DisplayTimingHelper::RevertCruFallback()
 
     auto posSnapshot = SnapshotDisplayPositions();
 
-    LONG result = ChangeDisplaySettingsExW(
-        state->device_name.c_str(),
-        &state->original_mode,
-        nullptr,
-        CDS_FULLSCREEN,
-        nullptr);
-
-    if (result != DISP_CHANGE_SUCCESSFUL) {
-        // Fallback: reset to default.
-        LOG() << "DisplayTimingHelper::RevertCruFallback: revert failed result="
-              << result << ", trying default";
-        ChangeDisplaySettingsExW(state->device_name.c_str(), nullptr, nullptr, 0, nullptr);
-    }
+    RestoreSavedMode(state->device_name, state->original_mode);
 
     WaitForModesetSettle(500);
     RestoreDisplayPositions(posSnapshot);
 }
 
 }  // namespace vrto3d
-
