@@ -18,8 +18,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
+#include <system_error>
 
 #include <d3dcompiler.h>
 
@@ -36,6 +39,7 @@
 
 #include "hmd_device_driver.h"
 #include "vrto3dlib/stereo_config.h"
+#include "vrto3dlib/win32_helper.hpp"  // GetSteamInstallPath
 
 #ifndef VRTO3D_LOG
 #  include <iostream>
@@ -48,6 +52,19 @@ using namespace std::chrono;
 namespace vrto3d::osd {
 
 namespace {
+
+// Geometric-mean font scale based on the per-eye OSD area. Treats SbS and
+// TaB layouts identically at the same source resolution (both have the same
+// per-eye area), so users get consistent text size regardless of output
+// mode. Baseline area = 720p SbS half (640x720 = 460800 px) so 1080p SbS
+// still resolves to 1.5x, matching the previous eye_h/720 formula on that
+// case while bumping TaB up from its old 0.75x floor.
+float ComputeFontScale(UINT eye_w, UINT eye_h) {
+    constexpr float baseline_area = 640.0f * 720.0f;
+    const float area = static_cast<float>(eye_w) * static_cast<float>(eye_h);
+    if (area <= 0.0f) return 1.0f;
+    return std::clamp(std::sqrt(area / baseline_area), 0.75f, 3.0f);
+}
 
 // Full-screen triangle VS — emits a single triangle that covers the viewport
 // using vertex IDs 0/1/2. UVs are derived so that (0,0) lands at top-left.
@@ -121,6 +138,9 @@ struct OsdRenderer::Impl {
     // ImGui state.
     ImGuiContext*                     imgui_ctx = nullptr;
     bool                              imgui_dx11_ready = false;
+    // Backing storage for io.IniFilename — ImGui only holds the const char*,
+    // so the std::string must outlive the ImGui context.
+    std::string                       ini_path;
 
     // Input pump + menu (created in Init).
     std::unique_ptr<OsdInput>         input;
@@ -287,17 +307,28 @@ bool OsdRenderer::Init(ID3D11Device* device,
     IMGUI_CHECKVERSION();
     s.imgui_ctx = ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr;       // don't litter Steam directory with imgui.ini
+    // Persist window pos/size, table column widths, etc. to the VRto3D
+    // config folder so the user's layout survives across sessions. The ini
+    // path string is held on the Impl so the pointer stays valid for the
+    // lifetime of the ImGui context. If Steam isn't installed (CI / debug
+    // shells) we fall through with IniFilename = nullptr — ImGui then runs
+    // ephemerally instead of writing to an unknown location.
+    io.IniFilename = nullptr;
     io.LogFilename = nullptr;
+    if (const std::string steam = GetSteamInstallPath(); !steam.empty()) {
+        const std::string folder = steam + "\\config\\vrto3d";
+        std::error_code ec;
+        std::filesystem::create_directories(folder, ec);
+        s.ini_path = folder + "\\imgui_osd.ini";
+        io.IniFilename = s.ini_path.c_str();
+    }
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-    // Scale fonts to the eye height. Default 13px is too small at 1080p,
-    // and conversely 1.0 is too large when the SbS surface is itself small
-    // (low render-res or non-standard output modes) — let the scale shrink
-    // below 1.0 down to a 0.75 floor so the menu still fits the window.
-    io.FontGlobalScale = std::clamp(static_cast<float>(eye_h) / 720.0f,
-                                     0.75f, 3.0f);
+    // Scale fonts to the per-eye area so SbS and TaB read the same at the
+    // same source resolution; the formula clamps below 1.0 for very small
+    // surfaces and above 1.0 for high-res so the menu stays legible.
+    io.FontGlobalScale = ComputeFontScale(eye_w, eye_h);
     io.DisplaySize = ImVec2(static_cast<float>(eye_w), static_cast<float>(eye_h));
 
     if (!ImGui_ImplDX11_Init(device, context)) {
@@ -331,8 +362,7 @@ void OsdRenderer::OnResize(UINT eye_w, UINT eye_h) {
     if (s.imgui_ctx) {
         ImGui::SetCurrentContext(s.imgui_ctx);
         ImGui::GetIO().DisplaySize = ImVec2(static_cast<float>(eye_w), static_cast<float>(eye_h));
-        ImGui::GetIO().FontGlobalScale =
-            std::clamp(static_cast<float>(eye_h) / 720.0f, 0.75f, 3.0f);
+        ImGui::GetIO().FontGlobalScale = ComputeFontScale(eye_w, eye_h);
     }
 }
 
@@ -351,6 +381,12 @@ void OsdRenderer::Shutdown() {
         s.imgui_dx11_ready = false;
     }
     if (s.imgui_ctx) {
+        // Force-flush any pending layout changes — ImGui's auto-save is
+        // throttled by IniSavingRate (5s by default) so a quick edit-then-
+        // exit could otherwise lose the user's window pos/size.
+        if (!s.ini_path.empty()) {
+            ImGui::SaveIniSettingsToDisk(s.ini_path.c_str());
+        }
         ImGui::DestroyContext(s.imgui_ctx);
         s.imgui_ctx = nullptr;
     }
@@ -498,21 +534,25 @@ void OsdRenderer::RenderFrame(ID3D11Texture2D* out_sbs) {
             // Toast text is 2x the menu font so it's legible at headset
             // distance even when the menu chrome is hidden.
             const float toast_scale = 2.0f;
-            // Bound the toast width so long messages wrap instead of running
-            // past the right edge of the eye, and anchor by the bottom-left
-            // pivot so wrapped multi-line toasts grow upward into the screen
-            // rather than falling off the bottom.
-            const float max_w = (std::max)(64.0f, static_cast<float>(s.eye_w) - 2.0f * pad_x);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
-                                                 ImVec2(max_w, FLT_MAX));
+            // Bound text wrap to the eye width so long messages wrap instead
+            // of running past the right edge. Pass the wrap position as an
+            // explicit window-local pixel value rather than 0.0f — with
+            // AlwaysAutoResize, a wrap-at-content-right behaves circularly
+            // (window width depends on content, content wrap depends on
+            // window width) and collapses to one glyph per line on first
+            // frame, producing a vertical column of characters.
+            const float wrap_local = (std::max)(64.0f,
+                static_cast<float>(s.eye_w) - 2.0f * pad_x -
+                2.0f * ImGui::GetStyle().WindowPadding.x);
+            // Anchor by bottom-left pivot so wrapped multi-line toasts grow
+            // upward into the screen rather than falling off the bottom.
             ImGui::SetNextWindowPos(
                 ImVec2(pad_x, static_cast<float>(s.eye_h) - pad_y),
                 ImGuiCond_Always,
                 ImVec2(0.0f, 1.0f));
             if (ImGui::Begin("##vrto3d_toast", nullptr, flags)) {
                 ImGui::SetWindowFontScale(toast_scale);
-                // Wrap at the window's content-region right edge.
-                ImGui::PushTextWrapPos(0.0f);
+                ImGui::PushTextWrapPos(wrap_local);
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
                 ImGui::TextUnformatted(msg.c_str());
                 ImGui::PopStyleColor();
