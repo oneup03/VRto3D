@@ -96,9 +96,10 @@ void OsdMenu::BuildUI(OsdInput& input) {
     auto& s = *impl_;
     if (!s.visible.load() || !s.component) return;
 
-    // Adapt the menu bounds to the OSD surface — eye_w/eye_h can be smaller
-    // than the comfortable 720x520 target on low-res sources, in which case
-    // the window would otherwise spill past the SbS half and get clipped.
+    // Default the menu to roughly half the OSD surface — comfortable at any
+    // render resolution, leaves plenty of game visible around it, and the
+    // user can still drag-resize after. Min-size keeps a floor so the menu
+    // remains usable on very small surfaces; max-size caps it to the OSD.
     // (std::clamp)/(std::max) paren-wraps suppress windows.h min/max macros.
     const ImVec2 disp = ImGui::GetIO().DisplaySize;
     const float kPad = 20.0f;
@@ -108,9 +109,13 @@ void OsdMenu::BuildUI(OsdInput& input) {
     const float min_h = (std::clamp)(disp.y - 2 * kPad, kFloorH, 520.0f);
     const float max_w = (std::max)(disp.x, min_w);
     const float max_h = (std::max)(disp.y, min_h);
+    const float init_w = (std::clamp)(disp.x * 0.5f, min_w, max_w);
+    const float init_h = (std::clamp)(disp.y * 0.5f, min_h, max_h);
     ImGui::SetNextWindowSizeConstraints(ImVec2(min_w, min_h), ImVec2(max_w, max_h));
-    const float init_x = (std::clamp)(80.0f, 0.0f, (std::max)(0.0f, disp.x - min_w));
-    const float init_y = (std::clamp)(80.0f, 0.0f, (std::max)(0.0f, disp.y - min_h));
+    ImGui::SetNextWindowSize(ImVec2(init_w, init_h), ImGuiCond_FirstUseEver);
+    // Center the initial position so the menu sits roughly mid-screen.
+    const float init_x = (std::max)(0.0f, (disp.x - init_w) * 0.5f);
+    const float init_y = (std::max)(0.0f, (disp.y - init_h) * 0.5f);
     ImGui::SetNextWindowPos(ImVec2(init_x, init_y), ImGuiCond_FirstUseEver);
 
     const std::string title = "VRto3D " + s.version + "###vrto3d_menu";
@@ -196,11 +201,15 @@ void OsdMenu::Impl::DrawTitleChrome() {
 
     if (callbacks.always_on_top && callbacks.toggle_always_on_top) {
         const char* label = "Always on Top";
+        const char* hint  = "(Ctrl + F8)";
+        const ImGuiStyle& style = ImGui::GetStyle();
         const float box_w = ImGui::CalcTextSize(label).x +
                              ImGui::GetFrameHeight() +
-                             ImGui::GetStyle().ItemInnerSpacing.x;
-        const float target_x = ImGui::GetWindowWidth() - box_w -
-                                ImGui::GetStyle().WindowPadding.x;
+                             style.ItemInnerSpacing.x;
+        const float hint_w = ImGui::CalcTextSize(hint).x +
+                              style.ItemSpacing.x;
+        const float target_x = ImGui::GetWindowWidth() - box_w - hint_w -
+                                style.WindowPadding.x;
         // Only right-align when there's room past the current cursor. On
         // narrow windows the profile name plus checkbox overlap; let the
         // checkbox fall to its own line in that case.
@@ -212,6 +221,8 @@ void OsdMenu::Impl::DrawTitleChrome() {
         if (ImGui::Checkbox(label, &on)) {
             callbacks.toggle_always_on_top();
         }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", hint);
     }
     ImGui::Separator();
 }
