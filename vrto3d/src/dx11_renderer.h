@@ -17,9 +17,11 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 
 #include <wrl/client.h>
@@ -54,15 +56,29 @@ public:
               const StereoDisplayDriverConfiguration& cfg,
               const vrto3d::FocusContext& focus);
 
+    // Per-layer eye-texture pair, passed from DirectModeComponent::Present.
+    // The textures are owned by the DirectModeComponent's swap-texture pool;
+    // the ComPtr here keeps them alive until the window thread is done with
+    // the frame.
+    struct DirectModeLayerPair {
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> left;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> right;
+    };
+    static constexpr int kMaxLayers = 8;
+
     // Called from IVRDriverDirectModeComponent::Present (compositor thread).
-    // Stashes the per-eye + sync handles and signals the window thread; does
-    // no immediate-context work itself. left_handle / right_handle are handles
-    // we previously returned from CreateSwapTextureSet and looked up against
-    // the DirectModeComponent's handle map (so the texture pointers passed in
-    // are device-resident on our device); sync_handle is the SteamVR-supplied
-    // shared sync texture we acquire to fence the compositor's writes.
-    void OnDirectModeFrame(ID3D11Texture2D* left_eye_texture,
-                           ID3D11Texture2D* right_eye_texture,
+    // Composes the per-layer eye textures into out_sbs_ synchronously on the
+    // compositor thread, gated by an AcquireSync/ReleaseSync pair around the
+    // syncTexture's keyed mutex (matches ALVR's pattern). Doing the read+
+    // composite here while the syncTexture mutex is held guarantees we never
+    // sample mid-render from UEVR's eye textures, which is the root cause of
+    // the "frame jumping back" stutter we saw with the deferred-window-thread
+    // design. The immediate context is shared with the window thread via
+    // context_mutex_, so only one side at a time issues D3D11 commands.
+    // Layer 0 is the base scene (CopySubresourceRegion); layers 1+ are
+    // alpha-blended via the composite shader pipeline.
+    void OnDirectModeFrame(const DirectModeLayerPair* layers,
+                           int layer_count,
                            vr::SharedTextureHandle_t sync_handle);
 
     // Called from the presenter's window thread. Blocks up to timeout_ms for a
@@ -122,6 +138,7 @@ public:
 
 private:
     void EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming);
+    void VsyncTickThread();
 
     Microsoft::WRL::ComPtr<ID3D11Device>        device_;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
@@ -138,15 +155,48 @@ private:
     std::atomic<double>    last_vsync_qpc_sec_  {0.0};
     double                 qpc_freq_sec_        {0.0};
 
+    // Last-seen per-eye dimensions, for one-line-per-change diagnostic.
+    UINT                   last_left_w_         {0};
+    UINT                   last_left_h_         {0};
+    UINT                   last_right_w_        {0};
+    UINT                   last_right_h_        {0};
+    DXGI_FORMAT            last_eye_format_     {DXGI_FORMAT_UNKNOWN};
+
+    // Dedicated VsyncEvent timer thread. Drives the compositor's submit
+    // cadence at a stable per-eye-frequency tick (matches HMD properties
+    // wired up in MockControllerDeviceDriver::Activate — half the panel
+    // rate for frame-sequential output modes like WibbleWobble/NvStereoDX9).
+    std::thread            vsync_thread_;
+    std::atomic<bool>      vsync_stop_{false};
+    std::chrono::nanoseconds frame_interval_ns_{8'333'333};  // refined from cfg in Init
+
+    // Compositor → window thread handoff. OnDirectModeFrame sets ready=true
+    // after composite + Flush so the window thread wakes immediately and
+    // presents the freshly-composed out_sbs_. Matches the smooth pacing of
+    // the old IVRVirtualDisplay path — the window thread runs at the
+    // compositor's submit rate rather than a phase-offset internal timer,
+    // which minimizes the latency variance between compositor frame arrival
+    // and display update.
+    std::condition_variable composite_cv_;
+    std::mutex              composite_ready_mutex_;
+    bool                    composite_ready_ = false;
+
+    // Serializes immediate-context access between the compositor thread
+    // (OnDirectModeFrame: layer copies + composite + Flush) and the window
+    // thread (WaitAndDrawPending: OSD render + presenter PresentFrame).
+    // Held briefly on each side — ~1ms typical — so the compositor never
+    // waits significantly on us, and vice versa.
+    std::mutex context_mutex_;
+
     // Compositor -> window-thread frame handoff. Only the latest pending
-    // stereo pair is kept; if the window thread can't keep up, older frames
-    // are dropped (matches the compositor's expected pacing). The per-eye
-    // texture pointers are AddRef'd ComPtrs so the textures stay alive even
-    // if DestroySwapTextureSet fires between the stash and the drain.
+    // layer batch is kept; if the window thread can't keep up, older frames
+    // are dropped (matches the compositor's expected pacing). The per-layer
+    // ComPtrs keep the swap textures alive even if DestroySwapTextureSet
+    // fires between the stash and the drain.
     std::mutex                                pending_mutex_;
     std::condition_variable                   pending_cv_;
-    Microsoft::WRL::ComPtr<ID3D11Texture2D>   pending_left_;
-    Microsoft::WRL::ComPtr<ID3D11Texture2D>   pending_right_;
+    DirectModeLayerPair                       pending_layers_[kMaxLayers]{};
+    int                                       pending_layer_count_ = 0;
     vr::SharedTextureHandle_t                 pending_sync_handle_ = 0;
     bool                                      pending_ready_       = false;
 
@@ -157,6 +207,25 @@ private:
                               shared_texture_cache_;
 
     bool                   initialized_         = false;
+
+    // Composite pipeline state — used to alpha-blend overlay layers (layer
+    // 1+) onto out_sbs_. Layer 0 is still a straight CopySubresourceRegion.
+    Microsoft::WRL::ComPtr<ID3D11VertexShader>     composite_vs_;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader>      composite_ps_;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState>     composite_sampler_;
+    Microsoft::WRL::ComPtr<ID3D11BlendState>       composite_blend_;
+    Microsoft::WRL::ComPtr<ID3D11RasterizerState>  composite_raster_;
+    // Cached RTV on out_sbs_, recreated whenever out_sbs_ is recreated.
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> out_sbs_rtv_;
+    bool                   composite_pipeline_ready_ = false;
+
+    // Per-source-texture SRV cache for the composite blit. UEVR and the
+    // compositor reuse a small set of swap textures across frames, so we
+    // hash by ID3D11Texture2D* and keep the SRV alive across the session.
+    // Cleared whenever out_sbs_ is (re)created (covers game-start/-exit
+    // boundaries when the underlying textures get destroyed).
+    std::unordered_map<ID3D11Texture2D*, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>>
+                           composite_srv_cache_;
 
     // OSD overlay (lazy-initialized on first frame so eye dims are known).
     std::unique_ptr<vrto3d::osd::OsdRenderer> osd_renderer_;
@@ -170,7 +239,37 @@ private:
     std::string             pending_screenshot_app_;
     bool                    screenshot_pending_ = false;
 
+    // Background-encode result handoff: the encode thread writes the toast
+    // text here, the window thread picks it up on its next tick and calls
+    // OsdRenderer::SetText. Separated from screenshot_mutex_ since the
+    // encode thread runs much later than the capture request.
+    std::mutex              screenshot_result_mutex_;
+    std::string             pending_screenshot_toast_;
+
+    // Deferred staging readback. Synchronous Map(MAP_READ) blocks the
+    // immediate context for as long as it takes the GPU to flush the
+    // CopyResource — at 120Hz that's enough delay for SteamVR's compositor
+    // to partially desync us (we'd briefly drop a layer when it caught back
+    // up). Instead we queue the CopyResource on the screenshot frame and
+    // poll Map(DO_NOT_WAIT) on subsequent frames until it succeeds.
+    struct PendingShot {
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+        std::string app_name;
+        uint32_t    width  = 0;
+        uint32_t    height = 0;
+        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+        float       target_eye_aspect = 0.0f;
+        // Number of WaitAndDrawPending iterations since the CopyResource was
+        // queued — used both for an early-frame guard (give the GPU at least
+        // one frame to finish) and a timeout (give up if the staging is
+        // never readable, so the slot doesn't stay stuck).
+        int         age_frames = 0;
+    };
+    PendingShot pending_shot_;
+    bool        has_pending_shot_ = false;
+
     void CaptureScreenshot(const std::string& app_name);
+    void DrainPendingShot();
 
     // Auto-depth disparity analyzer. Owns the compute pipeline + readback
     // ring; lazy-initialized on first frame where auto-depth is enabled.

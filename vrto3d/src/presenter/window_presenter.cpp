@@ -640,14 +640,6 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
         return;
     }
 
-    static std::atomic<bool> logged_first{false};
-    bool expected = false;
-    if (logged_first.compare_exchange_strong(expected, true)) {
-        LOG() << "PresentFrame: first call OK srv=" << (void*)srv.Get()
-              << " td=" << td.Width << "x" << td.Height
-              << " fmt=" << td.Format << " bind=0x" << std::hex << td.BindFlags;
-    }
-
     // Update constant buffer.
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (SUCCEEDED(ctx->Map(cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -700,7 +692,14 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
     ID3D11ShaderResourceView* null_srv[] = { nullptr };
     ctx->PSSetShaderResources(0, 1, null_srv);
 
-    HRESULT hr = swapchain_->Present(1, 0);
+    // SyncInterval=0: don't block on vsync inside PresentFrame. The window
+    // thread is already paced by Dx11Renderer's 120Hz sleep_until, and
+    // PresentFrame is called while the shared context_mutex_ is held — a
+    // vsync block here would also block the compositor thread's next
+    // OnDirectModeFrame, producing the variable cadence we see in the
+    // histogram. The desktop DWM composites the back buffer at its own
+    // pace; tearing isn't perceptible for a Sbs windowed presenter.
+    HRESULT hr = swapchain_->Present(0, 0);
     if (FAILED(hr)) {
         static std::atomic<bool> logged_present_fail{false};
         bool expected = false;

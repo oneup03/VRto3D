@@ -73,10 +73,25 @@ private:
     std::mutex sets_mutex_;
     std::map<HANDLE, std::pair<TextureSet*, int>> handle_map_;
 
-    // Latest SubmitLayer payload for layer 0 (the game's eye textures). We
-    // ignore higher layers — the compositor injects overlays / system menus
-    // there but for a flat virtual HMD we only care about the game's view.
+    // Per-frame layer accumulation. Apps (especially UEVR-driven games)
+    // submit multiple layers per frame — typically layer 0 is the base scene
+    // and layers 1+ are HUD / overlay quads that alpha-blend on top. We keep
+    // up to kMaxLayers of them and the renderer composites in order.
+    static constexpr int kMaxLayers = 8;
     std::mutex          submit_mutex_;
-    SubmitLayerPerEye_t submit_layers_[2]{};
-    bool                have_submit_  = false;
+    SubmitLayerPerEye_t submit_layers_[kMaxLayers][2]{};
+    int                 submit_layer_count_       = 0;
+
+    // SubmitLayer-call counter — logged once per change. Tracked separately
+    // from submit_layer_count_ because the count we observe may exceed
+    // kMaxLayers; we want to know when that happens.
+    int                 last_logged_submit_count_ = -1;
+
+    // Running count of handle-map misses (submitted hTexture not in
+    // handle_map_). Logged on first miss + every 60th to detect persistence.
+    uint64_t handle_miss_count_ = 0;
+
+    // Track which submit-count we last logged per-layer dimensions for, so
+    // dimension lines aren't spammed every frame.
+    int last_logged_layer_dim_count_ = -1;
 };

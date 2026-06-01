@@ -642,7 +642,11 @@ void LeiaSrPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
 
     sr_weaver_->weave();
 
-    HRESULT hr = swapchain_->Present(1, 0);
+    // SyncInterval=0: Dx11Renderer's 120Hz sleep_until paces presentation,
+    // and PresentFrame holds context_mutex_ — a vsync block here would
+    // serialize the compositor's next OnDirectModeFrame behind our vsync
+    // wait, producing variable cadence visible as stutter.
+    HRESULT hr = swapchain_->Present(0, 0);
     if (FAILED(hr)) {
         static std::atomic<bool> logged{false};
         bool e = false;

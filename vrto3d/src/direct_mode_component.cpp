@@ -160,9 +160,13 @@ void DirectModeComponent::GetNextSwapTextureSetIndex(vr::SharedTextureHandle_t /
 void DirectModeComponent::SubmitLayer(const SubmitLayerPerEye_t (&perEye)[2])
 {
     std::lock_guard<std::mutex> lk(submit_mutex_);
-    submit_layers_[0] = perEye[0];
-    submit_layers_[1] = perEye[1];
-    have_submit_      = true;
+    if (submit_layer_count_ < kMaxLayers) {
+        submit_layers_[submit_layer_count_][0] = perEye[0];
+        submit_layers_[submit_layer_count_][1] = perEye[1];
+    }
+    // Always increment so the logged count reflects what the compositor
+    // submits even when it exceeds kMaxLayers.
+    ++submit_layer_count_;
 }
 
 
@@ -170,18 +174,42 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
 {
     if (!renderer_) return;
 
-    SubmitLayerPerEye_t local[2]{};
+    SubmitLayerPerEye_t local[kMaxLayers][2]{};
+    int submitted_count = 0;
+    int kept_count      = 0;
     {
         std::lock_guard<std::mutex> lk(submit_mutex_);
-        if (!have_submit_) return;
-        local[0] = submit_layers_[0];
-        local[1] = submit_layers_[1];
-        have_submit_ = false;
+        submitted_count      = submit_layer_count_;
+        submit_layer_count_  = 0;
+        if (submitted_count == 0) {
+            if (last_logged_submit_count_ != 0) {
+                LOG() << "DirectModeComponent: Present with no SubmitLayer "
+                         "(was " << last_logged_submit_count_ << ")";
+                last_logged_submit_count_ = 0;
+            }
+            return;
+        }
+        kept_count = submitted_count > kMaxLayers ? kMaxLayers : submitted_count;
+        for (int i = 0; i < kept_count; ++i) {
+            local[i][0] = submit_layers_[i][0];
+            local[i][1] = submit_layers_[i][1];
+        }
     }
 
-    // Resolve each eye's shared handle back to the texture we allocated in
-    // CreateSwapTextureSet.
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> left, right;
+    if (submitted_count != last_logged_submit_count_) {
+        LOG() << "DirectModeComponent: SubmitLayer calls per Present = "
+              << submitted_count
+              << " (was " << last_logged_submit_count_ << ")";
+        last_logged_submit_count_ = submitted_count;
+    }
+
+    // Resolve each layer's eye handles back to the textures we allocated in
+    // CreateSwapTextureSet. We don't filter by pid — UEVR-driven games can
+    // submit the scene and HUD via two different pids (game-pid for one
+    // layer, SteamVR-compositor-pid for the overlay), and dropping either
+    // visibly loses content.
+    Dx11Renderer::DirectModeLayerPair pairs[kMaxLayers]{};
+    int resolved_count = 0;
     {
         std::lock_guard<std::mutex> lk(sets_mutex_);
         auto find_one = [&](vr::SharedTextureHandle_t h)
@@ -192,20 +220,49 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
             if (it == handle_map_.end()) return {};
             return it->second.first->textures[it->second.second];
         };
-        left  = find_one(local[0].hTexture);
-        right = find_one(local[1].hTexture);
+        for (int i = 0; i < kept_count; ++i) {
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> left  = find_one(local[i][0].hTexture);
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> right = find_one(local[i][1].hTexture);
+            if (!left || !right) {
+                ++handle_miss_count_;
+                continue;
+            }
+            pairs[resolved_count].left  = std::move(left);
+            pairs[resolved_count].right = std::move(right);
+            ++resolved_count;
+        }
     }
 
-    if (!left || !right) {
-        static std::atomic<bool> logged{false};
-        bool e = false;
-        if (logged.compare_exchange_strong(e, true)) {
-            LOG() << "DirectModeComponent::Present submitted eye handle not in handle_map_ "
-                     "(L=0x" << std::hex << local[0].hTexture
-                  << " R=0x" << local[1].hTexture << ")";
+    // Diagnostic: log per-layer source-texture dimensions when the resolved
+    // layer count changes (only — earlier version's condition fired every
+    // frame whenever a layer got dropped).
+    if (resolved_count != last_logged_layer_dim_count_) {
+        last_logged_layer_dim_count_ = resolved_count;
+        for (int i = 0; i < resolved_count; ++i) {
+            D3D11_TEXTURE2D_DESC ld{}, rd{};
+            pairs[i].left->GetDesc(&ld);
+            pairs[i].right->GetDesc(&rd);
+            LOG() << "DirectModeComponent: layer " << i << " dims L="
+                  << ld.Width << "x" << ld.Height
+                  << " R=" << rd.Width << "x" << rd.Height
+                  << " fmt=" << ld.Format
+                  << " bounds L=(" << local[i][0].bounds.uMin << "," << local[i][0].bounds.vMin
+                  << "," << local[i][0].bounds.uMax << "," << local[i][0].bounds.vMax << ")";
+        }
+    }
+
+    if (resolved_count == 0) {
+        if (handle_miss_count_ == 1 || (handle_miss_count_ % 60) == 0) {
+            LOG() << "DirectModeComponent::Present: no submitted layers resolved "
+                     "to handle_map_ entries (misses=" << handle_miss_count_ << ")";
         }
         return;
     }
+    if (handle_miss_count_ > 0) {
+        LOG() << "DirectModeComponent::Present: handle lookups recovered after "
+              << handle_miss_count_ << " misses";
+        handle_miss_count_ = 0;
+    }
 
-    renderer_->OnDirectModeFrame(left.Get(), right.Get(), syncTexture);
+    renderer_->OnDirectModeFrame(pairs, resolved_count, syncTexture);
 }
