@@ -616,7 +616,14 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
         pp.EnableAutoDepthStencil = FALSE;
         pp.Flags                  = 0;
         pp.FullScreen_RefreshRateInHz = windowed ? 0 : dm.RefreshRate;
-        pp.PresentationInterval   = D3DPRESENT_INTERVAL_ONE;
+        // INTERVAL_IMMEDIATE: Dx11Renderer's per-eye-frequency sleep_until
+        // already paces presentation, and PresentEx is called while the
+        // shared context_mutex_ is held — a hardware vsync wait here would
+        // also block the compositor thread's next OnDirectModeFrame,
+        // producing variable cadence visible as stutter. 3D Vision frame-
+        // sequential alternation is driven by the GPU's stereo signaling,
+        // not by the per-Present sync interval.
+        pp.PresentationInterval   = D3DPRESENT_INTERVAL_IMMEDIATE;
     };
 
     DWORD flags = D3DCREATE_HARDWARE_VERTEXPROCESSING

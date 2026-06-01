@@ -1133,7 +1133,6 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                                   : !prev_name_.empty() ? prev_name_
                                   : std::string("vrto3d");
                 renderer_->RequestScreenshot(name);
-                setOverlay("Screenshot requested");
             }
             sleep.shot = cfg.sleep_count_max;
         }
