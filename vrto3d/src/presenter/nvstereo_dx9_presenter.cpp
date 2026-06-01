@@ -845,22 +845,38 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (FAILED(ctx->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &mapped))) return;
 
-    // Lock the D3D9 sysmem packed surface and copy rows. D3D11 texture is
-    // R8G8B8A8 (RGBA byte order); D3D9 X8R8G8B8 stores BGRA. Swap channels
-    // per-pixel during the copy.
+    // D3D9 X8R8G8B8 stores BGRA in memory. Our staging copies from out_sbs_,
+    // whose byte layout depends on what the game submitted in direct mode:
+    //   - RGBA input  (DXGI_FORMAT_R8G8B8A8_UNORM family, fmt 28/29):
+    //       swap R↔B per pixel to convert RGBA→BGRA (display-redirect
+    //       and SteamVR-home path).
+    //   - BGRA input  (DXGI_FORMAT_B8G8R8A8_UNORM family, fmt 87/91):
+    //       already in D3D9's byte order — straight memcpy.
+    // Without this discrimination, UEVR (which submits BGRA_SRGB) renders
+    // with R/B swapped under 3D Vision.
+    const bool src_is_rgba = (td.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
+                              td.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
     D3DLOCKED_RECT lr{};
     if (SUCCEEDED(packed_sysmem_->LockRect(&lr, nullptr, 0))) {
         const uint32_t copy_h = td.Height;
+        const uint32_t row_bytes = packed_w_ * 4u;
         for (uint32_t y = 0; y < copy_h; ++y) {
             const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + y * mapped.RowPitch;
             uint8_t*       dst = static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch;
-            // Per-pixel swap r<->b. RowBytes = packed_w_ * 4.
-            const uint32_t row_bytes = packed_w_ * 4u;
-            for (uint32_t x = 0; x < row_bytes; x += 4) {
-                dst[x + 0] = src[x + 2];   // B <- src.B (offset 2 in RGBA)
-                dst[x + 1] = src[x + 1];   // G
-                dst[x + 2] = src[x + 0];   // R <- src.R (offset 0)
-                dst[x + 3] = 0xFF;
+            if (src_is_rgba) {
+                for (uint32_t x = 0; x < row_bytes; x += 4) {
+                    dst[x + 0] = src[x + 2];   // B <- src.B (offset 2 in RGBA)
+                    dst[x + 1] = src[x + 1];   // G
+                    dst[x + 2] = src[x + 0];   // R <- src.R (offset 0)
+                    dst[x + 3] = 0xFF;
+                }
+            } else {
+                // BGRA → BGRA: straight copy, only normalize alpha to 0xFF
+                // since the packed surface format is X8R8G8B8 (no alpha).
+                std::memcpy(dst, src, row_bytes);
+                for (uint32_t x = 3; x < row_bytes; x += 4) {
+                    dst[x] = 0xFF;
+                }
             }
         }
         // Stamp the NV3D signature into row index td.Height (the extra row).
