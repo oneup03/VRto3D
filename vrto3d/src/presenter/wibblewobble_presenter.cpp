@@ -152,13 +152,30 @@ struct WibbleWobblePresenter::Impl {
     PFN_WWClient_SetSourceFormat  pSetSourceFormat = nullptr;
     PFN_WWClient_PresentFrame     pPresentFrame    = nullptr;
 
-    // GPU completion fence. The client samples our shared out_sbs_ on its
-    // own internal D3D11 device; without an explicit Flush + wait, the
-    // upstream CopyResource (compositor -> out_sbs_) and the OSD composite
-    // pass may still be queued on our immediate context when the client
-    // reads. That race shows up as the OSD blinking out on alternating
-    // frames. Mirrors the COPY_WAIT path in WibbleWobbleVR.h.
+    // GPU completion fence. The client samples our shared ring textures
+    // on its own internal D3D11 device; without an explicit Flush + wait,
+    // the CopyResource (out_sbs_ -> ring[idx]) and the upstream renderer
+    // work (L+R copies + OSD composite into out_sbs_) may still be queued
+    // on our immediate context when the client reads. Mirrors the
+    // COPY_WAIT path in WibbleWobbleVR.h.
     Microsoft::WRL::ComPtr<ID3D11Query> copy_wait_query;
+
+    // Triple-buffer ring of shared SBS textures. Each PresentFrame copies
+    // out_sbs_ into ring[ring_idx] and hands ring_handles[ring_idx] to the
+    // WW client, then advances. The client samples the slot on its own
+    // internal D3D11 device at its own display rate; by the time we wrap
+    // back to a slot it has moved on.
+    //
+    // Without the ring, the *next* compositor frame's L+R CopyResources
+    // into out_sbs_ replace (not blend) the pixels the OSD additive-blend
+    // pass wrote on top — if WW reads in that window the OSD blinks out
+    // on alternating frames. The Flush + event-wait above only fixes our
+    // half of the race (queued draws on our side); the ring fixes the
+    // other half (next-frame writes vs. WW's still-pending read).
+    static constexpr int kRingSize = 3;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> ring[kRingSize];
+    void*                                   ring_handles[kRingSize] = {};
+    int                                     ring_idx = 0;
 };
 
 WibbleWobblePresenter::WibbleWobblePresenter() = default;
@@ -399,55 +416,75 @@ void WibbleWobblePresenter::PresentFrame(ID3D11Texture2D* sbs_input) {
         return;
     }
 
-    // Refresh the cached shared HANDLE when the source texture pointer
-    // changes (resize / format change recreates out_sbs_ in Dx11Renderer).
-    // GetSharedHandle returns a HANDLE owned by the texture itself — no
-    // explicit close needed; it dies with the texture.
+    // (Re)create the ring whenever the source texture changes — Dx11Renderer
+    // recreates out_sbs_ on resize / format change (and on the first frame),
+    // which always changes the pointer. Slots are sized to match sbs_input
+    // so CopyResource below is a straight blit.
     if (sbs_input != last_sbs_input_) {
-        ComPtr<IDXGIResource> dxgi_res;
-        HRESULT hr = sbs_input->QueryInterface(__uuidof(IDXGIResource),
-                                                reinterpret_cast<void**>(dxgi_res.GetAddressOf()));
-        if (FAILED(hr) || !dxgi_res) {
-            LOG() << "WibbleWobblePresenter: QueryInterface(IDXGIResource) on out_sbs_ failed hr=0x"
-                  << std::hex << hr
-                  << " — make sure out_sbs_ is created with D3D11_RESOURCE_MISC_SHARED";
-            shared_handle_ = nullptr;
-            last_sbs_input_ = sbs_input;
-            return;
-        }
-        HANDLE h = nullptr;
-        hr = dxgi_res->GetSharedHandle(&h);
-        if (FAILED(hr) || !h) {
-            LOG() << "WibbleWobblePresenter: GetSharedHandle failed hr=0x" << std::hex << hr;
-            shared_handle_ = nullptr;
-            last_sbs_input_ = sbs_input;
-            return;
-        }
-        shared_handle_  = h;
-        last_sbs_input_ = sbs_input;
-        LOG() << "WibbleWobblePresenter: shared HANDLE refreshed for new out_sbs_";
-    }
-    if (!shared_handle_) return;
+        D3D11_TEXTURE2D_DESC src{};
+        sbs_input->GetDesc(&src);
 
-    // Force all pending work that touches out_sbs_ (the upstream compositor
-    // CopyResource AND the OSD composite pass, both queued by Dx11Renderer
-    // before us) to actually execute on the GPU before we hand the texture
-    // off. Without this the client's read can race ahead of our queued
-    // OSD draws — visible as the OSD blinking out on alternating frames.
-    if (context_) {
-        context_->Flush();
-        if (impl_->copy_wait_query) {
-            context_->End(impl_->copy_wait_query.Get());
-            while (context_->GetData(impl_->copy_wait_query.Get(), nullptr, 0, 0) != S_OK) {
-                Sleep(0);  // yield rather than hot-spin
+        D3D11_TEXTURE2D_DESC d = src;
+        d.MipLevels      = 1;
+        d.ArraySize      = 1;
+        d.SampleDesc     = {1, 0};
+        d.Usage           = D3D11_USAGE_DEFAULT;
+        d.BindFlags       = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+        d.CPUAccessFlags  = 0;
+        d.MiscFlags       = D3D11_RESOURCE_MISC_SHARED;
+
+        for (int i = 0; i < Impl::kRingSize; ++i) {
+            impl_->ring[i].Reset();
+            impl_->ring_handles[i] = nullptr;
+            HRESULT hr = device_->CreateTexture2D(&d, nullptr, impl_->ring[i].GetAddressOf());
+            if (FAILED(hr) || !impl_->ring[i]) {
+                LOG() << "WibbleWobblePresenter: CreateTexture2D(ring[" << i << "]) failed hr=0x"
+                      << std::hex << hr;
+                continue;
             }
+            ComPtr<IDXGIResource> dxgi_res;
+            hr = impl_->ring[i]->QueryInterface(
+                __uuidof(IDXGIResource),
+                reinterpret_cast<void**>(dxgi_res.GetAddressOf()));
+            HANDLE h = nullptr;
+            if (SUCCEEDED(hr) && dxgi_res) {
+                hr = dxgi_res->GetSharedHandle(&h);
+            }
+            if (FAILED(hr) || !h) {
+                LOG() << "WibbleWobblePresenter: GetSharedHandle(ring[" << i << "]) failed hr=0x"
+                      << std::hex << hr;
+                continue;
+            }
+            impl_->ring_handles[i] = h;
+        }
+        impl_->ring_idx = 0;
+        last_sbs_input_ = sbs_input;
+        LOG() << "WibbleWobblePresenter: SBS ring (re)created " << d.Width << "x" << d.Height
+              << " fmt=" << d.Format;
+    }
+
+    const int idx = impl_->ring_idx;
+    if (!impl_->ring[idx] || !impl_->ring_handles[idx] || !context_) return;
+
+    // Snapshot out_sbs_ (which now holds the freshly-composited stereo +
+    // OSD) into the current ring slot. The Flush + event-wait below covers
+    // the upstream renderer's queued L+R copies + OSD composite AND this
+    // copy, so the client's cross-device sample sees committed bytes.
+    context_->CopyResource(impl_->ring[idx].Get(), sbs_input);
+    context_->Flush();
+    if (impl_->copy_wait_query) {
+        context_->End(impl_->copy_wait_query.Get());
+        while (context_->GetData(impl_->copy_wait_query.Get(), nullptr, 0, 0) != S_OK) {
+            Sleep(0);  // yield rather than hot-spin
         }
     }
 
-    // Direct hand-off to the in-process client. frame_id is a monotonic
-    // counter — the client uses it as a pair-atomicity key and dedups
-    // re-presents of the same source frame.
-    impl_->pPresentFrame(impl_->client_handle, shared_handle_, ++frame_id_);
+    // Hand the slot off and advance. WW continues sampling ring[idx] for
+    // an indeterminate time on its own device; we won't overwrite the slot
+    // until we wrap (kRingSize frames from now), which decouples its read
+    // from the next compositor frame's writes into out_sbs_.
+    impl_->pPresentFrame(impl_->client_handle, impl_->ring_handles[idx], ++frame_id_);
+    impl_->ring_idx = (idx + 1) % Impl::kRingSize;
 }
 
 void WibbleWobblePresenter::Shutdown() {
@@ -471,7 +508,6 @@ void WibbleWobblePresenter::Shutdown() {
     }
 
     last_sbs_input_ = nullptr;
-    shared_handle_  = nullptr;
     frame_id_       = 0;
     renderer_ = nullptr;
     device_   = nullptr;

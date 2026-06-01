@@ -76,11 +76,10 @@ private:
     FocusContext         focus_{};
 
     // Per-frame state for WWClient_PresentFrame.
-    // shared_handle_ is the HANDLE returned by IDXGIResource::GetSharedHandle
-    // on the current out_sbs_ texture; refreshed when the source texture
-    // pointer changes (resize, format change, presenter init).
+    // last_sbs_input_ is the most recent out_sbs_ pointer we've seen; when
+    // it changes (resize / format change) we recreate the SBS ring held in
+    // Impl. frame_id_ is the WW client's pair-atomicity counter.
     ID3D11Texture2D*     last_sbs_input_  = nullptr;
-    void*                shared_handle_   = nullptr;
     uint64_t             frame_id_        = 0;
 
     // pImpl holds Windows.h-flavored state (HMODULE, function pointers,
