@@ -170,6 +170,12 @@ public:
     StereoDisplayComponent*       GetStereoComponent()       { return stereo_display_component_.get(); }
     vrto3d::FocusContext          GetFocusContext();
 
+    // Reach the renderer + direct-mode component so the device provider can
+    // drain stale shared-texture handles on VREvent_ProcessDisconnected and
+    // toggle the renderer's pause-on-disconnect circuit-breaker.
+    Dx11Renderer*         GetRenderer()            { return renderer_.get(); }
+    DirectModeComponent*  GetDirectModeComponent() { return direct_mode_component_.get(); }
+
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;
 

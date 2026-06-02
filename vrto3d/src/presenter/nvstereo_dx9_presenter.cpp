@@ -334,6 +334,16 @@ LRESULT CALLBACK NvStereoDx9Presenter::FseSubclassProc(HWND hw, UINT msg, WPARAM
         GetWindowLongPtrW(hw, GWLP_USERDATA));
     WNDPROC orig = self ? self->orig_wndproc_ : DefWindowProcW;
 
+    // NOTE: we deliberately do NOT mark the device dead on WM_DISPLAYCHANGE
+    // — FSE D3D9Ex itself raises that message when it modesets the display
+    // for fullscreen-exclusive entry, and that's a normal, expected event.
+    // Treating it as a fatal signal kills the device immediately after
+    // creation and breaks 3D Vision activation (the present pipeline turns
+    // into a no-op on the very first frame). Hot-plug protection has to be
+    // distinguished from our own modesets via something other than this
+    // message alone; the periodic CheckDeviceState in PresentFrame already
+    // catches the unrecoverable-device case after the fact.
+
     // When suppress_minimize_ is true (default / "on-top" active), swallow
     // deactivation messages so the FSE window never minimizes.  When false
     // (user toggled on-top off), let everything through — the FSE window
@@ -516,13 +526,44 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
         }
     }
 
+    // 2b. Force stereo driver mode to AUTOMATIC. The NV3D-signed packed back-
+    //     buffer route only works in AUTOMATIC mode — the driver scans for
+    //     the signature and routes left/right halves per-eye. DIRECT mode
+    //     disables that auto-detection: the emitter still turns on but the
+    //     panel just blits the SbS surface as-is (verified empirically).
+    //     We set it explicitly in case a prior session left it on DIRECT.
+    {
+        NvAPI_Status s = NvAPI_Stereo_SetDriverMode(NVAPI_STEREO_DRIVER_MODE_AUTOMATIC);
+        if (s != NVAPI_OK) {
+            LOG() << "NvStereoDx9Presenter: NvAPI_Stereo_SetDriverMode(AUTOMATIC) failed status="
+                  << static_cast<int>(s);
+        } else {
+            LOG() << "NvStereoDx9Presenter: stereo driver mode = AUTOMATIC";
+        }
+    }
+
+
     // 3. LightBoost: check the current resolution/timings against the
     //    nvtimings.json database. If the monitor's current timing doesn't
     //    match a known entry, apply a LightBoost custom resolution.
     //    This must happen BEFORE creating the window so the modeset is
     //    settled and the D3D9 FSE device sees the correct timing.
     //    Non-fatal — failures are logged but never abort init.
-    CheckAndApplyLightBoost();
+    //    Single-display only: filtered to the configured cfg.display_index
+    //    target so we never modify timings on other monitors.
+    CheckAndApplyLightBoost(primary.device_name);
+
+    // Drain WM_DISPLAYCHANGE etc. one more time before creating the present
+    // window — ensures DWM/thread DPI see the new modeset before we touch
+    // any HWND. (WaitForTimingMatch already pumped during the poll; this is
+    // just a final belt-and-braces drain.)
+    {
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
 
     window_ = platform::CreatePresentWindow(primary, nullptr, "VRto3D-3DVision");
     if (!window_) {
@@ -562,13 +603,75 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
         if (window_) window_->PollEvents();
     }
 
-    // Tear down on this thread.
-    LOG() << "NvStereoDx9Presenter: teardown step 1 — disable LightBoost";
-    DisableLightBoost();
-    LOG() << "NvStereoDx9Presenter: teardown step 2 — remove FSE WndProc subclass";
+    // Graceful teardown. The previous design called TerminateProcess here,
+    // which skipped all D3D9/NvAPI cleanup and was itself implicated in the
+    // shutdown-time GPU driver freezes — the driver had to garbage-collect
+    // state for a process that exited mid-flight, with refcounts still held
+    // on the D3D9 device and NvAPI stereo handle.
+    //
+    // First action: hide the window NOW. Even if the rest of teardown takes
+    // a couple of seconds, the user sees the VRto3D-3DVision window vanish
+    // immediately when SteamVR closes.
+    if (window_) {
+        HWND hwnd = static_cast<HWND>(window_->NativeHandle());
+        if (hwnd) {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+    }
+
+    // Order matters. The original design did DisableLightBoost FIRST so
+    // DWM/driver were back on the original modeset before any D3D objects
+    // were released — but in practice we've observed that path freezes the
+    // GPU on shutdown when RevertCustomDisplayTrial fails (e.g. when the
+    // trial has been auto-finalized), because we then release a still-
+    // engaged D3D9Ex FSE device while the GPU has an unreverted custom
+    // timing applied at the NVAPI level.
+    //
+    // New order:
+    //   1. RemoveFseSubclass    — drops WS_EX_LAYERED + WS_EX_TRANSPARENT
+    //                             and pumps messages so DWM sees the style
+    //                             change before any swap chain is torn down.
+    //   2. Stereo_DestroyHandle — NvAPI bookkeeping cleanup.
+    //   3. Release D3D9 objects — drops FSE, returns the panel to desktop
+    //                             control. Done BEFORE LightBoost revert so
+    //                             the GPU isn't holding the display when
+    //                             NVAPI attempts the modeset.
+    //   4. DisableLightBoost    — revert the custom timing. The display is
+    //                             no longer FSE-locked at this point.
+    //   5. NvAPI_Unload         — mirrors XR3DV's pattern.
+    //   6. Destroy present window.
+    LOG() << "NvStereoDx9Presenter: teardown step 1 — remove FSE WndProc subclass";
     RemoveFseSubclass();
-    LOG() << "NvStereoDx9Presenter: teardown step 3 — TerminateProcess (hard exit)";
-    TerminateProcess(GetCurrentProcess(), 0);
+
+    if (stereo_handle_) {
+        LOG() << "NvStereoDx9Presenter: teardown step 2 — destroy NvAPI stereo handle";
+        NvAPI_Stereo_DestroyHandle(stereo_handle_);
+        stereo_handle_ = nullptr;
+    }
+
+    LOG() << "NvStereoDx9Presenter: teardown step 3 — release D3D9 objects (drops FSE)";
+    back_buffer_.Reset();
+    packed_default_.Reset();
+    packed_input_default_.Reset();
+    packed_sysmem_.Reset();
+    device9_.Reset();
+    d3d9_.Reset();
+    staging_.Reset();
+
+    LOG() << "NvStereoDx9Presenter: teardown step 4 — disable LightBoost";
+    DisableLightBoost();
+
+    LOG() << "NvStereoDx9Presenter: teardown step 5 — NvAPI_Unload";
+    NvAPI_Unload();
+
+    // The Win32 present window must be destroyed on the thread that pumped
+    // its messages — i.e. THIS thread. The old TerminateProcess design
+    // sidestepped this by killing the whole vrserver process; the new
+    // graceful path has to destroy it explicitly or the window lingers
+    // visibly after SteamVR closes.
+    LOG() << "NvStereoDx9Presenter: teardown step 6 — destroy present window";
+    window_.reset();
+
     LOG() << "NvStereoDx9Presenter: window thread exited";
 }
 
@@ -651,8 +754,12 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
     }
 
     // Force our window to the foreground / focus before FSE CreateDeviceEx.
-    // vrserver isn't normally allowed to do this; the AttachThreadInput
-    // trick inside ForceForeground bypasses Windows' foreground-lock.
+    // vrserver isn't normally allowed to call SetForegroundWindow directly
+    // (Windows foreground-lock), but the AttachThreadInput trick inside
+    // ForceForeground bypasses it. FSE D3D9Ex REQUIRES the device window
+    // to be the focus window — without this, CreateDeviceEx either falls
+    // back to a non-exclusive mode (breaking 3D Vision activation) or
+    // returns an error.
     SetWindowPos(hwnd, HWND_TOPMOST, 0, 0,
                  static_cast<int>(dm.Width), static_cast<int>(dm.Height),
                  SWP_SHOWWINDOW | SWP_NOACTIVATE);
@@ -711,7 +818,9 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
               << " " << dm.Width << "x" << dm.Height << "@" << dm.RefreshRate << "Hz";
         is_fse_ = true;
         // Install WndProc subclass to swallow deactivation messages so the
-        // FSE window never minimizes when the user interacts with another display.
+        // FSE window never minimizes when the user interacts with another
+        // display, and apply WS_EX_LAYERED + WS_EX_TRANSPARENT for click-
+        // through.
         InstallFseSubclass(hwnd);
     }
 
@@ -757,32 +866,67 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
 
 bool NvStereoDx9Presenter::EnsurePackedSurfaces(uint32_t input_w_per_eye, uint32_t input_h)
 {
-    const uint32_t pw = input_w_per_eye * 2u;
-    const uint32_t ph = input_h + 1u;
+    // Input-side dims (where the CPU memcpy lands).
+    const uint32_t in_pw = input_w_per_eye * 2u;
+    const uint32_t in_ph = input_h + 1u;       // +1 row scratch, unused now
+    // Output-side dims (panel-sized so per-eye stretching is uniform). The
+    // back buffer is panel-sized via dm.Width/dm.Height in BuildD3D9Stack.
+    const uint32_t out_pw = monitor_w_ * 2u;
+    const uint32_t out_ph = monitor_h_ + 1u;   // +1 row for NV3D signature
 
-    if (packed_sysmem_ && packed_w_ == pw && packed_h_ == input_h) return true;
+    const bool input_unchanged  = packed_sysmem_ && packed_w_in_  == in_pw  && packed_h_in_  == input_h;
+    const bool output_unchanged = packed_default_ && packed_w_out_ == out_pw && packed_h_out_ == monitor_h_;
+    if (input_unchanged && output_unchanged) return true;
 
-    packed_default_.Reset();
-    packed_sysmem_.Reset();
+    HRESULT hr = S_OK;
 
-    HRESULT hr = device9_->CreateOffscreenPlainSurface(
-        pw, ph, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &packed_sysmem_, nullptr);
-    if (FAILED(hr)) {
-        LOG() << "NvStereoDx9Presenter: CreateOffscreenPlainSurface(SYSMEM) failed hr=0x" << std::hex << hr;
-        return false;
-    }
-    hr = device9_->CreateOffscreenPlainSurface(
-        pw, ph, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &packed_default_, nullptr);
-    if (FAILED(hr)) {
-        LOG() << "NvStereoDx9Presenter: CreateOffscreenPlainSurface(DEFAULT) failed hr=0x" << std::hex << hr;
+    if (!input_unchanged) {
         packed_sysmem_.Reset();
-        return false;
+        packed_input_default_.Reset();
+        hr = device9_->CreateOffscreenPlainSurface(
+            in_pw, in_ph, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &packed_sysmem_, nullptr);
+        if (FAILED(hr)) {
+            LOG() << "NvStereoDx9Presenter: CreateOffscreenPlainSurface(packed_sysmem) failed hr=0x"
+                  << std::hex << hr;
+            return false;
+        }
+        hr = device9_->CreateOffscreenPlainSurface(
+            in_pw, in_ph, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &packed_input_default_, nullptr);
+        if (FAILED(hr)) {
+            LOG() << "NvStereoDx9Presenter: CreateOffscreenPlainSurface(packed_input_default) failed hr=0x"
+                  << std::hex << hr;
+            packed_sysmem_.Reset();
+            return false;
+        }
+        packed_w_in_ = in_pw;
+        packed_h_in_ = input_h;
     }
 
-    packed_w_ = pw;
-    packed_h_ = input_h;
-    LOG() << "NvStereoDx9Presenter: packed surfaces " << pw << "x" << ph
-          << " (per-eye " << input_w_per_eye << "x" << input_h << ")";
+    if (!output_unchanged) {
+        packed_default_.Reset();
+        // Lockable render target. RT-ness is required for the LINEAR
+        // StretchRect from packed_input_default_ to land here (NVIDIA
+        // refuses LINEAR offscreen-plain → offscreen-plain). Lockable=TRUE
+        // lets us LockRect the header row and write the 20-byte NV3D
+        // signature with all four bytes per pixel intact.
+        hr = device9_->CreateRenderTarget(
+            out_pw, out_ph, D3DFMT_X8R8G8B8,
+            D3DMULTISAMPLE_NONE, 0,
+            TRUE,                        // lockable
+            &packed_default_, nullptr);
+        if (FAILED(hr)) {
+            LOG() << "NvStereoDx9Presenter: CreateRenderTarget(packed_default panel, lockable) failed hr=0x"
+                  << std::hex << hr;
+            return false;
+        }
+        packed_w_out_ = out_pw;
+        packed_h_out_ = monitor_h_;
+    }
+
+    LOG() << "NvStereoDx9Presenter: packed pipeline input=" << in_pw << "x" << input_h
+          << " (per-eye " << input_w_per_eye << "x" << input_h << ")"
+          << "  output=" << out_pw << "x" << monitor_h_
+          << " (per-eye " << monitor_w_ << "x" << monitor_h_ << ")";
     return true;
 }
 
@@ -808,6 +952,25 @@ void NvStereoDx9Presenter::StereoActivationRetry()
 void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
 {
     if (!device9_ || !sbs_input || !renderer_) return;
+
+    // Circuit-breaker: once the D3D9 device has been observed in an
+    // unrecoverable state, stop driving it. Continuing to submit work to a
+    // dead device causes the driver to spin and can wedge the GPU.
+    if (d3d9_dead_.load(std::memory_order_relaxed)) return;
+
+    // Periodically check the D3D9Ex device state. This is the modern (D3D9Ex)
+    // replacement for TestCooperativeLevel — it cheaply detects device-lost
+    // / hung / removed without doing any GPU work.
+    if (++frames_since_state_check_ >= 60 && device9_) {
+        frames_since_state_check_ = 0;
+        HRESULT cs = device9_->CheckDeviceState(subclassed_hwnd_);
+        // S_OK, S_PRESENT_OCCLUDED — fine to continue.
+        // S_PRESENT_MODE_CHANGED, D3DERR_DEVICELOST/HUNG/REMOVED — bail.
+        if (cs != S_OK && cs != S_PRESENT_OCCLUDED) {
+            (void)CheckAndMarkD3D9Dead(cs, "CheckDeviceState");
+            if (d3d9_dead_.load(std::memory_order_relaxed)) return;
+        }
+    }
 
     ID3D11Device*        dev = renderer_->Device();
     ID3D11DeviceContext* ctx = renderer_->Context();
@@ -856,10 +1019,11 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
     // with R/B swapped under 3D Vision.
     const bool src_is_rgba = (td.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
                               td.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    // ----- Stage 1: CPU memcpy the body into packed_sysmem_ at INPUT size.
     D3DLOCKED_RECT lr{};
     if (SUCCEEDED(packed_sysmem_->LockRect(&lr, nullptr, 0))) {
         const uint32_t copy_h = td.Height;
-        const uint32_t row_bytes = packed_w_ * 4u;
+        const uint32_t row_bytes = packed_w_in_ * 4u;
         for (uint32_t y = 0; y < copy_h; ++y) {
             const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + y * mapped.RowPitch;
             uint8_t*       dst = static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch;
@@ -879,51 +1043,87 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
                 }
             }
         }
-        // Stamp the NV3D signature into row index td.Height (the extra row).
-        // The compositor lays out our SbS input as [left | right]; NVIDIA's
-        // 3D Vision driver routes the left half of the packed surface to the
-        // right eye by default for our pipeline, so we flip the swap-eyes bit
-        // by default. eye_swap_ in the config returns it to non-swapped.
+        packed_sysmem_->UnlockRect();
+    }
+    ctx->Unmap(staging_.Get(), 0);
+
+    RECT in_body{ 0, 0, static_cast<LONG>(packed_w_in_), static_cast<LONG>(td.Height) };
+    POINT origin{ 0, 0 };
+    HRESULT hr = device9_->UpdateSurface(packed_sysmem_.Get(), &in_body,
+                                          packed_input_default_.Get(), &origin);
+    if (FAILED(hr)) {
+        static std::atomic<bool> logged{false};
+        bool e = false;
+        if (logged.compare_exchange_strong(e, true))
+            LOG() << "NvStereoDx9Presenter: UpdateSurface(body) failed hr=0x" << std::hex << hr;
+        (void)CheckAndMarkD3D9Dead(hr, "UpdateSurface");
+        return;
+    }
+
+    // ----- Stage 3 [uniform scale]: input-sized offscreen plain DEFAULT →
+    // panel-sized lockable render target with LINEAR filter. This is the
+    // single place we do the uniform per-eye scale (input per-eye → panel
+    // per-eye), so the only non-uniform step in the rest of the chain (the
+    // NV3D 2:1 horizontal squash to the back buffer) lands on a well-
+    // conditioned source.
+    RECT out_body{ 0, 0, static_cast<LONG>(packed_w_out_), static_cast<LONG>(packed_h_out_) };
+    hr = device9_->StretchRect(packed_input_default_.Get(), &in_body,
+                                packed_default_.Get(), &out_body, D3DTEXF_LINEAR);
+    if (FAILED(hr)) {
+        static std::atomic<bool> logged{false};
+        bool e = false;
+        if (logged.compare_exchange_strong(e, true))
+            LOG() << "NvStereoDx9Presenter: StretchRect(input->panel) failed hr=0x" << std::hex << hr;
+        (void)CheckAndMarkD3D9Dead(hr, "StretchRect(input->panel)");
+        return;
+    }
+
+    // ----- Stage 4 [signature]: LockRect the header row of the lockable
+    // render target and memcpy the 20-byte NV3D struct directly. Lockable
+    // RTs preserve all 4 bytes per pixel (including the X byte that holds
+    // the 'D' in 'N','V','3','D') and the lock-on-RT GPU sync cost is
+    // negligible at 60Hz for 20 bytes.
+    {
         NvStereoImageHeader hdr{};
         hdr.signature = kNvStereoSignature;
-        hdr.width     = per_eye_w;
-        hdr.height    = td.Height;
+        hdr.width     = monitor_w_;
+        hdr.height    = monitor_h_;
         hdr.bpp       = 32;
-        // Live-poll eye_swap so the OSD's "Swap Eyes" toggle takes effect
-        // immediately. Falls back to the Init-time cache if no component
-        // pointer is wired.
         bool live_swap = eye_swap_;
         if (renderer_ && renderer_->Component()) {
             live_swap = renderer_->Component()->GetConfig().eye_swap;
         }
         hdr.flags     = live_swap ? 1u : 0u;
-        uint8_t* hdr_row = static_cast<uint8_t*>(lr.pBits) + td.Height * lr.Pitch;
-        std::memcpy(hdr_row, &hdr, sizeof(hdr));
 
-        packed_sysmem_->UnlockRect();
+        RECT hdr_lock{ 0, static_cast<LONG>(packed_h_out_), 5,
+                       static_cast<LONG>(packed_h_out_) + 1 };
+        D3DLOCKED_RECT hlr{};
+        HRESULT lhr = packed_default_->LockRect(&hlr, &hdr_lock, 0);
+        if (FAILED(lhr)) {
+            static std::atomic<bool> logged{false};
+            bool e = false;
+            if (logged.compare_exchange_strong(e, true))
+                LOG() << "NvStereoDx9Presenter: LockRect(header row) failed hr=0x"
+                      << std::hex << lhr;
+            (void)CheckAndMarkD3D9Dead(lhr, "LockRect(header)");
+            return;
+        }
+        std::memcpy(hlr.pBits, &hdr, sizeof(hdr));
+        packed_default_->UnlockRect();
     }
-    ctx->Unmap(staging_.Get(), 0);
 
-    // Push to GPU.
-    HRESULT hr = device9_->UpdateSurface(packed_sysmem_.Get(), nullptr,
-                                          packed_default_.Get(), nullptr);
-    if (FAILED(hr)) {
-        static std::atomic<bool> logged{false};
-        bool e = false;
-        if (logged.compare_exchange_strong(e, true))
-            LOG() << "NvStereoDx9Presenter: UpdateSurface failed hr=0x" << std::hex << hr;
-        return;
-    }
-
-    // Stretch packed (excluding header row) to back buffer.
-    RECT src{ 0, 0, static_cast<LONG>(packed_w_), static_cast<LONG>(packed_h_) };
-    hr = device9_->StretchRect(packed_default_.Get(), &src,
+    // ----- Stage 5 [final squash]: lockable RT → back buffer (also a RT).
+    // NV3D sees the signature row in packed_default_, splits the body
+    // horizontally, and unsquashes each half back to full panel width per
+    // eye on the stereo back buffer.
+    hr = device9_->StretchRect(packed_default_.Get(), &out_body,
                                 back_buffer_.Get(), nullptr, D3DTEXF_LINEAR);
     if (FAILED(hr)) {
         static std::atomic<bool> logged{false};
         bool e = false;
         if (logged.compare_exchange_strong(e, true))
-            LOG() << "NvStereoDx9Presenter: StretchRect failed hr=0x" << std::hex << hr;
+            LOG() << "NvStereoDx9Presenter: StretchRect(panel->backbuf) failed hr=0x" << std::hex << hr;
+        (void)CheckAndMarkD3D9Dead(hr, "StretchRect(panel->backbuf)");
         return;
     }
 
@@ -933,11 +1133,22 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
         bool e = false;
         if (logged.compare_exchange_strong(e, true))
             LOG() << "NvStereoDx9Presenter: PresentEx failed hr=0x" << std::hex << hr;
+        // Route through the D3D9 circuit-breaker — if the device went away,
+        // stop driving it instead of spinning on every frame.
+        (void)CheckAndMarkD3D9Dead(hr, "PresentEx");
+        return;
     }
 
+
     // Deferred stereo activation: keep retrying after each real present until
-    // the driver's IR emitter wakes up or we run out of attempts.
-    if (!stereo_activated_ && activation_retries_left_ > 0 && stereo_handle_) {
+    // the driver's IR emitter wakes up or we run out of attempts. Throttled
+    // to one attempt per 50ms so the 60-retry budget can't burn through in
+    // <1s during driver contention (e.g. while LightBoost is settling).
+    const DWORD now_tick = GetTickCount();
+    const bool retry_due = (now_tick - last_stereo_activate_tick_) >= 50;
+    if (!stereo_activated_ && activation_retries_left_ > 0 && stereo_handle_ &&
+        !d3d9_dead_.load(std::memory_order_relaxed) && retry_due) {
+        last_stereo_activate_tick_ = now_tick;
         --activation_retries_left_;
         NvAPI_Stereo_Activate(stereo_handle_);
         NvU8 active = 0;
@@ -1069,11 +1280,155 @@ void NvStereoDx9Presenter::FocusThreadLoop()
 // NvAPI_DISP_TryCustomDisplay so the monitor enters low-persistence mode.
 // ===========================================================================
 
-void NvStereoDx9Presenter::CheckAndApplyLightBoost()
+// Resolve a GDI device name (e.g. "\\.\DISPLAY3") to the NVAPI displayId.
+// Returns 0 on failure.
+NvU32 NvStereoDx9Presenter::ResolveNvDisplayId(const std::string& gdi_device_name)
 {
-    LOG() << "NvStereoDx9Presenter::CheckAndApplyLightBoost";
+    if (gdi_device_name.empty()) return 0;
+    char narrow[NVAPI_SHORT_STRING_MAX] = {};
+    const size_t n = (std::min)(gdi_device_name.size(), sizeof(narrow) - 1);
+    std::memcpy(narrow, gdi_device_name.data(), n);
+    NvU32 displayId = 0;
+    NvAPI_Status s = NvAPI_DISP_GetDisplayIdByDisplayName(narrow, &displayId);
+    if (s != NVAPI_OK) {
+        LOG() << "ResolveNvDisplayId: NvAPI_DISP_GetDisplayIdByDisplayName('"
+              << narrow << "') failed status=" << s;
+        return 0;
+    }
+    return displayId;
+}
+
+
+// Pump messages and poll NvAPI_DISP_GetTiming on `displayId` until the live
+// timing matches `expected` (HTotal/VTotal within 1 unit, pclk within 0.1%)
+// or `timeout_ms` elapses. Returns true if a match was observed.
+bool NvStereoDx9Presenter::WaitForTimingMatch(NvU32 displayId,
+                                              const NV_TIMING& expected,
+                                              DWORD timeout_ms)
+{
+    if (!displayId) {
+        // No displayId to poll — fall back to a fixed wait so callers still
+        // get *some* settle when the resolution lookup failed earlier.
+        display_utils::WaitForModesetSettle(timeout_ms);
+        return false;
+    }
+    const DWORD start = GetTickCount();
+    while (true) {
+        // Drain WM_DISPLAYCHANGE etc. so DWM sees the modeset complete.
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+
+        NV_TIMING live = {};
+        NV_TIMING_INPUT ti = {}; ti.version = NV_TIMING_INPUT_VER;
+        NvAPI_Status s = NvAPI_DISP_GetTiming(displayId, &ti, &live);
+        if (s == NVAPI_OK) {
+            const bool h_match = (live.HTotal == expected.HTotal);
+            const bool v_match = (live.VTotal == expected.VTotal);
+            // pclk in 10kHz units; allow 0.1% tolerance.
+            const NvU32 pclk_a = live.pclk, pclk_b = expected.pclk;
+            const NvU32 pclk_tol = pclk_b ? (std::max<NvU32>)(1u, pclk_b / 1000u) : 1u;
+            const bool p_match = (pclk_a == 0 || pclk_b == 0) ? true
+                : (pclk_a >= pclk_b - pclk_tol && pclk_a <= pclk_b + pclk_tol);
+            if (h_match && v_match && p_match) {
+                const DWORD elapsed = GetTickCount() - start;
+                LOG() << "WaitForTimingMatch: settled after " << elapsed
+                      << "ms (HTotal=" << live.HTotal << " VTotal=" << live.VTotal
+                      << " pclk=" << live.pclk << ")";
+                return true;
+            }
+        }
+        if (GetTickCount() - start >= timeout_ms) {
+            LOG() << "WaitForTimingMatch: TIMEOUT after " << timeout_ms
+                  << "ms — expected HTotal=" << expected.HTotal
+                  << " VTotal=" << expected.VTotal << " pclk=" << expected.pclk;
+            return false;
+        }
+        Sleep(50);
+    }
+}
+
+
+// Like WaitForTimingMatch but waits for the timing to *differ* from `previous`
+// (used after RevertCustomDisplayTrial so we know the revert took effect).
+bool NvStereoDx9Presenter::WaitForTimingChange(NvU32 displayId,
+                                               const NV_TIMING& previous,
+                                               DWORD timeout_ms)
+{
+    if (!displayId) {
+        display_utils::WaitForModesetSettle(timeout_ms);
+        return false;
+    }
+    const DWORD start = GetTickCount();
+    while (true) {
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        NV_TIMING live = {};
+        NV_TIMING_INPUT ti = {}; ti.version = NV_TIMING_INPUT_VER;
+        NvAPI_Status s = NvAPI_DISP_GetTiming(displayId, &ti, &live);
+        if (s == NVAPI_OK) {
+            if (live.HTotal != previous.HTotal || live.VTotal != previous.VTotal) {
+                const DWORD elapsed = GetTickCount() - start;
+                LOG() << "WaitForTimingChange: settled after " << elapsed
+                      << "ms (now HTotal=" << live.HTotal << " VTotal=" << live.VTotal << ")";
+                return true;
+            }
+        }
+        if (GetTickCount() - start >= timeout_ms) {
+            LOG() << "WaitForTimingChange: TIMEOUT after " << timeout_ms << "ms";
+            return false;
+        }
+        Sleep(50);
+    }
+}
+
+
+// Once any D3D9Ex call returns a state-loss / removed / hung HRESULT, we mark
+// the device dead and the present pipeline becomes a no-op. We never attempt
+// live ResetEx — driver semantics around DEVICEREMOVED on D3D9Ex are flaky,
+// and the failure mode we're protecting against (a wedged driver) is exactly
+// the one where ResetEx is least likely to work. "Stop, log, user restarts" is
+// the honest contract; the next SteamVR launch rebuilds the whole stack.
+bool NvStereoDx9Presenter::CheckAndMarkD3D9Dead(HRESULT hr, const char* origin)
+{
+    const bool is_lost =
+        hr == D3DERR_DEVICELOST ||
+        hr == D3DERR_DEVICEHUNG ||
+        hr == D3DERR_DEVICEREMOVED ||
+        hr == D3DERR_DRIVERINTERNALERROR ||
+        hr == S_PRESENT_MODE_CHANGED;
+    if (!is_lost) return false;
+    bool expected = false;
+    if (d3d9_dead_.compare_exchange_strong(expected, true)) {
+        LOG() << "NvStereoDx9Presenter: D3D9Ex device entered terminal state in "
+              << (origin ? origin : "?") << " hr=0x" << std::hex << hr
+              << " — stopping device. SteamVR restart required.";
+    }
+    return true;
+}
+
+
+void NvStereoDx9Presenter::CheckAndApplyLightBoost(const std::string& target_gdi_device)
+{
+    LOG() << "NvStereoDx9Presenter::CheckAndApplyLightBoost target='" << target_gdi_device << "'";
 
     NvAPI_Status  status;
+
+    // Resolve the GDI device name to a single NVAPI displayId. LightBoost is
+    // strictly single-display — applying timings to other monitors is unsafe
+    // and was the root cause of the multi-monitor freezes.
+    const NvU32 target_id = ResolveNvDisplayId(target_gdi_device);
+    if (!target_id) {
+        LOG() << "CheckAndApplyLightBoost: could not resolve target display '"
+              << target_gdi_device << "' to an NVAPI displayId — skipping LightBoost.";
+        return;
+    }
+    LOG() << "CheckAndApplyLightBoost: target displayId=" << target_id;
 
     NvPhysicalGpuHandle gpu_handles[NVAPI_MAX_PHYSICAL_GPUS] = {};
     NvU32               gpu_count = 0;
@@ -1098,10 +1453,11 @@ void NvStereoDx9Presenter::CheckAndApplyLightBoost()
     }
 
     primary_display_ids_.clear();
-    bool haveAnyMatch = false;
-    bool timingsInitialized = false;
+    has_original_target_timing_ = false;
+    bool target_found = false;
+    bool already_good = false;
 
-    for (NvU32 gpuIndex = 0; gpuIndex < gpu_count; ++gpuIndex) {
+    for (NvU32 gpuIndex = 0; gpuIndex < gpu_count && !target_found; ++gpuIndex) {
         NvPhysicalGpuHandle gpu = gpu_handles[gpuIndex];
 
         NV_GPU_DISPLAYIDS display_ids[NVAPI_MAX_DISPLAYS] = {};
@@ -1115,8 +1471,15 @@ void NvStereoDx9Presenter::CheckAndApplyLightBoost()
         for (NvU32 d = 0; d < display_count; ++d) {
             const NvU32 displayId = display_ids[d].displayId;
 
+            // Single-display filter — only the SteamVR target gets LightBoost.
+            if (displayId != target_id) continue;
+
             std::wstring monitor_edid = parse_monitor_EDID(displayId);
-            if (monitor_edid.empty()) continue;
+            if (monitor_edid.empty()) {
+                LOG() << "CheckAndApplyLightBoost: target displayId=" << displayId
+                      << " has no readable EDID — skipping LightBoost.";
+                continue;
+            }
 
             // Query the current timing for this display.
             NV_TIMING       timing  = {};
@@ -1125,13 +1488,13 @@ void NvStereoDx9Presenter::CheckAndApplyLightBoost()
 
             status = NvAPI_DISP_GetTiming(displayId, &current, &timing);
             if (status != NVAPI_OK) {
-                LOG() << "CheckAndApplyLightBoost: NvAPI_DISP_GetTiming failed for display "
+                LOG() << "CheckAndApplyLightBoost: NvAPI_DISP_GetTiming failed for target display "
                       << displayId << " status=" << status;
                 continue;
             }
 
             LOG() << "CheckAndApplyLightBoost: GPU " << gpuIndex
-                  << " Display[" << d << "] EDID=" << NvTimingsDb::to_utf8(monitor_edid)
+                  << " target Display EDID=" << NvTimingsDb::to_utf8(monitor_edid)
                   << " rr=" << timing.etc.rr
                   << " VTotal=" << timing.VTotal << " HTotal=" << timing.HTotal;
 
@@ -1150,40 +1513,62 @@ void NvStereoDx9Presenter::CheckAndApplyLightBoost()
                 }
             }
 
-            if (!e) continue;
+            if (!e) {
+                LOG() << "CheckAndApplyLightBoost: target display EDID '" << baseKey
+                      << "' not in nvtimings.json — skipping LightBoost.";
+                target_found = true;  // resolved but no DB entry
+                break;
+            }
 
-            haveAnyMatch = true;
+            target_found = true;
             primary_display_ids_.push_back(displayId);
 
-            if (!timingsInitialized) {
-                monitor_timings_ = *e;
-                monitor_timings_.refresh_int  = usedFallback ? e->refresh_int : timing.etc.rr;
-                monitor_timings_.monitor_EDID = baseKey;
+            monitor_timings_ = *e;
+            monitor_timings_.refresh_int  = usedFallback ? e->refresh_int : timing.etc.rr;
+            monitor_timings_.monitor_EDID = baseKey;
 
-                // Check if the current timing matches the DB entry.
-                // If it matches, LightBoost is already active or not needed.
-                if (timing.VTotal == e->timing.VTotal &&
-                    timing.HTotal == e->timing.HTotal) {
-                    LOG() << "CheckAndApplyLightBoost: timings already match DB entry — "
-                          << "LightBoost resolution not needed.";
-                } else {
-                    LOG() << "CheckAndApplyLightBoost: timings MISMATCH. "
-                          << "Current VTotal=" << timing.VTotal << " DB VTotal=" << e->timing.VTotal
-                          << " Current HTotal=" << timing.HTotal << " DB HTotal=" << e->timing.HTotal
-                          << " — will apply LightBoost resolution.";
-                }
+            // Cache the original timing so we can confirm the post-revert
+            // settle during DisableLightBoost.
+            original_target_timing_     = timing;
+            has_original_target_timing_ = true;
 
-                timingsInitialized = true;
+            // Tight match check — exact HTotal+VTotal+pclk. If already
+            // matched, the panel is already in LightBoost mode and we
+            // shouldn't reapply the modeset (which itself triggers a
+            // disruptive driver event).
+            const bool h_match = (timing.HTotal == e->timing.HTotal);
+            const bool v_match = (timing.VTotal == e->timing.VTotal);
+            const NvU32 pclk_tol = e->timing.pclk ? (std::max<NvU32>)(1u, e->timing.pclk / 1000u) : 1u;
+            const bool p_match = (e->timing.pclk == 0) ? true
+                : (timing.pclk + pclk_tol >= e->timing.pclk &&
+                   timing.pclk <= e->timing.pclk + pclk_tol);
+            already_good = (h_match && v_match && p_match);
+            if (already_good) {
+                LOG() << "CheckAndApplyLightBoost: target timings already match DB entry — "
+                      << "LightBoost not needed.";
+            } else {
+                LOG() << "CheckAndApplyLightBoost: timings MISMATCH. "
+                      << "Current VTotal=" << timing.VTotal << " DB VTotal=" << e->timing.VTotal
+                      << " Current HTotal=" << timing.HTotal << " DB HTotal=" << e->timing.HTotal
+                      << " — will apply LightBoost resolution.";
             }
+            break;  // matched target — done
         }
     }
 
-    if (!haveAnyMatch) {
-        LOG() << "CheckAndApplyLightBoost: no displays matched in nvtimings.json.";
+    if (!target_found) {
+        LOG() << "CheckAndApplyLightBoost: target NVAPI displayId=" << target_id
+              << " was not found via NvAPI_GPU_GetConnectedDisplayIds.";
+        return;
+    }
+    if (primary_display_ids_.empty() || already_good) {
+        // Nothing more to do — either no DB match, or the timing is already
+        // what we'd apply. Skip the modeset entirely.
         return;
     }
 
-    LOG() << "CheckAndApplyLightBoost: primary_display_ids count=" << primary_display_ids_.size();
+    LOG() << "CheckAndApplyLightBoost: primary_display_ids count=" << primary_display_ids_.size()
+          << " (filtered to single target)";
 
     // Attempt to enable LightBoost with the matched timings.
     EnableLightBoost();
@@ -1276,6 +1661,12 @@ void NvStereoDx9Presenter::EnableLightBoost()
     auto wndSnapshot = SnapshotProcessWindows();
     WaitForModesetSettle(100);
 
+    // Snapshot pre-apply timing so we can detect ANY change after
+    // TryCustomDisplay — much more robust than exact-match comparison, since
+    // NVAPI normalises live timing fields in ways that don't always match
+    // what we wrote.
+    NV_TIMING preApply = original_target_timing_;
+
     status = NvAPI_DISP_TryCustomDisplay(idArray.data(),
                                           static_cast<NvU32>(idArray.size()),
                                           displayArray.data());
@@ -1289,7 +1680,21 @@ void NvStereoDx9Presenter::EnableLightBoost()
         return;
     }
 
-    WaitForModesetSettle(500);
+    // Drain WM_DISPLAYCHANGE / let DWM observe the modeset for a beat, then
+    // poll for the live timing to differ from the pre-apply snapshot. Most
+    // modesets settle in well under 1s; the user has observed worst-case
+    // ~10s so we cap there. We do NOT revert on timeout — if GetTiming never
+    // reports a change, the modeset probably still took but isn't visible
+    // via this API path; ripping it back out would just thrash the driver.
+    WaitForModesetSettle(200);
+    const bool settled = has_original_target_timing_
+        ? WaitForTimingChange(idArray.front(), preApply, 10000)
+        : (WaitForModesetSettle(500), false);
+    if (!settled) {
+        LOG() << "EnableLightBoost: did not observe a timing change via GetTiming "
+                 "after the trial — proceeding under the assumption that the "
+                 "modeset succeeded (TryCustomDisplay returned OK).";
+    }
     RestoreDisplayPositions(posSnapshot);
     RestoreProcessWindows(wndSnapshot);
 
@@ -1319,12 +1724,28 @@ void NvStereoDx9Presenter::DisableLightBoost()
     auto posSnapshot = SnapshotDisplayPositions();
     auto wndSnapshot = SnapshotProcessWindows();
 
+    // Capture pre-revert timing so we can poll for the actual change to land,
+    // up to 10s — mirrors EnableLightBoost's polled settle. Without this the
+    // D3D9 device release races with the GPU driver still completing the
+    // revert, which has been observed to freeze the display on multi-monitor.
+    NV_TIMING preRevert = {};
+    {
+        NV_TIMING_INPUT ti = {}; ti.version = NV_TIMING_INPUT_VER;
+        NvAPI_DISP_GetTiming(idArray.front(), &ti, &preRevert);
+    }
+
     NvAPI_Status status = NvAPI_DISP_RevertCustomDisplayTrial(
         idArray.data(), static_cast<NvU32>(idArray.size()));
 
     LOG() << "DisableLightBoost: NvAPI_DISP_RevertCustomDisplayTrial returned " << status;
 
-    WaitForModesetSettle(500);
+    // Minimum drain so DWM processes WM_DISPLAYCHANGE before D3D9 release.
+    WaitForModesetSettle(200);
+    // Best-effort wait for the timing to change back. As with EnableLightBoost
+    // we don't trust an exact-match check (NVAPI normalises live values).
+    // WaitForTimingChange returns on ANY change vs. preRevert, which is the
+    // signal we actually want here.
+    WaitForTimingChange(idArray.front(), preRevert, 3000);
 
     if (status == NVAPI_OK) {
         RestoreDisplayPositions(posSnapshot);

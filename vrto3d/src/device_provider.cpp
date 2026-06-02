@@ -24,6 +24,8 @@
 
 #include "vrto3dlib/win32_helper.hpp"
 #include "device_provider.h"
+#include "dx11_renderer.h"
+#include "direct_mode_component.h"
 
 namespace {
 
@@ -143,6 +145,8 @@ void MyDeviceProvider::RunFrame()
                 g_current_app_pid.store(app_pid_);
                 LOG() << "AppName = " << app_name_.c_str();
                 my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessConnected);
+                // Resume the renderer (cleared by the prior ProcessDisconnected).
+                if (auto* r = my_hmd_device_->GetRenderer()) r->OnAppConnect();
                 wait_count_ = 500;
             }
         }
@@ -161,6 +165,19 @@ void MyDeviceProvider::RunFrame()
                 my_hmd_device_->GetStereoComponent()->GetConfig().auto_exit;
             const uint32_t pid_snapshot = app_pid_;
             my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessDisconnected);
+
+            // Drop the departed game's swap-texture handles BEFORE we
+            // continue submitting frames. The compositor doesn't always call
+            // DestroySwapTextureSet on app exit, leaving stale entries in
+            // handle_map_ that the renderer would try to import — and that
+            // import was the trigger for the DEVICE_REMOVED cascade observed
+            // in crash logs. Pause the renderer so it stops trying until the
+            // next ProcessConnected.
+            if (auto* dmc = my_hmd_device_->GetDirectModeComponent()) {
+                dmc->DestroyAllSwapTextureSets(pid_snapshot);
+            }
+            if (auto* r = my_hmd_device_->GetRenderer()) r->OnAppDisconnect();
+
             app_name_ = "";
             app_pid_ = 0;
             g_current_app_pid.store(0);
