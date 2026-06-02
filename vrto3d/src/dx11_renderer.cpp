@@ -248,6 +248,67 @@ void Dx11Renderer::VsyncTickThread()
 }
 
 
+// Detect a terminal DXGI device state from any HRESULT and latch it. On the
+// first observation we log GetDeviceRemovedReason and set device_dead_; all
+// future calls return immediately. This stops the EnsureOutputTexture spam
+// loop that was hammering a dead device thousands of times per second.
+bool Dx11Renderer::CheckAndMarkDeviceDead(HRESULT hr, const char* origin)
+{
+    const bool is_lost =
+        hr == DXGI_ERROR_DEVICE_REMOVED ||
+        hr == DXGI_ERROR_DEVICE_RESET   ||
+        hr == DXGI_ERROR_DEVICE_HUNG    ||
+        hr == DXGI_ERROR_DRIVER_INTERNAL_ERROR ||
+        hr == 0x887A0005 /* legacy DXGI_ERROR_DEVICE_REMOVED on some SDKs */;
+    if (!is_lost) return false;
+    bool expected = false;
+    if (device_dead_.compare_exchange_strong(expected, true)) {
+        HRESULT reason = device_ ? device_->GetDeviceRemovedReason() : S_OK;
+        device_removed_reason_ = reason;
+        LOG() << "Dx11Renderer: device terminal state in " << (origin ? origin : "?")
+              << " hr=0x" << std::hex << hr
+              << " GetDeviceRemovedReason=0x" << std::hex << reason
+              << " — stopping renderer. SteamVR restart required.";
+        // Drop everything that might be holding a reference to the dying
+        // device's resources. This unblocks SteamVR shutdown cleanly.
+        shared_texture_cache_.clear();
+        composite_srv_cache_.clear();
+        out_sbs_.Reset();
+        out_sbs_rtv_.Reset();
+    }
+    return true;
+}
+
+
+void Dx11Renderer::OnAppDisconnect()
+{
+    // Called from MyDeviceProvider when SteamVR fires VREvent_ProcessDisconnected.
+    // The departed game's swap textures are still referenced in our caches via
+    // shared-texture handles, but the source ID3D11Device just went away — any
+    // attempt to import / use them now will fault or trigger DEVICE_REMOVED.
+    // Drop everything and pause until the next ProcessConnected.
+    paused_for_disconnect_.store(true, std::memory_order_release);
+
+    std::lock_guard<std::mutex> ctx_lk(context_mutex_);
+    shared_texture_cache_.clear();
+    composite_srv_cache_.clear();
+    // out_sbs_ is sized for the previous game's resolution; the next game may
+    // submit a different size. Drop it so it gets recreated cleanly.
+    out_sbs_.Reset();
+    out_sbs_rtv_.Reset();
+    sbs_width_ = sbs_height_ = 0;
+    sbs_format_ = DXGI_FORMAT_UNKNOWN;
+    LOG() << "Dx11Renderer: app-disconnect — caches cleared, renderer paused";
+}
+
+
+void Dx11Renderer::OnAppConnect()
+{
+    paused_for_disconnect_.store(false, std::memory_order_release);
+    LOG() << "Dx11Renderer: app-connect — renderer resumed";
+}
+
+
 void Dx11Renderer::EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming)
 {
     if (out_sbs_ &&
@@ -280,6 +341,7 @@ void Dx11Renderer::EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming)
     HRESULT hr = device_->CreateTexture2D(&d, nullptr, &out_sbs_);
     if (FAILED(hr)) {
         LOG() << "Dx11Renderer: CreateTexture2D(out_sbs) failed hr=" << std::hex << hr;
+        (void)CheckAndMarkDeviceDead(hr, "EnsureOutputTexture/CreateTexture2D");
         return;
     }
     sbs_width_  = incoming.Width;
@@ -308,6 +370,14 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
                                      vr::SharedTextureHandle_t sync_handle)
 {
     if (!initialized_ || !device_ || !context_ || !layers || layer_count <= 0) return;
+    // Circuit-breaker: once the device has hit DEVICE_REMOVED / RESET / HUNG
+    // we stop submitting work. Continuing to hammer the device was the cause
+    // of the original "thousands of CreateTexture2D failures per second" log
+    // pattern that contributed to the GPU driver freeze.
+    if (device_dead_.load(std::memory_order_acquire)) return;
+    // Pause-on-disconnect: skip frames between VR apps so we don't try to
+    // import stale shared-texture handles from a process that just exited.
+    if (paused_for_disconnect_.load(std::memory_order_acquire)) return;
     if (layer_count > kMaxLayers) layer_count = kMaxLayers;
     if (!layers[0].left || !layers[0].right) return;
 
@@ -384,6 +454,10 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
         if (ahr == S_OK) {
             acquired = true;
         } else {
+            // Route through the circuit-breaker — if the source device is
+            // dead, AcquireSync can start returning DEVICE_REMOVED and we
+            // should latch+stop rather than spin retrying.
+            (void)CheckAndMarkDeviceDead(ahr, "AcquireSync");
             static std::atomic<bool> logged{false};
             bool expected = false;
             if (logged.compare_exchange_strong(expected, true)) {
@@ -525,6 +599,7 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
 bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
 {
     if (!initialized_ || !device_) return false;
+    if (device_dead_.load(std::memory_order_acquire)) return false;
 
     // Wait for the compositor thread to signal "fresh composite ready"
     // (matches the old IVRVirtualDisplay path: window thread paced by

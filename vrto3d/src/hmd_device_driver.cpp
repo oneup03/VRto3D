@@ -1283,7 +1283,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         SetAsync(config.async_enable);
 
         if (config.auto_focus) {
-            std::this_thread::sleep_for(std::chrono::seconds(8));
+            std::this_thread::sleep_for(std::chrono::seconds(10));
             is_on_top_ = true;
             man_on_top_ = true;
             vrto3d::TriggerOpenVRRecenter();

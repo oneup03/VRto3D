@@ -96,9 +96,27 @@ private:
     // database and apply a LightBoost custom resolution if the monitor's
     // current timing doesn't match a known entry.
     // All three are non-fatal — failures are logged but never abort init.
-    void CheckAndApplyLightBoost();
+    void CheckAndApplyLightBoost(const std::string& target_gdi_device);
     void EnableLightBoost();
     void DisableLightBoost();
+
+    // Resolve a Windows GDI device name (e.g. "\\.\\DISPLAY3") to the
+    // matching NVAPI displayId. Returns 0 on failure.
+    static NvU32 ResolveNvDisplayId(const std::string& gdi_device_name);
+
+    // Poll NvAPI_DISP_GetTiming on `displayId` until the live timing matches
+    // `expected.HTotal/VTotal/pclk` (within 1-unit tolerance) or `timeout_ms`
+    // elapses. Pumps Win32 messages during the poll so WM_DISPLAYCHANGE drains.
+    // Returns true if the timing was observed to match before timeout.
+    static bool WaitForTimingMatch(NvU32 displayId, const NV_TIMING& expected,
+                                    DWORD timeout_ms);
+    static bool WaitForTimingChange(NvU32 displayId, const NV_TIMING& previous,
+                                     DWORD timeout_ms);
+
+    // Detect that the D3D9Ex device has hit an unrecoverable state.
+    // On the first observed bad HRESULT we log GetDeviceRemovedReason-style
+    // info and set d3d9_dead_; subsequent calls are no-ops.
+    bool CheckAndMarkD3D9Dead(HRESULT hr, const char* origin);
 
     Dx11Renderer* renderer_ = nullptr;
     bool          eye_swap_ = false;
@@ -122,10 +140,44 @@ private:
     Microsoft::WRL::ComPtr<IDirect3D9Ex>           d3d9_;
     Microsoft::WRL::ComPtr<IDirect3DDevice9Ex>     device9_;
     Microsoft::WRL::ComPtr<IDirect3DSurface9>      back_buffer_;
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_sysmem_;   // 2W x (H+1) D3DPOOL_SYSTEMMEM
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_default_;  // 2W x (H+1) D3DPOOL_DEFAULT
-    uint32_t                                      packed_w_ = 0;     // 2 * input per-eye width
-    uint32_t                                      packed_h_ = 0;     // input height
+
+    // Three-stage packed-surface pipeline. The intermediate step exists so
+    // each eye gets a UNIFORM per-axis stretch to panel resolution before
+    // NV3D's 2:1 horizontal squash, instead of a single non-uniform stretch
+    // that distorted detail (e.g. 2880x1620 source → 1280x1440 per-eye
+    // region had different X/Y scales — the visible "squashy" artifact).
+    //
+    //   1. packed_sysmem_         (SYSTEMMEM,     input-sized) — CPU writes body bytes
+    //   2. packed_input_default_  (DEFAULT plain, input-sized) — GPU-upload target
+    //   3. packed_default_        (LOCKABLE RT,   panel-sized + header row) — final SbS
+    //
+    // Why this shape (after several false starts):
+    //   - LINEAR StretchRect between two offscreen plain D3DPOOL_DEFAULT
+    //     surfaces is INVALIDCALL on NVIDIA. So the body-stretch destination
+    //     has to be a render target.
+    //   - StretchRect from render target → offscreen plain D3DPOOL_DEFAULT is
+    //     also INVALIDCALL on NVIDIA, even with POINT and 1:1. So we can't
+    //     copy the scaled body back out to an offscreen plain.
+    //   - UpdateSurface can't target a render target.
+    //   - ColorFill on D3DFMT_X8R8G8B8 zaps the X byte (drops the 'D' in
+    //     'NV3D' which is at the high byte of the signature DWORD).
+    // Way out: make the render target LOCKABLE. Body scaling lands on it
+    // (RT dest is supported for LINEAR scaling). The NV3D signature row is
+    // written by LockRect + memcpy of the 20-byte struct — byte-exact,
+    // including the X byte. Locking a render target every frame for 20
+    // bytes forces a small GPU sync but is functionally correct and the
+    // perf cost is negligible at 60Hz.
+    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_sysmem_;
+    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_input_default_;
+    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_default_;
+
+    // Input dims (source per-eye × 2, body height) — packed_sysmem_ / packed_input_default_.
+    uint32_t                                      packed_w_in_  = 0;  // 2 * input per-eye width
+    uint32_t                                      packed_h_in_  = 0;  // input body height (no header)
+    // Output dims (panel per-eye × 2, panel height) — packed_default_.
+    uint32_t                                      packed_w_out_ = 0;  // 2 * panel per-eye width
+    uint32_t                                      packed_h_out_ = 0;  // panel body height (no header)
+
     uint32_t                                      monitor_w_ = 0;
     uint32_t                                      monitor_h_ = 0;
 
@@ -153,6 +205,19 @@ private:
     bool                   lightboost_enabled_ = false;
     NvTimingsEntry         monitor_timings_{};
     std::vector<NvU32>     primary_display_ids_;
+    NV_TIMING              original_target_timing_{};   // captured pre-LightBoost timing of the target
+    bool                   has_original_target_timing_ = false;
+
+    // D3D9Ex device-state circuit-breaker. Once set (by PresentFrame error,
+    // CheckDeviceState, or WM_DISPLAYCHANGE), the present pipeline becomes a
+    // no-op and stops driving a wedged driver. Cleared only by reinitialization.
+    std::atomic<bool>      d3d9_dead_{false};
+    // Frame counter purely for periodic CheckDeviceState — not exposed.
+    int                    frames_since_state_check_ = 0;
+    // Throttles per-frame Stereo_Activate retries so the 60-retry budget
+    // can't burn through in <1s during driver contention.
+    DWORD                  last_stereo_activate_tick_ = 0;
+
 };
 
 }  // namespace vrto3d

@@ -124,6 +124,14 @@ public:
     // to poke presenter-specific behavior (e.g. LeiaSR head-pose calibrate).
     vrto3d::IOutputPresenter* Presenter() { return presenter_.get(); }
 
+    // VR application lifecycle hooks. Called from MyDeviceProvider::RunFrame
+    // when SteamVR posts VREvent_ProcessConnected / ProcessDisconnected. The
+    // disconnect path drops the per-app swap-texture pool entries from the
+    // DirectModeComponent and pauses the renderer so we don't keep submitting
+    // work using stale shared-texture handles while no app is active.
+    void OnAppDisconnect();
+    void OnAppConnect();
+
     // Accessors for the presenter.
     ID3D11Device*           Device()   const { return device_.Get();  }
     ID3D11DeviceContext*    Context()  const { return context_.Get(); }
@@ -139,6 +147,19 @@ public:
 private:
     void EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming);
     void VsyncTickThread();
+
+    // Circuit-breaker: once set, OnDirectModeFrame and WaitAndDrawPending
+    // become no-ops. Set by CheckAndMarkDeviceDead on the first observation
+    // of a device-removed/reset/hung HRESULT. Cleared only by re-Init (not
+    // exposed here), so SteamVR restart is required to recover.
+    std::atomic<bool> device_dead_{false};
+    HRESULT           device_removed_reason_ = S_OK;
+    bool CheckAndMarkDeviceDead(HRESULT hr, const char* origin);
+
+    // Pause-on-disconnect: set by OnAppDisconnect, cleared by OnAppConnect.
+    // The renderer skips OnDirectModeFrame while paused so we don't try to
+    // import the just-departed game's stale shared-texture handles.
+    std::atomic<bool> paused_for_disconnect_{false};
 
     Microsoft::WRL::ComPtr<ID3D11Device>        device_;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
