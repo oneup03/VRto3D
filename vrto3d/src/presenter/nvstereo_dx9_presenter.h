@@ -85,8 +85,14 @@ private:
                         uint32_t monitor_w,
                         uint32_t monitor_h,
                         float    refresh_hz);
-    bool EnsurePackedSurfaces(uint32_t input_w_per_eye,
-                               uint32_t input_h);
+    // Ensures input-side packed_sysmem_/packed_input_default_ are sized to
+    // input dims, and panel-side packed_default_ is sized to monitor dims.
+    bool EnsurePackedSurfaces(uint32_t input_w_per_eye, uint32_t input_h);
+
+    // Refresh the NV3D signature row if any of (panel dims, eye swap) have
+    // changed since last write. LockRect's per-frame GPU sync is skipped on
+    // the common "nothing changed" path.
+    void RefreshSignatureIfNeeded();
     void StereoActivationRetry();
     void FocusThreadLoop();
     void InstallFseSubclass(HWND hwnd);
@@ -147,45 +153,48 @@ private:
     // that distorted detail (e.g. 2880x1620 source → 1280x1440 per-eye
     // region had different X/Y scales — the visible "squashy" artifact).
     //
-    //   1. packed_sysmem_         (SYSTEMMEM,     input-sized) — CPU writes body bytes
-    //   2. packed_input_default_  (DEFAULT plain, input-sized) — GPU-upload target
-    //   3. packed_default_        (LOCKABLE RT,   panel-sized + header row) — final SbS
+    //   1. staging_              (DX11 STAGING, input-sized) — Map(READ) target
+    //   2. packed_sysmem_        (SYSTEMMEM,    input-sized) — CPU memcpy lands here
+    //   3. packed_input_default_ (DEFAULT plain, input-sized) — UpdateSurface target
+    //   4. packed_default_       (LOCKABLE RT,  panel-sized + header row) — final SbS
     //
-    // Why this shape (after several false starts):
-    //   - LINEAR StretchRect between two offscreen plain D3DPOOL_DEFAULT
-    //     surfaces is INVALIDCALL on NVIDIA. So the body-stretch destination
-    //     has to be a render target.
-    //   - StretchRect from render target → offscreen plain D3DPOOL_DEFAULT is
-    //     also INVALIDCALL on NVIDIA, even with POINT and 1:1. So we can't
-    //     copy the scaled body back out to an offscreen plain.
-    //   - UpdateSurface can't target a render target.
-    //   - ColorFill on D3DFMT_X8R8G8B8 zaps the X byte (drops the 'D' in
-    //     'NV3D' which is at the high byte of the signature DWORD).
-    // Way out: make the render target LOCKABLE. Body scaling lands on it
-    // (RT dest is supported for LINEAR scaling). The NV3D signature row is
-    // written by LockRect + memcpy of the 20-byte struct — byte-exact,
-    // including the X byte. Locking a render target every frame for 20
-    // bytes forces a small GPU sync but is functionally correct and the
-    // perf cost is negligible at 60Hz.
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_sysmem_;
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_input_default_;
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_default_;
-
-    // Input dims (source per-eye × 2, body height) — packed_sysmem_ / packed_input_default_.
-    uint32_t                                      packed_w_in_  = 0;  // 2 * input per-eye width
-    uint32_t                                      packed_h_in_  = 0;  // input body height (no header)
-    // Output dims (panel per-eye × 2, panel height) — packed_default_.
-    uint32_t                                      packed_w_out_ = 0;  // 2 * panel per-eye width
-    uint32_t                                      packed_h_out_ = 0;  // panel body height (no header)
-
-    uint32_t                                      monitor_w_ = 0;
-    uint32_t                                      monitor_h_ = 0;
-
-    // DX11 staging texture for CPU readback of the compositor's SBS output.
+    // Why CPU readback rather than cross-API texture sharing: NVIDIA's
+    // legacy DXGI shared-handle path between D3D11 and D3D9Ex is unreliable
+    // for our workload (observed right-eye-stuck artifacts even with
+    // event-query CPU waits). Map(MAP_READ) on a STAGING texture is the
+    // proven-correct sync primitive — slower but reliable.
+    //
+    // packed_default_ is a LOCKABLE render target — the LINEAR stretch
+    // destination has to be a render target (NVIDIA refuses LINEAR
+    // offscreen-plain → offscreen-plain), and lockable lets us LockRect
+    // the header row to write the 20-byte NV3D signature with all four
+    // bytes per pixel intact (incl. the X byte that holds 'D').
     Microsoft::WRL::ComPtr<ID3D11Texture2D>        staging_;
     uint32_t                                       staging_w_ = 0;
     uint32_t                                       staging_h_ = 0;
     DXGI_FORMAT                                    staging_fmt_ = DXGI_FORMAT_UNKNOWN;
+
+    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_sysmem_;
+    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_input_default_;
+    uint32_t                                       packed_w_in_ = 0;  // 2 * input per-eye width
+    uint32_t                                       packed_h_in_ = 0;  // input body height
+
+    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_default_;
+
+    // Output dims (panel per-eye × 2, panel height) — packed_default_.
+    uint32_t                                      packed_w_out_ = 0;  // 2 * panel per-eye width
+    uint32_t                                      packed_h_out_ = 0;  // panel body height (no header)
+
+    // Cached NV3D signature state. The header row in packed_default_ only
+    // needs to be re-written when one of these changes (or the surface is
+    // recreated) — saves a per-frame LockRect+GPU-sync.
+    uint32_t                                      sig_width_  = 0;
+    uint32_t                                      sig_height_ = 0;
+    bool                                          sig_swap_   = false;
+    bool                                          sig_valid_  = false;
+
+    uint32_t                                      monitor_w_ = 0;
+    uint32_t                                      monitor_h_ = 0;
 
     // NVAPI stereo handle (opaque pointer to NVAPI's internal state).
     StereoHandle  stereo_handle_ = nullptr;
