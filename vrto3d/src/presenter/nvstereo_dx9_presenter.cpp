@@ -27,6 +27,9 @@
 #include <iomanip>
 #include <sstream>
 
+// SSSE3 — for the per-frame R/B byte swap in PresentFrame.
+#include <tmmintrin.h>
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <delayimp.h>
@@ -654,9 +657,9 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     packed_default_.Reset();
     packed_input_default_.Reset();
     packed_sysmem_.Reset();
+    staging_.Reset();
     device9_.Reset();
     d3d9_.Reset();
-    staging_.Reset();
 
     LOG() << "NvStereoDx9Presenter: teardown step 4 — disable LightBoost";
     DisableLightBoost();
@@ -866,15 +869,15 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
 
 bool NvStereoDx9Presenter::EnsurePackedSurfaces(uint32_t input_w_per_eye, uint32_t input_h)
 {
-    // Input-side dims (where the CPU memcpy lands).
+    // Input-side dims (CPU memcpy target + UpdateSurface upload pair).
     const uint32_t in_pw = input_w_per_eye * 2u;
-    const uint32_t in_ph = input_h + 1u;       // +1 row scratch, unused now
-    // Output-side dims (panel-sized so per-eye stretching is uniform). The
-    // back buffer is panel-sized via dm.Width/dm.Height in BuildD3D9Stack.
+    const uint32_t in_ph = input_h;
+    // Output-side dims (panel-sized so the LINEAR scale gives uniform
+    // per-eye quality and the NV3D squash to back-buffer is clean 2:1).
     const uint32_t out_pw = monitor_w_ * 2u;
     const uint32_t out_ph = monitor_h_ + 1u;   // +1 row for NV3D signature
 
-    const bool input_unchanged  = packed_sysmem_ && packed_w_in_  == in_pw  && packed_h_in_  == input_h;
+    const bool input_unchanged  = packed_sysmem_ && packed_w_in_  == in_pw && packed_h_in_  == in_ph;
     const bool output_unchanged = packed_default_ && packed_w_out_ == out_pw && packed_h_out_ == monitor_h_;
     if (input_unchanged && output_unchanged) return true;
 
@@ -899,16 +902,14 @@ bool NvStereoDx9Presenter::EnsurePackedSurfaces(uint32_t input_w_per_eye, uint32
             return false;
         }
         packed_w_in_ = in_pw;
-        packed_h_in_ = input_h;
+        packed_h_in_ = in_ph;
     }
 
     if (!output_unchanged) {
         packed_default_.Reset();
-        // Lockable render target. RT-ness is required for the LINEAR
-        // StretchRect from packed_input_default_ to land here (NVIDIA
-        // refuses LINEAR offscreen-plain → offscreen-plain). Lockable=TRUE
-        // lets us LockRect the header row and write the 20-byte NV3D
-        // signature with all four bytes per pixel intact.
+        sig_valid_ = false;  // surface recreated → signature row needs rewriting
+        // Lockable render target — see header comment for why both RT and
+        // lockable. LINEAR stretch dest + byte-exact signature LockRect.
         hr = device9_->CreateRenderTarget(
             out_pw, out_ph, D3DFMT_X8R8G8B8,
             D3DMULTISAMPLE_NONE, 0,
@@ -923,11 +924,57 @@ bool NvStereoDx9Presenter::EnsurePackedSurfaces(uint32_t input_w_per_eye, uint32
         packed_h_out_ = monitor_h_;
     }
 
-    LOG() << "NvStereoDx9Presenter: packed pipeline input=" << in_pw << "x" << input_h
+    LOG() << "NvStereoDx9Presenter: packed pipeline input=" << in_pw << "x" << in_ph
           << " (per-eye " << input_w_per_eye << "x" << input_h << ")"
           << "  output=" << out_pw << "x" << monitor_h_
           << " (per-eye " << monitor_w_ << "x" << monitor_h_ << ")";
     return true;
+}
+
+
+void NvStereoDx9Presenter::RefreshSignatureIfNeeded()
+{
+    if (!packed_default_) return;
+
+    bool live_swap = eye_swap_;
+    if (renderer_ && renderer_->Component()) {
+        live_swap = renderer_->Component()->GetConfig().eye_swap;
+    }
+
+    if (sig_valid_ &&
+        sig_width_  == monitor_w_ &&
+        sig_height_ == monitor_h_ &&
+        sig_swap_   == live_swap) {
+        return;
+    }
+
+    NvStereoImageHeader hdr{};
+    hdr.signature = kNvStereoSignature;
+    hdr.width     = monitor_w_;
+    hdr.height    = monitor_h_;
+    hdr.bpp       = 32;
+    hdr.flags     = live_swap ? 1u : 0u;
+
+    RECT hdr_lock{ 0, static_cast<LONG>(packed_h_out_), 5,
+                   static_cast<LONG>(packed_h_out_) + 1 };
+    D3DLOCKED_RECT hlr{};
+    HRESULT lhr = packed_default_->LockRect(&hlr, &hdr_lock, 0);
+    if (FAILED(lhr)) {
+        static std::atomic<bool> logged{false};
+        bool e = false;
+        if (logged.compare_exchange_strong(e, true))
+            LOG() << "NvStereoDx9Presenter: LockRect(header row) failed hr=0x"
+                  << std::hex << lhr;
+        (void)CheckAndMarkD3D9Dead(lhr, "LockRect(header)");
+        return;
+    }
+    std::memcpy(hlr.pBits, &hdr, sizeof(hdr));
+    packed_default_->UnlockRect();
+
+    sig_width_  = monitor_w_;
+    sig_height_ = monitor_h_;
+    sig_swap_   = live_swap;
+    sig_valid_  = true;
 }
 
 
@@ -978,7 +1025,7 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
     D3D11_TEXTURE2D_DESC td{};
     sbs_input->GetDesc(&td);
 
-    // Recreate staging on dimension/format change.
+    // Recreate the DX11 STAGING texture on dimension/format change.
     if (!staging_ || staging_w_ != td.Width || staging_h_ != td.Height || staging_fmt_ != td.Format) {
         staging_.Reset();
         D3D11_TEXTURE2D_DESC sd = td;
@@ -998,48 +1045,70 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
         staging_fmt_ = td.Format;
     }
 
-    // Copy compositor SBS texture → CPU-readable staging.
+    // GPU copy out_sbs_ → staging. The subsequent Map(MAP_READ) below acts
+    // as the implicit GPU→CPU sync point (waits for the GPU to finish).
     ctx->CopyResource(staging_.Get(), sbs_input);
 
-    // Recreate D3D9 packed surfaces if input dims changed. td.Width is 2*per_eye.
     const uint32_t per_eye_w = td.Width / 2u;
     if (!EnsurePackedSurfaces(per_eye_w, td.Height)) return;
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (FAILED(ctx->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &mapped))) return;
 
-    // D3D9 X8R8G8B8 stores BGRA in memory. Our staging copies from out_sbs_,
-    // whose byte layout depends on what the game submitted in direct mode:
-    //   - RGBA input  (DXGI_FORMAT_R8G8B8A8_UNORM family, fmt 28/29):
-    //       swap R↔B per pixel to convert RGBA→BGRA (display-redirect
-    //       and SteamVR-home path).
-    //   - BGRA input  (DXGI_FORMAT_B8G8R8A8_UNORM family, fmt 87/91):
-    //       already in D3D9's byte order — straight memcpy.
-    // Without this discrimination, UEVR (which submits BGRA_SRGB) renders
-    // with R/B swapped under 3D Vision.
+    // ----- Stage 1 [CPU copy + format normalize]: pack staging into
+    // packed_sysmem_. Source byte layout depends on what the compositor
+    // submitted:
+    //   - DXGI_FORMAT_R8G8B8A8 family (fmt 28/29): bytes are [R,G,B,A].
+    //     D3D9 X8R8G8B8 stores [B,G,R,X] — we swap R↔B per pixel.
+    //     SSSE3 _mm_shuffle_epi8 does 4 pixels per instruction.
+    //   - DXGI_FORMAT_B8G8R8A8 family (fmt 87/91): bytes are [B,G,R,A] —
+    //     already match D3D9 byte order, just a memcpy + alpha normalize.
     const bool src_is_rgba = (td.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
                               td.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-    // ----- Stage 1: CPU memcpy the body into packed_sysmem_ at INPUT size.
     D3DLOCKED_RECT lr{};
     if (SUCCEEDED(packed_sysmem_->LockRect(&lr, nullptr, 0))) {
-        const uint32_t copy_h = td.Height;
+        const uint32_t copy_h    = td.Height;
         const uint32_t row_bytes = packed_w_in_ * 4u;
-        for (uint32_t y = 0; y < copy_h; ++y) {
-            const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + y * mapped.RowPitch;
-            uint8_t*       dst = static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch;
-            if (src_is_rgba) {
-                for (uint32_t x = 0; x < row_bytes; x += 4) {
-                    dst[x + 0] = src[x + 2];   // B <- src.B (offset 2 in RGBA)
-                    dst[x + 1] = src[x + 1];   // G
-                    dst[x + 2] = src[x + 0];   // R <- src.R (offset 0)
+        if (src_is_rgba) {
+            // SSSE3 byte-shuffle: read 16 bytes (4 pixels RGBA), write 16
+            // bytes (4 pixels BGRA with alpha forced to 0xFF).
+            const __m128i shuf = _mm_setr_epi8(
+                2,1,0,3, 6,5,4,7, 10,9,8,11, 14,13,12,15);
+            const __m128i alpha_mask = _mm_set1_epi32(static_cast<int>(0xFF000000u));
+            for (uint32_t y = 0; y < copy_h; ++y) {
+                const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + y * mapped.RowPitch;
+                uint8_t*       dst = static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch;
+                uint32_t x = 0;
+                for (; x + 16 <= row_bytes; x += 16) {
+                    __m128i v       = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + x));
+                    __m128i swapped = _mm_shuffle_epi8(v, shuf);
+                    __m128i out     = _mm_or_si128(swapped, alpha_mask);
+                    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + x), out);
+                }
+                // Scalar tail (typical row widths are a multiple of 16, so
+                // this only fires for unusual resolutions).
+                for (; x < row_bytes; x += 4) {
+                    dst[x + 0] = src[x + 2];
+                    dst[x + 1] = src[x + 1];
+                    dst[x + 2] = src[x + 0];
                     dst[x + 3] = 0xFF;
                 }
-            } else {
-                // BGRA → BGRA: straight copy, only normalize alpha to 0xFF
-                // since the packed surface format is X8R8G8B8 (no alpha).
+            }
+        } else {
+            // BGRA → BGRA: straight memcpy + SIMD alpha-byte normalize.
+            const __m128i alpha_mask = _mm_set1_epi32(static_cast<int>(0xFF000000u));
+            for (uint32_t y = 0; y < copy_h; ++y) {
+                const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + y * mapped.RowPitch;
+                uint8_t*       dst = static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch;
                 std::memcpy(dst, src, row_bytes);
-                for (uint32_t x = 3; x < row_bytes; x += 4) {
-                    dst[x] = 0xFF;
+                uint32_t x = 0;
+                for (; x + 16 <= row_bytes; x += 16) {
+                    __m128i v   = _mm_loadu_si128(reinterpret_cast<__m128i*>(dst + x));
+                    __m128i out = _mm_or_si128(v, alpha_mask);
+                    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + x), out);
+                }
+                for (; x < row_bytes; x += 4) {
+                    dst[x + 3] = 0xFF;
                 }
             }
         }
@@ -1047,7 +1116,8 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
     }
     ctx->Unmap(staging_.Get(), 0);
 
-    RECT in_body{ 0, 0, static_cast<LONG>(packed_w_in_), static_cast<LONG>(td.Height) };
+    // ----- Stage 2 [GPU upload]: SYSMEM → DEFAULT plain (input-sized).
+    RECT  in_body { 0, 0, static_cast<LONG>(packed_w_in_), static_cast<LONG>(td.Height) };
     POINT origin{ 0, 0 };
     HRESULT hr = device9_->UpdateSurface(packed_sysmem_.Get(), &in_body,
                                           packed_input_default_.Get(), &origin);
@@ -1060,15 +1130,12 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
         return;
     }
 
-    // ----- Stage 3 [uniform scale]: input-sized offscreen plain DEFAULT →
-    // panel-sized lockable render target with LINEAR filter. This is the
-    // single place we do the uniform per-eye scale (input per-eye → panel
-    // per-eye), so the only non-uniform step in the rest of the chain (the
-    // NV3D 2:1 horizontal squash to the back buffer) lands on a well-
-    // conditioned source.
+    // ----- Stage 3 [uniform LINEAR scale]: input-sized DEFAULT plain →
+    // panel-sized lockable RT. Each eye gets a uniform per-axis scale here.
     RECT out_body{ 0, 0, static_cast<LONG>(packed_w_out_), static_cast<LONG>(packed_h_out_) };
     hr = device9_->StretchRect(packed_input_default_.Get(), &in_body,
-                                packed_default_.Get(), &out_body, D3DTEXF_LINEAR);
+                                packed_default_.Get(),       &out_body,
+                                D3DTEXF_LINEAR);
     if (FAILED(hr)) {
         static std::atomic<bool> logged{false};
         bool e = false;
@@ -1078,44 +1145,13 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
         return;
     }
 
-    // ----- Stage 4 [signature]: LockRect the header row of the lockable
-    // render target and memcpy the 20-byte NV3D struct directly. Lockable
-    // RTs preserve all 4 bytes per pixel (including the X byte that holds
-    // the 'D' in 'N','V','3','D') and the lock-on-RT GPU sync cost is
-    // negligible at 60Hz for 20 bytes.
-    {
-        NvStereoImageHeader hdr{};
-        hdr.signature = kNvStereoSignature;
-        hdr.width     = monitor_w_;
-        hdr.height    = monitor_h_;
-        hdr.bpp       = 32;
-        bool live_swap = eye_swap_;
-        if (renderer_ && renderer_->Component()) {
-            live_swap = renderer_->Component()->GetConfig().eye_swap;
-        }
-        hdr.flags     = live_swap ? 1u : 0u;
+    // ----- Stage 4 [signature]: ensure the NV3D header row is current.
+    // No-op on the common path (only re-writes on dim/eye-swap changes).
+    RefreshSignatureIfNeeded();
 
-        RECT hdr_lock{ 0, static_cast<LONG>(packed_h_out_), 5,
-                       static_cast<LONG>(packed_h_out_) + 1 };
-        D3DLOCKED_RECT hlr{};
-        HRESULT lhr = packed_default_->LockRect(&hlr, &hdr_lock, 0);
-        if (FAILED(lhr)) {
-            static std::atomic<bool> logged{false};
-            bool e = false;
-            if (logged.compare_exchange_strong(e, true))
-                LOG() << "NvStereoDx9Presenter: LockRect(header row) failed hr=0x"
-                      << std::hex << lhr;
-            (void)CheckAndMarkD3D9Dead(lhr, "LockRect(header)");
-            return;
-        }
-        std::memcpy(hlr.pBits, &hdr, sizeof(hdr));
-        packed_default_->UnlockRect();
-    }
-
-    // ----- Stage 5 [final squash]: lockable RT → back buffer (also a RT).
-    // NV3D sees the signature row in packed_default_, splits the body
-    // horizontally, and unsquashes each half back to full panel width per
-    // eye on the stereo back buffer.
+    // ----- Stage 5 [final squash]: lockable RT → back buffer. NV3D sees
+    // the signature row, splits the body horizontally, and unsquashes each
+    // half back to full panel width per eye on the stereo back buffer.
     hr = device9_->StretchRect(packed_default_.Get(), &out_body,
                                 back_buffer_.Get(), nullptr, D3DTEXF_LINEAR);
     if (FAILED(hr)) {
