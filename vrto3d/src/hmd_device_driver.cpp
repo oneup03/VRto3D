@@ -1283,10 +1283,26 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         SetAsync(config.async_enable);
 
         if (config.auto_focus) {
-            std::this_thread::sleep_for(std::chrono::seconds(10));
-            is_on_top_ = true;
-            man_on_top_ = true;
-            vrto3d::TriggerOpenVRRecenter();
+            // Run off-thread: this is called from RunFrame, and a 10s sleep
+            // here freezes the driver host's event loop. Snapshot the pid so
+            // a fast disconnect/reconnect doesn't make us focus/recenter for
+            // a different app. Retry the recenter a few times because games
+            // commonly call ResetSeatedZeroPose during their own VR init and
+            // will clobber a single well-timed shot.
+            const uint32_t pid = app_pid_.load();
+            std::thread([this, pid]() {
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+                if (!is_active_) return;
+                if (app_pid_.load() != pid) return;
+                is_on_top_ = true;
+                man_on_top_ = true;
+                for (int i = 0; i < 3; ++i) {
+                    vrto3d::TriggerOpenVRRecenter();
+                    if (i < 2) std::this_thread::sleep_for(std::chrono::seconds(2));
+                    if (!is_active_) return;
+                    if (app_pid_.load() != pid) return;
+                }
+            }).detach();
         }
     }
     else if (status == vr::VREvent_ProcessDisconnected)
