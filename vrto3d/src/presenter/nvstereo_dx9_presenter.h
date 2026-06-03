@@ -217,6 +217,18 @@ private:
     NV_TIMING              original_target_timing_{};   // captured pre-LightBoost timing of the target
     bool                   has_original_target_timing_ = false;
 
+    // GDI device name ("\\.\\DISPLAYn") of the LightBoost target. Captured at
+    // CheckAndApplyLightBoost time so DisableLightBoost can use Win32
+    // ChangeDisplaySettingsExW as a fallback when NVAPI_DISP_RevertCustomDisplayTrial
+    // fails (the trial state gets invalidated by FSE D3D9Ex modesets during
+    // the session, leaving the panel stuck at the LightBoost timing).
+    std::wstring           target_gdi_device_;
+    // OS-stored DEVMODE captured before the LightBoost trial was applied.
+    // ChangeDisplaySettingsExW with this mode forces a Windows-level modeset
+    // that pushes the original timing to the panel.
+    DEVMODEW               original_devmode_{};
+    bool                   has_original_devmode_ = false;
+
     // D3D9Ex device-state circuit-breaker. Once set (by PresentFrame error,
     // CheckDeviceState, or WM_DISPLAYCHANGE), the present pipeline becomes a
     // no-op and stops driving a wedged driver. Cleared only by reinitialization.
