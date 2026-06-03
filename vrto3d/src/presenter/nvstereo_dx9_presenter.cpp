@@ -1195,9 +1195,18 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
                   << (60 - activation_retries_left_) << " present cycle(s)";
         } else if (activation_retries_left_ == 0 && !activation_summary_logged_) {
             activation_summary_logged_ = true;
-            LOG() << "NvStereoDx9Presenter: 3D Vision did NOT engage after 60 "
-                     "present cycles. Frames are being delivered as a mono SbS "
-                     "image. Requirements:";
+            // Don't alarm the user — NvAPI_Stereo_IsActivated returning false
+            // does NOT mean stereo isn't engaging. Our packed back-buffer carries
+            // the NV3D signature in its last row, which the driver detects on
+            // every PresentEx and uses to route left/right halves per-eye via
+            // the IR emitter. That path engages stereo at the driver level
+            // independent of the NvAPI app-registration state queried here.
+            // If you see correct frame-sequential 3D output, this is the
+            // expected behaviour — just ignore the IsActivated state.
+            LOG() << "NvStereoDx9Presenter: NvAPI_Stereo_IsActivated remains false "
+                     "after 60 retries. The NV3D packed-surface signature path "
+                     "should still drive per-eye routing at the driver level. "
+                     "If you genuinely see mono output, verify:";
             LOG() << "  1) NVIDIA 3D Vision driver installed (use 3D Fix Manager)";
             LOG() << "  2) NVIDIA Control Panel > 'Set up stereoscopic 3D' > "
                      "enabled, with a paired IR emitter + glasses.";
@@ -1487,6 +1496,44 @@ void NvStereoDx9Presenter::CheckAndApplyLightBoost(const std::string& target_gdi
         LOG() << "CheckAndApplyLightBoost: Error loading nvtimings.json: " << ex.what();
         return;
     }
+
+    // Snapshot the OS-stored DEVMODE for the target GDI device. This is what
+    // Windows considers the "real" desktop mode independent of any NVAPI
+    // custom-display trial. We'll use it in DisableLightBoost as a
+    // ChangeDisplaySettingsExW fallback when the trial revert fails (the
+    // trial state gets invalidated by FSE D3D9Ex modesets during the
+    // session, and once that happens NvAPI_DISP_RevertCustomDisplayTrial
+    // returns -1 and the panel stays at the LightBoost timing).
+    target_gdi_device_.clear();
+    has_original_devmode_ = false;
+    if (!target_gdi_device.empty()) {
+        const int n = MultiByteToWideChar(
+            CP_UTF8, 0, target_gdi_device.c_str(), -1, nullptr, 0);
+        if (n > 0) {
+            target_gdi_device_.resize(static_cast<size_t>(n - 1), L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, target_gdi_device.c_str(), -1,
+                                target_gdi_device_.data(), n);
+            DEVMODEW dm{}; dm.dmSize = sizeof(dm);
+            if (EnumDisplaySettingsExW(target_gdi_device_.c_str(),
+                                        ENUM_CURRENT_SETTINGS, &dm, 0)) {
+                original_devmode_     = dm;
+                has_original_devmode_ = true;
+                LOG() << "CheckAndApplyLightBoost: snapshotted DEVMODE "
+                      << dm.dmPelsWidth << "x" << dm.dmPelsHeight << "@"
+                      << dm.dmDisplayFrequency << "Hz for fallback revert";
+            }
+        }
+    }
+
+    // NOTE: no speculative revert here. If the panel was left in a
+    // LightBoost timing from a previous session, the normal MISMATCH path
+    // below just re-applies the same custom timing — that's cheap and
+    // non-disruptive (the panel is already showing the right signal).
+    // Kicking it back to the original timing via Revert+ChangeDisplaySettings
+    // here just to immediately re-apply causes an unnecessary modeset
+    // flicker. The real cleanup happens in DisableLightBoost via the
+    // ChangeDisplaySettingsExW fallback that uses the DEVMODE we
+    // snapshotted above.
 
     primary_display_ids_.clear();
     has_original_target_timing_ = false;
@@ -1787,6 +1834,27 @@ void NvStereoDx9Presenter::DisableLightBoost()
         RestoreDisplayPositions(posSnapshot);
         RestoreProcessWindows(wndSnapshot);
         LOG() << "DisableLightBoost: revert succeeded.";
+    } else if (has_original_devmode_ && !target_gdi_device_.empty()) {
+        // Fallback: force a Windows-level modeset to the OS-stored DEVMODE we
+        // snapshotted before applying. The NVAPI trial gets invalidated
+        // mid-session by FSE D3D9Ex modesets (NV3D activation, FSE entry/exit),
+        // and once invalidated RevertCustomDisplayTrial returns -1 while the
+        // panel stays at the LightBoost timing. ChangeDisplaySettingsExW
+        // pushes a real Windows mode change which the panel honours.
+        LOG() << "DisableLightBoost: NVAPI revert failed (trial invalidated) — "
+                 "falling back to ChangeDisplaySettingsExW(" << status << ")";
+        DEVMODEW dm = original_devmode_;  // copy so we don't mutate the cache
+        LONG rc = ChangeDisplaySettingsExW(target_gdi_device_.c_str(), &dm,
+                                            nullptr, CDS_FULLSCREEN, nullptr);
+        if (rc != DISP_CHANGE_SUCCESSFUL) {
+            LOG() << "DisableLightBoost: ChangeDisplaySettingsExW failed rc=" << rc
+                  << " — trying CDS_RESET";
+            ChangeDisplaySettingsExW(target_gdi_device_.c_str(), &dm,
+                                      nullptr, CDS_RESET | CDS_FULLSCREEN, nullptr);
+        }
+        WaitForModesetSettle(500);
+        RestoreDisplayPositions(posSnapshot);
+        RestoreProcessWindows(wndSnapshot);
     }
 
     lightboost_enabled_ = false;
