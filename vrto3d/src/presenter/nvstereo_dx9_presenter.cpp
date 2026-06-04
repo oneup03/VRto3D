@@ -722,14 +722,14 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
         pp.EnableAutoDepthStencil = FALSE;
         pp.Flags                  = 0;
         pp.FullScreen_RefreshRateInHz = windowed ? 0 : dm.RefreshRate;
-        // INTERVAL_IMMEDIATE: Dx11Renderer's per-eye-frequency sleep_until
-        // already paces presentation, and PresentEx is called while the
-        // shared context_mutex_ is held — a hardware vsync wait here would
-        // also block the compositor thread's next OnDirectModeFrame,
-        // producing variable cadence visible as stutter. 3D Vision frame-
+        // INTERVAL_ONE: hardware vsync inside PresentEx. The presenter is
+        // split into RecordComposite (held under context_mutex_) and Present
+        // (mutex released), so this vsync block does NOT stall the
+        // compositor thread's next OnDirectModeFrame. 3D Vision frame-
         // sequential alternation is driven by the GPU's stereo signaling,
-        // not by the per-Present sync interval.
-        pp.PresentationInterval   = D3DPRESENT_INTERVAL_IMMEDIATE;
+        // not by the per-Present sync interval, so INTERVAL_ONE is the
+        // tear-free choice.
+        pp.PresentationInterval   = D3DPRESENT_INTERVAL_ONE;
     };
 
     DWORD flags = D3DCREATE_HARDWARE_VERTEXPROCESSING
@@ -996,7 +996,7 @@ void NvStereoDx9Presenter::StereoActivationRetry()
 }
 
 
-void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
+void NvStereoDx9Presenter::RecordComposite(ID3D11Texture2D* sbs_input)
 {
     if (!device9_ || !sbs_input || !renderer_) return;
 
@@ -1163,7 +1163,20 @@ void NvStereoDx9Presenter::PresentFrame(ID3D11Texture2D* sbs_input)
         return;
     }
 
-    hr = device9_->PresentEx(nullptr, nullptr, nullptr, nullptr, 0);
+    // RecordComposite ends here — PresentEx + activation retry happen in
+    // Present(), called by Dx11Renderer after context_mutex_ is released so
+    // INTERVAL_ONE's vsync block doesn't stall the compositor thread.
+}
+
+
+void NvStereoDx9Presenter::Present()
+{
+    if (!device9_ || d3d9_dead_.load(std::memory_order_relaxed)) return;
+
+    // INTERVAL_ONE on the present-params blocks PresentEx for vsync — that's
+    // what makes the FSE 3D Vision output tear-free. RecordComposite ran
+    // under context_mutex_, this runs after release.
+    HRESULT hr = device9_->PresentEx(nullptr, nullptr, nullptr, nullptr, 0);
     if (FAILED(hr)) {
         static std::atomic<bool> logged{false};
         bool e = false;

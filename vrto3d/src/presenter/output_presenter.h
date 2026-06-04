@@ -36,9 +36,18 @@ public:
                       const StereoDisplayDriverConfiguration& cfg,
                       const FocusContext& focus) = 0;
 
-    // Hand the freshly-copied 2W x H SbS input texture to the presenter for display.
-    // Presenter runs synchronously on the compositor's Present thread; keep it short.
-    virtual void PresentFrame(ID3D11Texture2D* sbs_input) = 0;
+    // Hand the freshly-copied 2W x H SbS input texture to the presenter, record
+    // all GPU work for this frame (compose-shader draw, weaver, packed-surface
+    // pipeline, etc.) onto the immediate context, and Flush so the commands are
+    // in the driver queue. Caller MUST hold Dx11Renderer::context_mutex_ across
+    // this call.
+    virtual void RecordComposite(ID3D11Texture2D* sbs_input) = 0;
+
+    // Issue the swap-chain Present for the frame recorded by RecordComposite.
+    // Caller MUST NOT hold Dx11Renderer::context_mutex_ — Present blocks on
+    // display pacing (waitable handle / vsync interval), and holding the mutex
+    // would stall the compositor thread's next OnDirectModeFrame.
+    virtual void Present() = 0;
 
     virtual void Shutdown() = 0;
 

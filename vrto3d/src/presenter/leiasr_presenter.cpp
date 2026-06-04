@@ -362,21 +362,38 @@ bool LeiaSrPresenter::CreateSwapChain(Dx11Renderer& renderer)
     ComPtr<IDXGIFactory2> factory;
     if (FAILED(adapter->GetParent(IID_PPV_ARGS(&factory)))) return false;
 
+    // Flip-model + waitable swap chain. The waitable handle gates pacing on
+    // the window thread, so Present(0, 0) returns immediately — tear-free
+    // without blocking inside Present (which would stall the compositor via
+    // the shared context_mutex_).
     DXGI_SWAP_CHAIN_DESC1 scd{};
     scd.Width       = window_->Width();
     scd.Height      = window_->Height();
     scd.Format      = DXGI_FORMAT_R8G8B8A8_UNORM;
     scd.SampleDesc  = { 1, 0 };
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.BufferCount = 1;
-    scd.SwapEffect  = DXGI_SWAP_EFFECT_DISCARD;
+    scd.BufferCount = 2;
+    scd.Scaling     = DXGI_SCALING_STRETCH;
+    scd.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     scd.AlphaMode   = DXGI_ALPHA_MODE_IGNORE;
+    scd.Flags       = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
     HWND hwnd = static_cast<HWND>(window_->NativeHandle());
     HRESULT hr = factory->CreateSwapChainForHwnd(dev, hwnd, &scd, nullptr, nullptr, &swapchain_);
     if (FAILED(hr)) {
         LOG() << "LeiaSrPresenter: CreateSwapChainForHwnd failed hr=0x" << std::hex << hr;
         return false;
+    }
+    factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
+
+    if (FAILED(swapchain_.As(&swapchain2_)) || !swapchain2_) {
+        LOG() << "LeiaSrPresenter: QueryInterface(IDXGISwapChain2) failed";
+        return false;
+    }
+    swapchain2_->SetMaximumFrameLatency(1);
+    frame_latency_wait_ = swapchain2_->GetFrameLatencyWaitableObject();
+    if (!frame_latency_wait_) {
+        LOG() << "LeiaSrPresenter: GetFrameLatencyWaitableObject returned null";
     }
 
     ComPtr<ID3D11Texture2D> bb;
@@ -385,7 +402,9 @@ bool LeiaSrPresenter::CreateSwapChain(Dx11Renderer& renderer)
 
     swap_width_  = window_->Width();
     swap_height_ = window_->Height();
-    LOG() << "LeiaSrPresenter: swapchain " << swap_width_ << "x" << swap_height_;
+    LOG() << "LeiaSrPresenter: swapchain " << swap_width_ << "x" << swap_height_
+          << " (FLIP_DISCARD, 2 buffers, waitable="
+          << (frame_latency_wait_ ? "yes" : "no") << ")";
     return true;
 }
 
@@ -465,6 +484,9 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         ID3D11DeviceContext* ctx = renderer->Context();
         const float clear[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
         ctx->ClearRenderTargetView(swapchain_rtv_.Get(), clear);
+        ID3D11RenderTargetView* null_rtv[] = { nullptr };
+        ctx->OMSetRenderTargets(1, null_rtv, nullptr);
+        swapchain_rtv_.Reset();   // release ref to back buffer before flip
         swapchain_->Present(0, 0);
     }
 
@@ -558,6 +580,11 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
     }
 
     while (!window_stop_.load(std::memory_order_relaxed)) {
+        // DWM signals frame_latency_wait_ once per display refresh; gates
+        // pacing without blocking inside Present.
+        if (frame_latency_wait_) {
+            WaitForSingleObjectEx(frame_latency_wait_, 100, TRUE);
+        }
         renderer->WaitAndDrawPending(33);
         if (window_) window_->PollEvents();
     }
@@ -584,19 +611,32 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
     sr_initialized_ = false;
 
     input_srv_.Reset();
+    if (frame_latency_wait_) {
+        CloseHandle(frame_latency_wait_);
+        frame_latency_wait_ = nullptr;
+    }
     swapchain_rtv_.Reset();
+    swapchain2_.Reset();
     swapchain_.Reset();
     window_.reset();
     LOG() << "LeiaSrPresenter: window thread exited";
 }
 
 
-void LeiaSrPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
+void LeiaSrPresenter::RecordComposite(ID3D11Texture2D* sbs_input)
 {
     if (!swapchain_ || !sbs_input || !sr_weaver_ || !renderer_) return;
 
     ID3D11Device*        dev = renderer_->Device();
     ID3D11DeviceContext* ctx = renderer_->Context();
+
+    // FLIP_DISCARD rotates buffer 0 every Present, so refresh the RTV each
+    // frame against the current back buffer. Must happen BEFORE weave() so
+    // the weaver writes to the live buffer.
+    ComPtr<ID3D11Texture2D> bb;
+    if (FAILED(swapchain_->GetBuffer(0, IID_PPV_ARGS(&bb))) || !bb) return;
+    swapchain_rtv_.Reset();
+    if (FAILED(dev->CreateRenderTargetView(bb.Get(), nullptr, &swapchain_rtv_))) return;
 
     D3D11_TEXTURE2D_DESC td{};
     sbs_input->GetDesc(&td);
@@ -642,10 +682,20 @@ void LeiaSrPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
 
     sr_weaver_->weave();
 
-    // SyncInterval=0: Dx11Renderer's 120Hz sleep_until paces presentation,
-    // and PresentFrame holds context_mutex_ — a vsync block here would
-    // serialize the compositor's next OnDirectModeFrame behind our vsync
-    // wait, producing variable cadence visible as stutter.
+    // Release RTV + back-buffer ref before Present (FLIP requirement).
+    ID3D11RenderTargetView* null_rtv[] = { nullptr };
+    ctx->OMSetRenderTargets(1, null_rtv, nullptr);
+    swapchain_rtv_.Reset();
+}
+
+
+void LeiaSrPresenter::Present()
+{
+    if (!swapchain_) return;
+
+    // Flip-model + waitable: SyncInterval=0 queues the flip and returns
+    // immediately; DWM consumes it at the next vblank. Pacing comes from the
+    // waitable handle on the window thread.
     HRESULT hr = swapchain_->Present(0, 0);
     if (FAILED(hr)) {
         static std::atomic<bool> logged{false};
