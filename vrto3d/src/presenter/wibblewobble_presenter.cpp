@@ -400,7 +400,7 @@ void WibbleWobblePresenter::FocusThreadLoop() {
     }
 }
 
-void WibbleWobblePresenter::PresentFrame(ID3D11Texture2D* sbs_input) {
+void WibbleWobblePresenter::RecordComposite(ID3D11Texture2D* sbs_input) {
     if (!impl_ || !sbs_input || !impl_->client_handle || !impl_->pPresentFrame) return;
 
     // Liveness check on the in-process client. If its worker thread exited,

@@ -402,18 +402,22 @@ bool WindowPresenter::CreateSwapChain(Dx11Renderer& renderer)
     ComPtr<IDXGIFactory2> factory;
     if (FAILED(adapter->GetParent(IID_PPV_ARGS(&factory)))) return false;
 
-    // Use legacy DISCARD swap effect — FLIP_DISCARD requires the window to be
-    // visible / on the desktop session and has been observed to silently fail
-    // to composite when the owner process (vrserver.exe) is a console app.
+    // Flip-model + waitable swap chain. The waitable handle (released once per
+    // display refresh) gates pacing on the window thread, so Present(0, 0)
+    // queues the flip and returns immediately — tear-free without blocking
+    // inside Present (which is what would stall the compositor thread via
+    // the shared context_mutex_).
     DXGI_SWAP_CHAIN_DESC1 scd{};
     scd.Width       = window_->Width();
     scd.Height      = window_->Height();
     scd.Format      = DXGI_FORMAT_R8G8B8A8_UNORM;
     scd.SampleDesc  = { 1, 0 };
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.BufferCount = 1;
-    scd.SwapEffect  = DXGI_SWAP_EFFECT_DISCARD;
+    scd.BufferCount = 2;
+    scd.Scaling     = DXGI_SCALING_STRETCH;
+    scd.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     scd.AlphaMode   = DXGI_ALPHA_MODE_IGNORE;
+    scd.Flags       = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
     HWND hwnd = static_cast<HWND>(window_->NativeHandle());
     HRESULT hr = factory->CreateSwapChainForHwnd(dev, hwnd, &scd, nullptr, nullptr, &swapchain_);
@@ -421,8 +425,23 @@ bool WindowPresenter::CreateSwapChain(Dx11Renderer& renderer)
         LOG() << "CreateSwapChainForHwnd failed hr=" << std::hex << hr;
         return false;
     }
-    LOG() << "WindowPresenter: swapchain created " << scd.Width << "x" << scd.Height
-          << " (DISCARD, " << scd.BufferCount << " buffer)";
+    factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
+
+    if (FAILED(swapchain_.As(&swapchain2_)) || !swapchain2_) {
+        LOG() << "WindowPresenter: QueryInterface(IDXGISwapChain2) failed";
+        return false;
+    }
+    swapchain2_->SetMaximumFrameLatency(1);
+    frame_latency_wait_ = swapchain2_->GetFrameLatencyWaitableObject();
+    if (!frame_latency_wait_) {
+        LOG() << "WindowPresenter: GetFrameLatencyWaitableObject returned null";
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 actual{};
+    swapchain_->GetDesc1(&actual);
+    LOG() << "WindowPresenter: swapchain created " << actual.Width << "x" << actual.Height
+          << " (FLIP_DISCARD, " << actual.BufferCount << " buffers, waitable="
+          << (frame_latency_wait_ ? "yes" : "no") << ")";
 
     ComPtr<ID3D11Texture2D> bb;
     if (FAILED(swapchain_->GetBuffer(0, IID_PPV_ARGS(&bb)))) return false;
@@ -551,6 +570,9 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         ID3D11DeviceContext* ctx = renderer->Context();
         const float clear[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
         ctx->ClearRenderTargetView(swapchain_rtv_.Get(), clear);
+        ID3D11RenderTargetView* null_rtv[] = { nullptr };
+        ctx->OMSetRenderTargets(1, null_rtv, nullptr);
+        swapchain_rtv_.Reset();   // release ref to back buffer before flip
         swapchain_->Present(0, 0);
     }
     // Window starts non-topmost; FocusThreadLoop asserts topmost when
@@ -577,12 +599,16 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 
     // This thread owns the window message pump AND drives rendering. Win32
     // requires the same thread that created the window to service its message
-    // queue, and DXGI DISCARD swap effect requires Present to be issued by
-    // that same thread for DWM to update the window reliably.
+    // queue, and DXGI flip-model Present must be issued by the thread that
+    // created the swap chain.
     while (!window_stop_.load(std::memory_order_relaxed)) {
-        // Block up to 33ms for a frame from the compositor; render + present
-        // when one arrives. PresentFrame internally calls swapchain->Present
-        // which blocks for vsync, naturally pacing this loop.
+        // DWM signals frame_latency_wait_ once per display refresh; this is
+        // what gates pacing now (no vsync block inside Present). 100 ms cap
+        // so we still pump messages if DWM is paused (occlusion / lock
+        // screen) — alertable so Shutdown's thread-stop wakes us promptly.
+        if (frame_latency_wait_) {
+            WaitForSingleObjectEx(frame_latency_wait_, 100, TRUE);
+        }
         renderer->WaitAndDrawPending(33);
 
         // Pump window messages so the window stays responsive even if the
@@ -591,7 +617,12 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
     }
 
     // Tear down on this thread (DestroyWindow must be called on the creating thread).
+    if (frame_latency_wait_) {
+        CloseHandle(frame_latency_wait_);
+        frame_latency_wait_ = nullptr;
+    }
     swapchain_rtv_.Reset();
+    swapchain2_.Reset();
     swapchain_.Reset();
     rasterizer_.Reset();
     blend_.Reset();
@@ -604,13 +635,13 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 }
 
 
-void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
+void WindowPresenter::RecordComposite(ID3D11Texture2D* sbs_input)
 {
     if (!swapchain_ || !sbs_input) {
         static std::atomic<bool> logged_null{false};
         bool expected = false;
         if (logged_null.compare_exchange_strong(expected, true)) {
-            LOG() << "PresentFrame: early return swapchain=" << (void*)swapchain_.Get()
+            LOG() << "RecordComposite: early return swapchain=" << (void*)swapchain_.Get()
                   << " sbs_input=" << (void*)sbs_input;
         }
         return;
@@ -618,6 +649,13 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
 
     ID3D11Device* dev = renderer_->Device();
     ID3D11DeviceContext* ctx = renderer_->Context();
+
+    // FLIP_DISCARD rotates buffer 0 every Present, so refresh the RTV each
+    // frame against the current back buffer.
+    ComPtr<ID3D11Texture2D> bb;
+    if (FAILED(swapchain_->GetBuffer(0, IID_PPV_ARGS(&bb))) || !bb) return;
+    swapchain_rtv_.Reset();
+    if (FAILED(dev->CreateRenderTargetView(bb.Get(), nullptr, &swapchain_rtv_))) return;
 
     ComPtr<ID3D11ShaderResourceView> srv;
     D3D11_SHADER_RESOURCE_VIEW_DESC sv{};
@@ -632,7 +670,7 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
         static std::atomic<bool> logged_srv{false};
         bool expected = false;
         if (logged_srv.compare_exchange_strong(expected, true)) {
-            LOG() << "PresentFrame: CreateShaderResourceView failed hr=0x"
+            LOG() << "RecordComposite: CreateShaderResourceView failed hr=0x"
                   << std::hex << srv_hr
                   << " fmt=" << std::dec << td.Format
                   << " bind=0x" << std::hex << td.BindFlags;
@@ -688,17 +726,23 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
 
     ctx->Draw(3, 0);
 
-    // Unbind SRV so we don't warn on next frame when input changes.
+    // Unbind SRV + RTV so the back buffer reference is released before
+    // Present (FLIP requires no outstanding RTV references on flip).
     ID3D11ShaderResourceView* null_srv[] = { nullptr };
     ctx->PSSetShaderResources(0, 1, null_srv);
+    ID3D11RenderTargetView* null_rtv[] = { nullptr };
+    ctx->OMSetRenderTargets(1, null_rtv, nullptr);
+    swapchain_rtv_.Reset();
+}
 
-    // SyncInterval=0: don't block on vsync inside PresentFrame. The window
-    // thread is already paced by Dx11Renderer's 120Hz sleep_until, and
-    // PresentFrame is called while the shared context_mutex_ is held — a
-    // vsync block here would also block the compositor thread's next
-    // OnDirectModeFrame, producing the variable cadence we see in the
-    // histogram. The desktop DWM composites the back buffer at its own
-    // pace; tearing isn't perceptible for a Sbs windowed presenter.
+
+void WindowPresenter::Present()
+{
+    if (!swapchain_) return;
+
+    // Flip-model + waitable: SyncInterval=0 queues the flip and returns
+    // immediately; DWM consumes it at the next vblank. Pacing is gated by
+    // frame_latency_wait_ on the window thread, not by Present blocking.
     HRESULT hr = swapchain_->Present(0, 0);
     if (FAILED(hr)) {
         static std::atomic<bool> logged_present_fail{false};
@@ -713,7 +757,6 @@ void WindowPresenter::PresentFrame(ID3D11Texture2D* sbs_input)
             LOG() << "WindowPresenter: swapchain occluded (window hidden / minimized)";
         }
     }
-    // Message pump runs on WindowThreadLoop — don't poll here.
 }
 
 

@@ -75,7 +75,8 @@ public:
     bool Init(Dx11Renderer& renderer,
               const StereoDisplayDriverConfiguration& cfg,
               const FocusContext& focus) override;
-    void PresentFrame(ID3D11Texture2D* sbs_input) override;
+    void RecordComposite(ID3D11Texture2D* sbs_input) override;
+    void Present() override;
     void Shutdown() override;
 
 private:

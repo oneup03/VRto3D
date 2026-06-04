@@ -23,6 +23,7 @@
 #include <wrl/client.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <dxgi1_3.h>
 
 #include "platform.h"
 #include "presenter/display_timing_helper.h"
@@ -41,7 +42,8 @@ public:
               const StereoDisplayDriverConfiguration& cfg,
               const FocusContext& focus) override;
 
-    void PresentFrame(ID3D11Texture2D* sbs_input) override;
+    void RecordComposite(ID3D11Texture2D* sbs_input) override;
+    void Present() override;
 
     void Shutdown() override;
 
@@ -73,7 +75,13 @@ private:
     FocusContext                                  focus_{};
     std::unique_ptr<platform::PresentWindow>      window_;
     Microsoft::WRL::ComPtr<IDXGISwapChain1>       swapchain_;
+    Microsoft::WRL::ComPtr<IDXGISwapChain2>       swapchain2_;
+    // FLIP_DISCARD rotates buffer 0 each present, so we recreate the RTV per
+    // frame instead of caching one at swap-chain creation.
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> swapchain_rtv_;
+    // DWM-signaled handle that releases once per display refresh — gates the
+    // window thread's pacing without blocking inside Present.
+    HANDLE                                        frame_latency_wait_ = nullptr;
     uint32_t                                      swap_width_  = 0;
     uint32_t                                      swap_height_ = 0;
 

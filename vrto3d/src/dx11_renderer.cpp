@@ -618,56 +618,73 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
     if (!out_sbs_) return false;
 
     // Serialize against OnDirectModeFrame's GPU work on the immediate
-    // context. Lock held only across DrainPendingShot + OSD + presenter
-    // — the compositor side waits at most this long, typically <1ms.
-    std::lock_guard<std::mutex> ctx_lk(context_mutex_);
-
-    // Drain any previously-queued staging readback (screenshot encode).
-    DrainPendingShot();
-
-    // If a background screenshot encode completed since our last tick,
-    // surface its result toast now — done on the window thread so the
-    // OSD lifetime is well-defined.
+    // context. Lock is held only across DrainPendingShot + OSD + the
+    // presenter's RecordComposite. The swap-chain Present (presenter_->
+    // Present()) runs OUTSIDE this lock — Present can block on display
+    // pacing (FLIP waitable / vsync interval), and holding context_mutex_
+    // across it would stall the compositor thread's next OnDirectModeFrame.
     {
-        std::string toast;
+        std::lock_guard<std::mutex> ctx_lk(context_mutex_);
+
+        // Drain any previously-queued staging readback (screenshot encode).
+        DrainPendingShot();
+
+        // If a background screenshot encode completed since our last tick,
+        // surface its result toast now — done on the window thread so the
+        // OSD lifetime is well-defined.
         {
-            std::lock_guard<std::mutex> lk(screenshot_result_mutex_);
-            if (!pending_screenshot_toast_.empty()) {
-                toast = std::move(pending_screenshot_toast_);
-                pending_screenshot_toast_.clear();
+            std::string toast;
+            {
+                std::lock_guard<std::mutex> lk(screenshot_result_mutex_);
+                if (!pending_screenshot_toast_.empty()) {
+                    toast = std::move(pending_screenshot_toast_);
+                    pending_screenshot_toast_.clear();
+                }
+            }
+            if (!toast.empty() && osd_renderer_) {
+                osd_renderer_->SetText(toast);
             }
         }
-        if (!toast.empty() && osd_renderer_) {
-            osd_renderer_->SetText(toast);
+
+        // Lazy-init the OSD now that we know per-eye dimensions.
+        if (!osd_initialized_ && osd_pending_callbacks_ && device_ && context_) {
+            osd_renderer_ = std::make_unique<vrto3d::osd::OsdRenderer>();
+            const UINT eye_w = sbs_width_ / 2;
+            if (osd_renderer_->Init(device_.Get(), context_.Get(),
+                                    eye_w, sbs_height_,
+                                    osd_headset_hwnd_,
+                                    osd_component_,
+                                    std::move(*osd_pending_callbacks_))) {
+                osd_initialized_ = true;
+                LOG() << "Dx11Renderer: OSD initialized eye=" << eye_w << "x" << sbs_height_;
+            } else {
+                LOG() << "Dx11Renderer: OSD init failed";
+                osd_renderer_.reset();
+            }
+            osd_pending_callbacks_.reset();
         }
-    }
 
-    // Lazy-init the OSD now that we know per-eye dimensions.
-    if (!osd_initialized_ && osd_pending_callbacks_ && device_ && context_) {
-        osd_renderer_ = std::make_unique<vrto3d::osd::OsdRenderer>();
-        const UINT eye_w = sbs_width_ / 2;
-        if (osd_renderer_->Init(device_.Get(), context_.Get(),
-                                eye_w, sbs_height_,
-                                osd_headset_hwnd_,
-                                osd_component_,
-                                std::move(*osd_pending_callbacks_))) {
-            osd_initialized_ = true;
-            LOG() << "Dx11Renderer: OSD initialized eye=" << eye_w << "x" << sbs_height_;
-        } else {
-            LOG() << "Dx11Renderer: OSD init failed";
-            osd_renderer_.reset();
+        // Composite OSD into out_sbs_ before the presenter sees it.
+        if (osd_initialized_ && osd_renderer_) {
+            const UINT eye_w = sbs_width_ / 2;
+            osd_renderer_->OnResize(eye_w, sbs_height_);
+            osd_renderer_->RenderFrame(out_sbs_.Get());
         }
-        osd_pending_callbacks_.reset();
+
+        if (presenter_) presenter_->RecordComposite(out_sbs_.Get());
+
+        // Flush so all GPU commands recorded under context_mutex_ are in the
+        // driver queue before we release the lock. Any work the compositor
+        // thread queues next will land after ours in driver-submission order,
+        // and the GPU's automatic resource-hazard tracking serializes the
+        // out_sbs_ read/write between this frame's compose and the next
+        // frame's CopySubresourceRegion.
+        if (context_) context_->Flush();
     }
 
-    // Composite OSD into out_sbs_ before the presenter sees it.
-    if (osd_initialized_ && osd_renderer_) {
-        const UINT eye_w = sbs_width_ / 2;
-        osd_renderer_->OnResize(eye_w, sbs_height_);
-        osd_renderer_->RenderFrame(out_sbs_.Get());
-    }
-
-    if (presenter_) presenter_->PresentFrame(out_sbs_.Get());
+    // Present outside the lock. Pacing comes from the presenter's display
+    // hook (FLIP waitable handle / vsync interval), not from blocking here.
+    if (presenter_) presenter_->Present();
 
     // VsyncEvent is driven from a dedicated 120Hz timer thread (see
     // VsyncTickThread), not here. Firing it from the window thread inherits
