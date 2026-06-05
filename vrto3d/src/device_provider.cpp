@@ -26,6 +26,7 @@
 #include "device_provider.h"
 #include "dx11_renderer.h"
 #include "direct_mode_component.h"
+#include "vr_recenter.h"
 
 namespace {
 
@@ -188,6 +189,13 @@ void MyDeviceProvider::RunFrame()
             }
         }
     }
+
+    // VREvent_Quit isn't delivered via the driver-host event stream — it
+    // goes to *client* apps over their IPC pipe. Our TriggerOpenVRRecenter
+    // VR_Init registers us as a Background client, so we have to drain
+    // that client-side queue and ack quit, or vrserver waits 5s for us
+    // and force-kills the process.
+    vrto3d::PumpOpenVRClientEvents();
 }
 
 //-----------------------------------------------------------------------------
@@ -220,5 +228,10 @@ void MyDeviceProvider::Cleanup()
 
     // Our controller devices will have already deactivated. Let's now destroy them.
     my_hmd_device_ = nullptr;
+
+    // Tear down the background OpenVR client session we used for chaperone
+    // recenters. vrserver flags an unclean exit if a VR_Init'd client never
+    // VR_Shutdown's. This is the last hook called before our DLL unloads.
+    vrto3d::ShutdownOpenVRClient();
 }
 
