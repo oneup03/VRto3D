@@ -63,6 +63,13 @@ public:
     struct DirectModeLayerPair {
         Microsoft::WRL::ComPtr<ID3D11Texture2D> left;
         Microsoft::WRL::ComPtr<ID3D11Texture2D> right;
+        // Per-eye UV sub-rect within the source texture that holds the
+        // actually-rendered pixels. Games can allocate a larger texture (e.g.
+        // sized for max FFR / supersample) and submit bounds < (0,0,1,1) to
+        // tell the compositor which portion is valid. Ignoring this turns the
+        // valid region into a picture-in-picture inside an oversized eye.
+        vr::VRTextureBounds_t bounds_left  { 0.f, 0.f, 1.f, 1.f };
+        vr::VRTextureBounds_t bounds_right { 0.f, 0.f, 1.f, 1.f };
     };
     static constexpr int kMaxLayers = 8;
 
@@ -181,6 +188,8 @@ private:
     UINT                   last_left_h_         {0};
     UINT                   last_right_w_        {0};
     UINT                   last_right_h_        {0};
+    UINT                   last_eff_w_          {0};
+    UINT                   last_eff_h_          {0};
     DXGI_FORMAT            last_eye_format_     {DXGI_FORMAT_UNKNOWN};
 
     // Dedicated VsyncEvent timer thread. Drives the compositor's submit

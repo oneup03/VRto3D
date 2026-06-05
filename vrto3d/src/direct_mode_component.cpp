@@ -17,6 +17,7 @@
 
 #include "direct_mode_component.h"
 
+#include <cmath>
 #include <set>
 
 #include <dxgi.h>
@@ -227,9 +228,49 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
                 ++handle_miss_count_;
                 continue;
             }
-            pairs[resolved_count].left  = std::move(left);
-            pairs[resolved_count].right = std::move(right);
+            pairs[resolved_count].left         = std::move(left);
+            pairs[resolved_count].right        = std::move(right);
+            pairs[resolved_count].bounds_left  = local[i][0].bounds;
+            pairs[resolved_count].bounds_right = local[i][1].bounds;
             ++resolved_count;
+        }
+    }
+
+    // Pick the scene layer by largest *effective* area (texture dims scaled
+    // by the submitted bounds rect). The compositor submits layers in an
+    // order we don't control:
+    //   - UEVR can land a 2x4 HUD quad at index 0 ahead of its 5760x3240 scene.
+    //   - SteamVR's dashboard / vrwebhelper overlay (1828x1080 BGRA8_SRGB
+    //     with a sub-epsilon uMin) can land ahead of the game's R16F scene.
+    //   - A game can allocate a 2592x1458 texture but only render to its
+    //     top-left 1920x1080 (bounds=(0,0,0.741,0.741)) — raw-area would
+    //     mis-prefer a smaller full-bounds layer like SteamVR Home.
+    // Whichever layer wins moves to index 0; OnDirectModeFrame still sees
+    // "layers[0] is the scene" and the rest stay overlays.
+    if (resolved_count > 1) {
+        auto effective_area = [](const Dx11Renderer::DirectModeLayerPair& p) -> uint64_t {
+            D3D11_TEXTURE2D_DESC d{};
+            p.left->GetDesc(&d);
+            const float du = std::abs(p.bounds_left.uMax - p.bounds_left.uMin);
+            const float dv = std::abs(p.bounds_left.vMax - p.bounds_left.vMin);
+            const double eff_w = static_cast<double>(d.Width)  * du;
+            const double eff_h = static_cast<double>(d.Height) * dv;
+            if (eff_w <= 0.0 || eff_h <= 0.0) return 0;
+            return static_cast<uint64_t>(eff_w * eff_h);
+        };
+        int scene_idx = 0;
+        uint64_t best_area = 0;
+        for (int i = 0; i < resolved_count; ++i) {
+            const uint64_t area = effective_area(pairs[i]);
+            if (area > best_area) {
+                best_area = area;
+                scene_idx = i;
+            }
+        }
+        if (scene_idx != 0) {
+            std::swap(pairs[0],            pairs[scene_idx]);
+            std::swap(local[0][0],         local[scene_idx][0]);
+            std::swap(local[0][1],         local[scene_idx][1]);
         }
     }
 

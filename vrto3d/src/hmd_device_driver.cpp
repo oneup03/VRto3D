@@ -1454,8 +1454,8 @@ bool StereoDisplayComponent::IsDisplayRealDisplay() { return false; }
 void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    *pnWidth = config_.render_width;
-    *pnHeight = config_.render_height;
+    *pnWidth  = static_cast<uint32_t>(config_.render_width);
+    *pnHeight = static_cast<uint32_t>(config_.render_height);
 }
 
 //-----------------------------------------------------------------------------

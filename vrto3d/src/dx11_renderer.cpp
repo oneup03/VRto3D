@@ -408,17 +408,72 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     D3D11_TEXTURE2D_DESC right_desc{};
     right->GetDesc(&right_desc);
 
-    // One-line-per-change diagnostic.
+    // Resolve bounds → integer source sub-rect for each eye. Games may
+    // allocate a texture larger than the rendered region (e.g. sized for max
+    // FFR/supersample) and submit bounds < (0,0,1,1) to mark the valid
+    // portion; copying the whole texture would compress the valid portion
+    // into the top-left of out_sbs_ (picture-in-picture).
+    auto sub_rect = [](const vr::VRTextureBounds_t& b, UINT tex_w, UINT tex_h,
+                       UINT& sx, UINT& sy, UINT& sw, UINT& sh) -> bool {
+        // V-flip / U-flip bounds (vMin > vMax etc.) would require shader
+        // sampling to mirror, which CopySubresourceRegion can't do. Detect
+        // and fall through to "full texture" below.
+        if (!(b.uMax > b.uMin) || !(b.vMax > b.vMin)) return false;
+        const float du = b.uMax - b.uMin;
+        const float dv = b.vMax - b.vMin;
+        if (du <= 0.f || du > 1.f || dv <= 0.f || dv > 1.f) return false;
+        sx = static_cast<UINT>(b.uMin * tex_w + 0.5f);
+        sy = static_cast<UINT>(b.vMin * tex_h + 0.5f);
+        sw = static_cast<UINT>(du * tex_w + 0.5f);
+        sh = static_cast<UINT>(dv * tex_h + 0.5f);
+        if (sw == 0 || sh == 0)             return false;
+        if (sx + sw > tex_w || sy + sh > tex_h) return false;
+        return true;
+    };
+
+    UINT lsx = 0, lsy = 0, lsw = eye_desc.Width,  lsh = eye_desc.Height;
+    UINT rsx = 0, rsy = 0, rsw = right_desc.Width, rsh = right_desc.Height;
+    const bool left_sub  = sub_rect(layers[0].bounds_left,  eye_desc.Width,  eye_desc.Height,  lsx, lsy, lsw, lsh);
+    const bool right_sub = sub_rect(layers[0].bounds_right, right_desc.Width, right_desc.Height, rsx, rsy, rsw, rsh);
+    if (!left_sub) {
+        lsx = lsy = 0; lsw = eye_desc.Width;  lsh = eye_desc.Height;
+    }
+    if (!right_sub) {
+        rsx = rsy = 0; rsw = right_desc.Width; rsh = right_desc.Height;
+    }
+    // out_sbs_ is sized to the per-eye effective dims (post-bounds). Both
+    // eyes are normally identical; if they diverge, use the left as the
+    // canonical eye size — sampling a sub-rect of the right that ends up a
+    // pixel off in width is far less visible than a stretched composite.
+    const UINT eff_eye_w = lsw;
+    const UINT eff_eye_h = lsh;
+
+    // One-line-per-change diagnostic. Effective dims and "(bounds applied)"
+    // are only reported when the submitted bounds actually shrink the source
+    // sub-rect below the raw texture size, since that's the case worth
+    // calling out in a debug log.
+    const bool bounds_shrank = eff_eye_w != eye_desc.Width ||
+                               eff_eye_h != eye_desc.Height;
     if (eye_desc.Width  != last_left_w_  || eye_desc.Height  != last_left_h_  ||
         right_desc.Width != last_right_w_ || right_desc.Height != last_right_h_ ||
+        eff_eye_w != last_eff_w_ || eff_eye_h != last_eff_h_ ||
         eye_desc.Format != last_eye_format_) {
-        LOG() << "Dx11Renderer: per-eye dims L=" << eye_desc.Width << "x" << eye_desc.Height
-              << " R=" << right_desc.Width << "x" << right_desc.Height
-              << " fmt=" << eye_desc.Format;
+        if (bounds_shrank) {
+            LOG() << "Dx11Renderer: per-eye dims L=" << eye_desc.Width << "x" << eye_desc.Height
+                  << " R=" << right_desc.Width << "x" << right_desc.Height
+                  << " fmt=" << eye_desc.Format
+                  << " eff=" << eff_eye_w << "x" << eff_eye_h << " (bounds applied)";
+        } else {
+            LOG() << "Dx11Renderer: per-eye dims L=" << eye_desc.Width << "x" << eye_desc.Height
+                  << " R=" << right_desc.Width << "x" << right_desc.Height
+                  << " fmt=" << eye_desc.Format;
+        }
         last_left_w_     = eye_desc.Width;
         last_left_h_     = eye_desc.Height;
         last_right_w_    = right_desc.Width;
         last_right_h_    = right_desc.Height;
+        last_eff_w_      = eff_eye_w;
+        last_eff_h_      = eff_eye_h;
         last_eye_format_ = eye_desc.Format;
     }
 
@@ -440,7 +495,8 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     std::lock_guard<std::mutex> ctx_lk(context_mutex_);
 
     D3D11_TEXTURE2D_DESC sbs_desc = eye_desc;
-    sbs_desc.Width = eye_desc.Width * 2;
+    sbs_desc.Width  = eff_eye_w * 2;
+    sbs_desc.Height = eff_eye_h;
     sbs_desc.Format = strip_srgb(eye_desc.Format);
     EnsureOutputTexture(sbs_desc);
     if (!out_sbs_) return;
@@ -469,21 +525,19 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     }
 
     // Layer 0 — base scene, byte-pass-through via CopySubresourceRegion.
-    D3D11_BOX src_full{};
-    src_full.left   = 0;
-    src_full.top    = 0;
-    src_full.front  = 0;
-    src_full.right  = eye_desc.Width;
-    src_full.bottom = eye_desc.Height;
-    src_full.back   = 1;
+    // Source rect honors the submitted bounds (when applicable) so an
+    // oversized eye texture with bounds=(0,0,<1,<1) doesn't degenerate
+    // into picture-in-picture.
+    D3D11_BOX lbox{ lsx, lsy, 0, lsx + lsw, lsy + lsh, 1 };
+    D3D11_BOX rbox{ rsx, rsy, 0, rsx + rsw, rsy + rsh, 1 };
     context_->CopySubresourceRegion(out_sbs_.Get(), 0,
                                     0, 0, 0,
                                     left,           0,
-                                    &src_full);
+                                    &lbox);
     context_->CopySubresourceRegion(out_sbs_.Get(), 0,
-                                    eye_desc.Width, 0, 0,
+                                    eff_eye_w, 0, 0,
                                     right,          0,
-                                    &src_full);
+                                    &rbox);
 
     // Layers 1+ — alpha-blended overlay via shader composite.
     if (layer_count > 1 && composite_pipeline_ready_ && out_sbs_rtv_) {
@@ -500,8 +554,11 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
         ID3D11SamplerState* samps[] = { composite_sampler_.Get() };
         context_->PSSetSamplers(0, 1, samps);
 
-        const UINT half_w = eye_desc.Width;
-        const UINT full_h = eye_desc.Height;
+        // Match the per-eye region we wrote layer 0 into. Using texture dims
+        // here would place overlay halves outside out_sbs_ whenever bounds <
+        // (0,0,1,1) shrank the scene below the raw texture size.
+        const UINT half_w = eff_eye_w;
+        const UINT full_h = eff_eye_h;
 
         auto blit_half = [&](ID3D11Texture2D* tex, UINT viewport_x) {
             if (!tex) return;
