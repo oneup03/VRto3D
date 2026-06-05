@@ -26,6 +26,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <thread>
 
 // SSSE3 — for the per-frame R/B byte swap in PresentFrame.
 #include <tmmintrin.h>
@@ -1052,8 +1053,53 @@ void NvStereoDx9Presenter::RecordComposite(ID3D11Texture2D* sbs_input)
     const uint32_t per_eye_w = td.Width / 2u;
     if (!EnsurePackedSurfaces(per_eye_w, td.Height)) return;
 
+    // GPU→CPU sync point. Use DO_NOT_WAIT + bounded poll instead of a
+    // blocking Map: if the GPU is wedged (LightBoost+FSE+NV3D init has hit
+    // bad-state races on startup), an indefinite Map blocks this thread
+    // forever while holding context_mutex_, which then blocks the
+    // compositor and the runtime appears frozen. With a deadline we mark
+    // the D3D device dead, bail this frame, and the next frame's
+    // circuit-breaker takes over instead of hanging.
     D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (FAILED(ctx->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &mapped))) return;
+    {
+        HRESULT mhr = E_FAIL;
+        const auto map_deadline = std::chrono::steady_clock::now()
+                                  + std::chrono::milliseconds(50);
+        // One-time diagnostic log so if we *do* hang here next time, we
+        // know it's the staging Map and not something later.
+        static std::atomic<bool> logged_first{false};
+        bool expected = false;
+        if (logged_first.compare_exchange_strong(expected, true)) {
+            LOG() << "NvStereoDx9Presenter: first PresentFrame about to Map(staging, MAP_READ) "
+                  << "— if no further logs appear, the GPU is wedged at this point.";
+        }
+        while (true) {
+            mhr = ctx->Map(staging_.Get(), 0, D3D11_MAP_READ,
+                            D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
+            if (SUCCEEDED(mhr)) break;
+            if (mhr != DXGI_ERROR_WAS_STILL_DRAWING) {
+                static std::atomic<bool> err_logged{false};
+                bool e = false;
+                if (err_logged.compare_exchange_strong(e, true))
+                    LOG() << "NvStereoDx9Presenter: Map(staging) failed hr=0x"
+                          << std::hex << mhr;
+                return;
+            }
+            if (std::chrono::steady_clock::now() >= map_deadline) {
+                static std::atomic<bool> to_logged{false};
+                bool e = false;
+                if (to_logged.compare_exchange_strong(e, true))
+                    LOG() << "NvStereoDx9Presenter: Map(staging) DO_NOT_WAIT polled past "
+                             "50ms deadline — GPU appears wedged; marking device dead.";
+                // Mark DX9 dead so PresentFrame becomes a no-op on subsequent
+                // frames. Also poke the DX11 renderer so its own circuit-
+                // breaker doesn't keep submitting work into the wedge.
+                (void)CheckAndMarkD3D9Dead(D3DERR_DEVICEHUNG, "Map(staging) timeout");
+                return;
+            }
+            std::this_thread::yield();
+        }
+    }
 
     // ----- Stage 1 [CPU copy + format normalize]: pack staging into
     // packed_sysmem_. Source byte layout depends on what the compositor
