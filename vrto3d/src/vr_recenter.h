@@ -31,6 +31,22 @@ namespace vrto3d {
 // both the seated and standing universes, and shuts the session back
 // down. Safe to call from any thread; returns false if the runtime
 // could not be reached.
-bool TriggerOpenVRRecenter();
+//
+// `tag` is included in the log line so the same TU can be called from
+// several sites (auto_focus retries, hotkey, OSD toggle) and still be
+// disambiguated in the driver log.
+bool TriggerOpenVRRecenter(const char* tag = nullptr);
+
+// Tear down the cached background client session created by
+// TriggerOpenVRRecenter. Safe to call from RunFrame (poll path) or
+// Cleanup (fallback). Idempotent.
+void ShutdownOpenVRClient();
+
+// Drain pending events on our cached client session and handle
+// VREvent_Quit: acknowledge it, then shut the client down. Must be
+// called from RunFrame on every tick once VR_Init has succeeded — if
+// we don't acknowledge VREvent_Quit, vrserver waits 5s and force-kills
+// us. No-op when no client session is open.
+void PumpOpenVRClientEvents();
 
 } // namespace vrto3d

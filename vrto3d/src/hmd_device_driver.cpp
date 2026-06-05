@@ -1291,13 +1291,20 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
             // will clobber a single well-timed shot.
             const uint32_t pid = app_pid_.load();
             std::thread([this, pid]() {
-                std::this_thread::sleep_for(std::chrono::seconds(10));
+                std::this_thread::sleep_for(std::chrono::seconds(8));
                 if (!is_active_) return;
                 if (app_pid_.load() != pid) return;
                 is_on_top_ = true;
                 man_on_top_ = true;
+                // Give the game a moment after focus before kicking the
+                // recenter, so the first attempt lands after the game has
+                // settled into its initial pose rather than mid-init.
+                std::this_thread::sleep_for(std::chrono::seconds(4));
+                if (!is_active_) return;
+                if (app_pid_.load() != pid) return;
                 for (int i = 0; i < 3; ++i) {
-                    vrto3d::TriggerOpenVRRecenter();
+                    const std::string tag = "auto_focus#" + std::to_string(i + 1);
+                    vrto3d::TriggerOpenVRRecenter(tag.c_str());
                     if (i < 2) std::this_thread::sleep_for(std::chrono::seconds(2));
                     if (!is_active_) return;
                     if (app_pid_.load() != pid) return;
@@ -1349,7 +1356,7 @@ void MockControllerDeviceDriver::ConsumePoseReset()
     stereo_display_component_->SetReset();
     std::thread([]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        vrto3d::TriggerOpenVRRecenter();
+        vrto3d::TriggerOpenVRRecenter("pose_reset");
     }).detach();
 }
 
