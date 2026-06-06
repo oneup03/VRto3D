@@ -54,10 +54,10 @@ Dx11Renderer::~Dx11Renderer() { Shutdown(); }
 
 namespace {
 
-// Fullscreen-triangle vertex shader. The pixel shader samples its SRV at the
-// computed UV and outputs straight-alpha BGRA. Blend state is configured for
-// SRC_ALPHA / INV_SRC_ALPHA on the renderer side, so transparent pixels in
-// the overlay leave the underlying SbS pixels intact.
+// Fullscreen-triangle vertex shader. The pixel shader samples its SRV and
+// outputs the texel as-is (re-encoded to sRGB to match layer 0's byte-
+// passthrough convention). Blend state is straight alpha (SRC_ALPHA /
+// INV_SRC_ALPHA) — matches ALVR's overlay-layer convention.
 const char* kCompositeVsHlsl = R"hlsl(
 struct VsOut {
     float4 pos : SV_Position;
@@ -179,6 +179,11 @@ bool Dx11Renderer::Init(LUID adapter_luid,
         sd.MaxLOD         = D3D11_FLOAT32_MAX;
         if (FAILED(device_->CreateSamplerState(&sd, &composite_sampler_))) break;
 
+        // Straight-alpha blend (SRC_ALPHA / INV_SRC_ALPHA). Matches ALVR's
+        // convention for OpenVR direct-mode overlay layers. DirectModeComponent
+        // reorders layers so the game-pid scene is at index 0 (base, copied
+        // byte-pass-through) and vrcompositor-pid overlays follow at 1+, so
+        // this straight-alpha math is what they expect.
         D3D11_BLEND_DESC bd{};
         bd.RenderTarget[0].BlendEnable    = TRUE;
         bd.RenderTarget[0].SrcBlend       = D3D11_BLEND_SRC_ALPHA;
@@ -194,6 +199,17 @@ bool Dx11Renderer::Init(LUID adapter_luid,
         rd.FillMode = D3D11_FILL_SOLID;
         rd.CullMode = D3D11_CULL_NONE;
         if (FAILED(device_->CreateRasterizerState(&rd, &composite_raster_))) break;
+
+        // Disable depth/stencil entirely for the overlay composite. We bind a
+        // null DSV when drawing layer 1+, but D3D11's default depth-stencil
+        // state has DepthEnable=TRUE. Without an explicit no-test state, some
+        // drivers (and any leftover state from a prior pass) can cause every
+        // overlay pixel to be discarded — manifesting as a fully black overlay
+        // and a black main menu in games that submit the menu as a layer.
+        D3D11_DEPTH_STENCIL_DESC dsd{};
+        dsd.DepthEnable    = FALSE;
+        dsd.StencilEnable  = FALSE;
+        if (FAILED(device_->CreateDepthStencilState(&dsd, &composite_depth_))) break;
 
         composite_pipeline_ready_ = true;
     } while (false);
@@ -546,6 +562,7 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
 
         context_->OMSetRenderTargets(1, &rtv, nullptr);
         context_->OMSetBlendState(composite_blend_.Get(), blend_factor, 0xFFFFFFFF);
+        context_->OMSetDepthStencilState(composite_depth_.Get(), 0);
         context_->RSSetState(composite_raster_.Get());
         context_->IASetInputLayout(nullptr);
         context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
@@ -803,7 +820,6 @@ void Dx11Renderer::Shutdown()
     for (auto& pl : pending_layers_) { pl.left.Reset(); pl.right.Reset(); }
     pending_layer_count_ = 0;
     pending_shot_.staging.Reset();
-    pending_shot_.app_name.clear();
     has_pending_shot_ = false;
     out_sbs_rtv_.Reset();
     out_sbs_.Reset();
@@ -812,6 +828,7 @@ void Dx11Renderer::Shutdown()
     composite_sampler_.Reset();
     composite_blend_.Reset();
     composite_raster_.Reset();
+    composite_depth_.Reset();
     composite_pipeline_ready_ = false;
     context_.Reset();
     device_.Reset();
@@ -848,12 +865,10 @@ void Dx11Renderer::RequestScreenshot(std::string app_name)
 void Dx11Renderer::CaptureScreenshot(const std::string& app_name)
 {
     if (!device_ || !context_ || !out_sbs_) return;
-
-    // If a previous shot is still pending, drop this request. The latest
-    // pending one will complete on a later frame and the user can re-trigger
-    // once it finishes. Bounded to one in-flight to keep memory simple.
     if (has_pending_shot_) {
-        LOG() << "Screenshot: previous shot still draining; dropping new request";
+        // Previous shot still draining (staging not yet readable). Drop the
+        // new request rather than blow it away mid-encode.
+        LOG() << "Screenshot: previous capture still in flight; dropping";
         return;
     }
 
@@ -905,7 +920,11 @@ void Dx11Renderer::CaptureScreenshot(const std::string& app_name)
 
 void Dx11Renderer::DrainPendingShot()
 {
-    if (!has_pending_shot_ || !pending_shot_.staging || !context_) return;
+    if (!has_pending_shot_ || !context_) return;
+    if (!pending_shot_.staging) {
+        has_pending_shot_ = false;
+        return;
+    }
     ++pending_shot_.age_frames;
 
     // Give the GPU at least one frame to finish the queued CopyResource
@@ -924,7 +943,6 @@ void Dx11Renderer::DrainPendingShot()
             LOG() << "Screenshot: staging never became readable after "
                   << pending_shot_.age_frames << " frames — abandoning";
             pending_shot_.staging.Reset();
-            pending_shot_.app_name.clear();
             has_pending_shot_ = false;
         }
         return;
@@ -932,7 +950,6 @@ void Dx11Renderer::DrainPendingShot()
     if (FAILED(hr)) {
         LOG() << "Screenshot: Map(staging,DO_NOT_WAIT) hr=0x" << std::hex << hr;
         pending_shot_.staging.Reset();
-        pending_shot_.app_name.clear();
         has_pending_shot_ = false;
         return;
     }

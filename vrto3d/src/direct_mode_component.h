@@ -18,6 +18,8 @@
 
 #include <map>
 #include <mutex>
+#include <string>
+#include <unordered_map>
 
 #include <wrl/client.h>
 #include <d3d11.h>
@@ -94,4 +96,8 @@ private:
     // Track which submit-count we last logged per-layer dimensions for, so
     // dimension lines aren't spammed every frame.
     int last_logged_layer_dim_count_ = -1;
+
+    // pid → executable name cache for the per-layer diagnostic log. Avoids
+    // an OpenProcess call every time the layer-count changes.
+    std::unordered_map<uint32_t, std::string> pid_name_cache_;
 };

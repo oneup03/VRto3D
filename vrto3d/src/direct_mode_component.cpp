@@ -17,13 +17,16 @@
 
 #include "direct_mode_component.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <set>
 
 #include <dxgi.h>
 
 #include "dx11_renderer.h"
 #include "vrto3dlib/debug_log.hpp"
+#include "vrto3dlib/win32_helper.hpp"
 
 
 DirectModeComponent::DirectModeComponent(Dx11Renderer* renderer)
@@ -213,17 +216,19 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
     int resolved_count = 0;
     {
         std::lock_guard<std::mutex> lk(sets_mutex_);
-        auto find_one = [&](vr::SharedTextureHandle_t h)
+        auto find_one = [&](vr::SharedTextureHandle_t h, uint32_t* out_pid)
             -> Microsoft::WRL::ComPtr<ID3D11Texture2D>
         {
             auto raw = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(h));
             auto it = handle_map_.find(raw);
             if (it == handle_map_.end()) return {};
+            if (out_pid) *out_pid = it->second.first->pid;
             return it->second.first->textures[it->second.second];
         };
         for (int i = 0; i < kept_count; ++i) {
-            Microsoft::WRL::ComPtr<ID3D11Texture2D> left  = find_one(local[i][0].hTexture);
-            Microsoft::WRL::ComPtr<ID3D11Texture2D> right = find_one(local[i][1].hTexture);
+            uint32_t pid_l = 0, pid_r = 0;
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> left  = find_one(local[i][0].hTexture, &pid_l);
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> right = find_one(local[i][1].hTexture, &pid_r);
             if (!left || !right) {
                 ++handle_miss_count_;
                 continue;
@@ -232,21 +237,30 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
             pairs[resolved_count].right        = std::move(right);
             pairs[resolved_count].bounds_left  = local[i][0].bounds;
             pairs[resolved_count].bounds_right = local[i][1].bounds;
+            pairs[resolved_count].pid          = pid_l;
             ++resolved_count;
         }
     }
 
-    // Pick the scene layer by largest *effective* area (texture dims scaled
-    // by the submitted bounds rect). The compositor submits layers in an
-    // order we don't control:
-    //   - UEVR can land a 2x4 HUD quad at index 0 ahead of its 5760x3240 scene.
-    //   - SteamVR's dashboard / vrwebhelper overlay (1828x1080 BGRA8_SRGB
-    //     with a sub-epsilon uMin) can land ahead of the game's R16F scene.
-    //   - A game can allocate a 2592x1458 texture but only render to its
-    //     top-left 1920x1080 (bounds=(0,0,0.741,0.741)) — raw-area would
-    //     mis-prefer a smaller full-bounds layer like SteamVR Home.
-    // Whichever layer wins moves to index 0; OnDirectModeFrame still sees
-    // "layers[0] is the scene" and the rest stay overlays.
+    // Reorder layers so OnDirectModeFrame's "layers[0] is the opaque base,
+    // layers[1+] composite on top" assumption holds across mods.
+    //
+    // Two-tier sort:
+    //   1. Layers owned by the game process come before layers owned by
+    //      vrcompositor.exe. This catches Luke Ross R.E.A.L., which submits
+    //      the actual 3D scene from the game's pid (a smaller texture) but
+    //      routes its in-game UI / mod menu through a larger vrcompositor-
+    //      owned overlay layer. Without this, the area heuristic alone
+    //      picked the UI layer as base and the game scene (alpha=1 across
+    //      the surface) drew over it, hiding the UI completely.
+    //   2. Within the same group, larger effective area (texture dims
+    //      scaled by submitted bounds rect) wins. This preserves UEVR's
+    //      behavior where the game submits both scene and HUD from one
+    //      pid: the full 5760x3240 scene beats a 2x4 HUD quad. It also
+    //      handles bounds-shrunk allocations (e.g. a 2592x1458 texture
+    //      with bounds=(0,0,0.741,0.741) rendered into the top-left
+    //      1920x1080) — raw width*height would mis-prefer a smaller
+    //      full-bounds layer like SteamVR Home.
     if (resolved_count > 1) {
         auto effective_area = [](const Dx11Renderer::DirectModeLayerPair& p) -> uint64_t {
             D3D11_TEXTURE2D_DESC d{};
@@ -258,33 +272,74 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
             if (eff_w <= 0.0 || eff_h <= 0.0) return 0;
             return static_cast<uint64_t>(eff_w * eff_h);
         };
-        int scene_idx = 0;
-        uint64_t best_area = 0;
+
+        struct LayerKey {
+            int      original_index;
+            bool     is_compositor;
+            uint64_t eff_area;
+        };
+        LayerKey keys[kMaxLayers];
         for (int i = 0; i < resolved_count; ++i) {
-            const uint64_t area = effective_area(pairs[i]);
-            if (area > best_area) {
-                best_area = area;
-                scene_idx = i;
+            auto it = pid_name_cache_.find(pairs[i].pid);
+            if (it == pid_name_cache_.end()) {
+                it = pid_name_cache_.emplace(pairs[i].pid, GetProcessName(pairs[i].pid)).first;
             }
+            keys[i].original_index = i;
+            keys[i].is_compositor  = _stricmp(it->second.c_str(), "vrcompositor.exe") == 0;
+            keys[i].eff_area       = effective_area(pairs[i]);
         }
-        if (scene_idx != 0) {
-            std::swap(pairs[0],            pairs[scene_idx]);
-            std::swap(local[0][0],         local[scene_idx][0]);
-            std::swap(local[0][1],         local[scene_idx][1]);
+
+        int order[kMaxLayers];
+        for (int i = 0; i < resolved_count; ++i) order[i] = i;
+        std::stable_sort(order, order + resolved_count,
+            [&](int a, int b) {
+                if (keys[a].is_compositor != keys[b].is_compositor) {
+                    return !keys[a].is_compositor;
+                }
+                return keys[a].eff_area > keys[b].eff_area;
+            });
+
+        bool needs_reorder = false;
+        for (int i = 0; i < resolved_count; ++i) {
+            if (order[i] != i) { needs_reorder = true; break; }
+        }
+        if (needs_reorder) {
+            Dx11Renderer::DirectModeLayerPair sorted_pairs[kMaxLayers]{};
+            SubmitLayerPerEye_t               sorted_local[kMaxLayers][2]{};
+            for (int i = 0; i < resolved_count; ++i) {
+                sorted_pairs[i]    = std::move(pairs[order[i]]);
+                sorted_local[i][0] = local[order[i]][0];
+                sorted_local[i][1] = local[order[i]][1];
+            }
+            for (int i = 0; i < resolved_count; ++i) {
+                pairs[i]    = std::move(sorted_pairs[i]);
+                local[i][0] = sorted_local[i][0];
+                local[i][1] = sorted_local[i][1];
+            }
         }
     }
 
-    // Diagnostic: log per-layer source-texture dimensions when the resolved
-    // layer count changes (only — earlier version's condition fired every
-    // frame whenever a layer got dropped).
+    // Per-layer log: emitted once per change in resolved layer count.
+    // Useful when adding a new mod/game combo — pid + process name lets
+    // us sanity-check the post-reorder order (game-pid layer should be
+    // at index 0, vrcompositor-pid layers should follow).
     if (resolved_count != last_logged_layer_dim_count_) {
         last_logged_layer_dim_count_ = resolved_count;
         for (int i = 0; i < resolved_count; ++i) {
             D3D11_TEXTURE2D_DESC ld{}, rd{};
             pairs[i].left->GetDesc(&ld);
             pairs[i].right->GetDesc(&rd);
-            LOG() << "DirectModeComponent: layer " << i << " dims L="
-                  << ld.Width << "x" << ld.Height
+
+            const uint32_t pid = pairs[i].pid;
+            auto it = pid_name_cache_.find(pid);
+            if (it == pid_name_cache_.end()) {
+                it = pid_name_cache_.emplace(pid, GetProcessName(pid)).first;
+            }
+            const std::string& pname = it->second;
+
+            LOG() << "DirectModeComponent: layer " << i
+                  << " pid=" << pid << "(" << pname.c_str() << ")"
+                  << " dims L=" << ld.Width << "x" << ld.Height
                   << " R=" << rd.Width << "x" << rd.Height
                   << " fmt=" << ld.Format
                   << " bounds L=(" << local[i][0].bounds.uMin << "," << local[i][0].bounds.vMin
