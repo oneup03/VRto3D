@@ -501,6 +501,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 std::string path = steam + "\\config\\vrto3d";
                 ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             };
+            cb.set_async = [this](bool on) {
+                SetAsync(on);
+            };
             cb.download_latest_profiles = [this]() {
                 // Re-entrancy guard — ignore clicks while a previous download
                 // is still in flight.
