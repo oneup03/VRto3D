@@ -208,12 +208,21 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
     }
 
     // Resolve each layer's eye handles back to the textures we allocated in
-    // CreateSwapTextureSet. We don't filter by pid — UEVR-driven games can
-    // submit the scene and HUD via two different pids (game-pid for one
-    // layer, SteamVR-compositor-pid for the overlay), and dropping either
-    // visibly loses content.
+    // CreateSwapTextureSet, dropping placeholder/marker quads as we go. The
+    // resolve loop also compacts local[] in lockstep with pairs[] so the
+    // sort below can permute them together by a single index.
+    //
+    // Placeholder filter: UEVR mods can submit a 2x4 or 16x16 marker on the
+    // game's pid alongside the real scene that flows through vrcompositor's
+    // full-eye target. If we kept the marker it would either (a) sort to
+    // index 0 under the pid-first rule and shrink out_sbs_ to ~4x4, breaking
+    // the picture, or (b) end up as a stretched overlay smearing whatever
+    // garbage the placeholder holds across the full eye. Anything below
+    // kMinSceneAreaPx effective pixels can't carry visual content; drop it.
+    constexpr uint64_t kMinSceneAreaPx = 64ull * 64ull;
     Dx11Renderer::DirectModeLayerPair pairs[kMaxLayers]{};
     int resolved_count = 0;
+    int filtered_tiny  = 0;
     {
         std::lock_guard<std::mutex> lk(sets_mutex_);
         auto find_one = [&](vr::SharedTextureHandle_t h, uint32_t* out_pid)
@@ -233,19 +242,43 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
                 ++handle_miss_count_;
                 continue;
             }
+            D3D11_TEXTURE2D_DESC ld{};
+            left->GetDesc(&ld);
+            const float du = std::abs(local[i][0].bounds.uMax - local[i][0].bounds.uMin);
+            const float dv = std::abs(local[i][0].bounds.vMax - local[i][0].bounds.vMin);
+            const uint64_t eff_px =
+                static_cast<uint64_t>(static_cast<double>(ld.Width)  * du + 0.5) *
+                static_cast<uint64_t>(static_cast<double>(ld.Height) * dv + 0.5);
+            if (eff_px < kMinSceneAreaPx) {
+                ++filtered_tiny;
+                continue;
+            }
             pairs[resolved_count].left         = std::move(left);
             pairs[resolved_count].right        = std::move(right);
             pairs[resolved_count].bounds_left  = local[i][0].bounds;
             pairs[resolved_count].bounds_right = local[i][1].bounds;
             pairs[resolved_count].pid          = pid_l;
+            if (i != resolved_count) {
+                local[resolved_count][0] = local[i][0];
+                local[resolved_count][1] = local[i][1];
+            }
             ++resolved_count;
         }
+    }
+    if (filtered_tiny > 0 && filtered_tiny != last_logged_filtered_tiny_) {
+        LOG() << "DirectModeComponent: filtered " << filtered_tiny
+              << " sub-threshold layer(s) (<" << kMinSceneAreaPx << "px)";
+        last_logged_filtered_tiny_ = filtered_tiny;
+    } else if (filtered_tiny == 0 && last_logged_filtered_tiny_ != 0) {
+        last_logged_filtered_tiny_ = 0;
     }
 
     // Reorder layers so OnDirectModeFrame's "layers[0] is the opaque base,
     // layers[1+] composite on top" assumption holds across mods.
     //
-    // Two-tier sort:
+    // The resolve loop above already dropped sub-threshold placeholder
+    // quads, so every remaining layer is real, scene-or-overlay-sized
+    // content. Two-tier sort over what's left:
     //   1. Layers owned by the game process come before layers owned by
     //      vrcompositor.exe. This catches Luke Ross R.E.A.L., which submits
     //      the actual 3D scene from the game's pid (a smaller texture) but
@@ -254,13 +287,13 @@ void DirectModeComponent::Present(vr::SharedTextureHandle_t syncTexture)
     //      picked the UI layer as base and the game scene (alpha=1 across
     //      the surface) drew over it, hiding the UI completely.
     //   2. Within the same group, larger effective area (texture dims
-    //      scaled by submitted bounds rect) wins. This preserves UEVR's
-    //      behavior where the game submits both scene and HUD from one
-    //      pid: the full 5760x3240 scene beats a 2x4 HUD quad. It also
-    //      handles bounds-shrunk allocations (e.g. a 2592x1458 texture
-    //      with bounds=(0,0,0.741,0.741) rendered into the top-left
-    //      1920x1080) — raw width*height would mis-prefer a smaller
-    //      full-bounds layer like SteamVR Home.
+    //      scaled by submitted bounds rect) wins. This handles UEVR mods
+    //      that submit both scene and a same-pid HUD quad: the full scene
+    //      beats the smaller HUD. It also handles bounds-shrunk
+    //      allocations (e.g. a 2592x1458 texture with bounds=(0,0,0.741,
+    //      0.741) rendered into the top-left 1920x1080) — raw
+    //      width*height would mis-prefer a smaller full-bounds layer
+    //      like SteamVR Home.
     if (resolved_count > 1) {
         auto effective_area = [](const Dx11Renderer::DirectModeLayerPair& p) -> uint64_t {
             D3D11_TEXTURE2D_DESC d{};
