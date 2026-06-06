@@ -28,6 +28,11 @@ struct FocusContext {
     std::atomic<bool>*     is_on_top     = nullptr;
     std::atomic<bool>*     man_on_top    = nullptr;
     std::atomic<uint32_t>* app_pid       = nullptr;
+    // Live mirror of config.auto_focus. The driver re-writes this whenever
+    // a profile is (re)loaded or the OSD checkbox toggles, so presenter
+    // focus loops see the change on the next iteration instead of being
+    // stuck with the value cached at Init().
+    std::atomic<bool>*     auto_focus    = nullptr;
 };
 
 }  // namespace vrto3d

@@ -799,6 +799,9 @@ void WindowPresenter::FocusThreadLoop()
         const bool is_on_top   = focus_.is_on_top   && focus_.is_on_top->load();
         const bool man_on_top  = focus_.man_on_top  && focus_.man_on_top->load();
         const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
+        // Live mirror — falls back to the init-time cache if the driver
+        // didn't plumb the pointer (older code paths / unit tests).
+        const bool auto_focus  = focus_.auto_focus  ? focus_.auto_focus->load() : auto_focus_;
 
         // Multi-display placement nudge, once after first show.
         if (spans_two_monitors_ && !nudged) {
@@ -819,7 +822,7 @@ void WindowPresenter::FocusThreadLoop()
             want_on_top = true;
         } else if (is_on_top && app_running) {
             want_on_top = true;
-        } else if (auto_focus_ && !is_on_top
+        } else if (auto_focus && !is_on_top
                    && app_running && pid != 0
                    && pid != last_auto_focused_pid) {
             // Auto-raise once per new tracked app PID. Without the pid latch

@@ -66,6 +66,10 @@ struct MenuCallbacks {
     // Push the Async Reprojection toggle to SteamVR for every known AppID so
     // it takes effect without waiting for a profile reload or driver restart.
     std::function<void(bool)> set_async;
+    // Mirror the Auto Focus checkbox to the driver's live atomic so the
+    // presenter's focus loop sees the toggle on its next iteration instead
+    // of being stuck with the value cached at presenter Init().
+    std::function<void(bool)> set_auto_focus;
 
     // Auto-depth feature: toggle + comfort-target slider (fraction of one
     // eye's width). The Stereo tab binds these to read/write the live
