@@ -1039,14 +1039,16 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
     while (is_active_) {
         auto cfg = stereo_display_component_->GetConfig();
 
-        // Ctrl+Home (keyboard) or Start+Back (gamepad) toggles the OSD menu.
-        // Always polled (independent of disable_hotkeys) so users can always
-        // recover from a runaway config.
+        // Ctrl+Home (keyboard) or Start+DPad-Down (gamepad) toggles the OSD
+        // menu. Always polled (independent of disable_hotkeys) so users can
+        // always recover from a runaway config. Start+Back is avoided here
+        // because several VR mods already use that pair as their own pause /
+        // menu chord.
         DWORD menu_pad = 0;
+        const DWORD menu_chord_mask = XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_DPAD_DOWN;
         const bool menu_pad_chord =
             GetXInputButtonState(menu_pad) &&
-            ((menu_pad & (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_BACK)) ==
-                        (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_BACK));
+            ((menu_pad & menu_chord_mask) == menu_chord_mask);
         if (((isCtrlDown() && isDown(VK_HOME)) || menu_pad_chord) && sleep.menu == 0) {
             if (auto* osd = getOsd()) {
                 osd->ToggleMenu();

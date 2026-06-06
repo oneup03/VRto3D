@@ -141,10 +141,11 @@ Checkout the [Compatibility List](https://oneup03.github.io/VRto3D/wiki/Compatib
 
 
 ## Hotkeys
-Most adjustments now happen in the [On-Screen Menu](#user-presets-via-osd) — open it with `Ctrl + Home` (or `Start + Back` on a connected XInput controller). The remaining global hotkeys are intentionally minimal:
+Most adjustments now happen in the [On-Screen Menu](#user-presets-via-osd) — open it with `Ctrl + Home` (or `Start + D-Pad Down` on a connected XInput controller). The remaining global hotkeys are intentionally minimal:
 
-- Open / close the OSD menu with `Ctrl + Home` or the `Start + Back` gamepad chord
-    - Once open, the menu accepts mouse, keyboard, and gamepad navigation (D-pad / left stick to move, `A` to activate, `B` to cancel, `LB`/`RB` to page through tabs, right stick to scroll)
+- Open / close the OSD menu with `Ctrl + Home` or the `Start + D-Pad Down` gamepad chord
+    - Once open, the menu accepts mouse, keyboard, and gamepad navigation (D-pad / left stick to move, `A` to activate, `B` to cancel the current widget, `LB`/`RB` to page through tabs, right stick to scroll)
+    - Tap `X` (Xbox) / `Square` (PS) to jump nav up to the title bar (where the `X` close button lives — press `A` to dismiss); hold the same button to enter ImGui's *windowing mode* (left stick moves the window, D-pad resizes it, `LB`/`RB` cycle windows)
 - Adjust Depth (Separation) with `Ctrl + F3` and `Ctrl + F4`
     - Hold `Shift` to also re-sync the projection so the change is visible immediately (some VR mods otherwise need a reload to pick it up)
 - Adjust Convergence with `Ctrl + F5` and `Ctrl + F6` - this often has issues in VR mods
@@ -211,7 +212,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 | `auto_depth_enabled` +        | `bool`  | Enable Auto-Depth (GPU disparity analysis caps depth so the closest object stays comfortable)     | `false`        |
 | `auto_depth_target_disparity` +| `float`| Target max on-screen disparity, as a fraction of one eye's width                                  | `0.005`        |
 | `auto_depth_smoothing` +      | `float` | Auto-Depth smoothing (higher = snappier; lower = smoother)                                        | `0.08`         |
-| `disable_hotkeys`             | `bool`  | Disable the global hotkeys (Depth/Convergence/profile/save) to avoid conflict with other 3D mods. `Ctrl + Home` and `Start + Back` (OSD toggles) are unaffected | `false` |
+| `disable_hotkeys`             | `bool`  | Disable the global hotkeys (Depth/Convergence/profile/save) to avoid conflict with other 3D mods. `Ctrl + Home` and `Start + D-Pad Down` (OSD toggles) are unaffected | `false` |
 | `dash_enable`                 | `bool`  | Enable or disable SteamVR Dashboard and Home                                                      | `false`        |
 | `auto_focus`                  | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground                                | `true`         |
 | `pitch_enable` +              | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                             | `false`        |
@@ -283,7 +284,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
     - Adjust filter sensitivities and deadzones from the OSD `Tracking` tab
 
 #### User Presets (via OSD)
-- Press `Ctrl + Home` (or `Start + Back` on a gamepad) to open the OSD menu and select the `User Hotkeys` tab
+- Press `Ctrl + Home` (or `Start + D-Pad Down` on a gamepad) to open the OSD menu and select the `User Hotkeys` tab
 - Each row maps a Load key to a `(Depth, Convergence, FoV)` preset. Only `toggle` mode supports multi-preset cycles - `switch` and `hold` rows are trimmed to the first value on edit and on profile load
     - Click `Set` to capture a single key, mouse button, or XInput button
     - Click `Combo` to capture an XInput chord (e.g. `XINPUT_GAMEPAD_LEFT_SHOULDER+XINPUT_GAMEPAD_RIGHT_SHOULDER`); the chord commits when you release everything
@@ -302,7 +303,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 
 #### Profile Creation (via OSD)
 1. Launch the game and let VRto3D load - the OSD title bar will show `Profile: (default)` if no per-game profile exists yet
-2. Press `Ctrl + Home` (or `Start + Back` on a gamepad) to open the OSD menu
+2. Press `Ctrl + Home` (or `Start + D-Pad Down` on a gamepad) to open the OSD menu
 3. **Stereo tab**: dial in `Depth`, `Convergence`, `FoV`, and toggle `Swap Eyes` / `Auto-Depth` as needed
 4. **User Hotkeys tab**: add preset rows for the depth/convergence/fov values you want, bind their Load keys, and use `Copy Current` to capture the current values into a row
 5. **Tracking tab** (only if the game needs it): set `Height` under `HMD Pose`, and enable `Pitch (right stick)` / `Yaw (right stick)` under `XInput (Xbox) Controller` for games that need camera control
