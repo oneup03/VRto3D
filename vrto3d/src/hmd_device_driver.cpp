@@ -485,22 +485,19 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     // to take foreground — the ALT-key trick inside
                     // ForceFocus misbehaves when Ctrl is still held.
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    for (int i = 0; i < 5; ++i) {
-                        if (!man_on_top_.load()) {
-                            LOG() << "request_game_focus iter=" << i
-                                  << " bail: user disabled always-on-top";
-                            return;
-                        }
-                        HWND game_hwnd = GetHWNDFromPID(pid);
-                        if (game_hwnd) {
-                            ForceFocus(game_hwnd,
-                                       GetCurrentThreadId(),
-                                       GetWindowThreadProcessId(game_hwnd, nullptr));
-                            LOG() << "request_game_focus iter=" << i
-                                  << " fg_match=" << (GetForegroundWindow() == game_hwnd);
-                        }
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
-                    }
+                    if (!man_on_top_.load()) return;
+                    HWND game_hwnd = GetHWNDFromPID(pid);
+                    if (!game_hwnd) return;
+                    // Skip if the game already has foreground — every
+                    // ForceFocus call briefly raises the game window over our
+                    // topmost VR window before the focus loop re-asserts it,
+                    // which the user sees as a flicker.
+                    if (GetForegroundWindow() == game_hwnd) return;
+                    ForceFocus(game_hwnd,
+                               GetCurrentThreadId(),
+                               GetWindowThreadProcessId(game_hwnd, nullptr));
+                    LOG() << "request_game_focus fg_match="
+                          << (GetForegroundWindow() == game_hwnd);
                 }).detach();
             };
             cb.open_config_folder = [this]() {
