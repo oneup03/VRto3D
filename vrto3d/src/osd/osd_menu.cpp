@@ -854,7 +854,10 @@ void OsdMenu::Impl::DrawSystemTab() {
             dirty = true;
             if (callbacks.set_async) callbacks.set_async(cfg.async_enable);
         }
-        if (ImGui::Checkbox("Auto Focus",         &cfg.auto_focus))   dirty = true;
+        if (ImGui::Checkbox("Auto Focus",         &cfg.auto_focus)) {
+            dirty = true;
+            if (callbacks.set_auto_focus) callbacks.set_auto_focus(cfg.auto_focus);
+        }
         if (ImGui::Checkbox("Auto Exit SteamVR",  &cfg.auto_exit)) dirty = true;
         char buf[512];
         std::snprintf(buf, sizeof(buf), "%s", cfg.launch_script.c_str());

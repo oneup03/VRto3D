@@ -195,6 +195,14 @@ private:
     std::unique_ptr< DirectModeComponent > direct_mode_component_;
     std::atomic< bool > is_on_top_;
     std::atomic< bool > man_on_top_;
+    // Snapshot of man_on_top_ at the moment of ProcessDisconnected, so a
+    // same-pid reconnect (e.g. RealVR re-init) can refocus immediately
+    // only if the user actually had focus enabled before the disconnect.
+    std::atomic< bool > focus_pre_disconnect_{ false };
+    // Live mirror of stereo_display_component_->GetConfig().auto_focus.
+    // Updated whenever a profile/config is (re)loaded so the presenter's
+    // focus loop sees toggles immediately. Default true matches stereo_config.h.
+    std::atomic< bool > auto_focus_{ true };
     std::atomic< bool > launch_script_executed_;
 
     std::mutex pose_mutex_;

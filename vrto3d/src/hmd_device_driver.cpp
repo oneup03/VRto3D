@@ -194,6 +194,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             ? (0.5f / cfg.display_frequency) : 0.011f;
         cfg.sleep_count_max   = (int)(floor(1600.0 / (1000.0 / cfg.display_frequency)));
         stereo_display_component_->LoadSettings(cfg);
+        auto_focus_.store(cfg.auto_focus);
         LOG() << "Display: target=" << primary.device_name
               << " freq=" << cfg.display_frequency << "Hz"
               << " latency=" << cfg.display_latency << "s";
@@ -406,6 +407,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 if (JsonManager().LoadProfileFromJson(prev_name_ + "_config.json", cfg)) {
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
+                    auto_focus_.store(cfg.auto_focus);
                     app_name_ = prev_name_;
                     if (renderer_ && renderer_->Osd()) {
                         renderer_->Osd()->SetAppName(app_name_);
@@ -424,6 +426,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 if (JsonManager().LoadProfileFromJson(DEF_CFG, cfg)) {
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
+                    auto_focus_.store(cfg.auto_focus);
                     app_name_ = "";
                     if (renderer_ && renderer_->Osd()) {
                         renderer_->Osd()->SetAppName(app_name_);
@@ -508,6 +511,16 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             };
             cb.set_async = [this](bool on) {
                 SetAsync(on);
+            };
+            cb.set_auto_focus = [this](bool on) {
+                auto_focus_.store(on);
+                // Disabling auto focus also drops any current always-on-top
+                // hold so the user's choice takes effect immediately rather
+                // than only blocking future auto-focus actions.
+                if (!on) {
+                    is_on_top_  = false;
+                    man_on_top_ = false;
+                }
             };
             cb.download_latest_profiles = [this]() {
                 // Re-entrancy guard — ignore clicks while a previous download
@@ -1105,6 +1118,7 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 if (JsonManager().LoadProfileFromJson(path, cfg)) {
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
+                    auto_focus_.store(cfg.auto_focus);
                     LOG() << "Loaded " << path.c_str() << " profile";
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
@@ -1192,6 +1206,7 @@ vrto3d::FocusContext MockControllerDeviceDriver::GetFocusContext()
     fc.is_on_top   = &is_on_top_;
     fc.man_on_top  = &man_on_top_;
     fc.app_pid     = &app_pid_;
+    fc.auto_focus  = &auto_focus_;
     return fc;
 }
 
@@ -1274,6 +1289,25 @@ void MockControllerDeviceDriver::MonitorModeThread() {
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status)
 {
+    // Quick same-pid reconnect (e.g. RealVR re-inits VR after FoV/res
+    // change): the disconnect branch dropped focus and armed a 15s grace
+    // timer. Refocus immediately so the user isn't stuck without input
+    // passthrough — but only if focus was actually on before the
+    // disconnect (we don't want to override a user "always-on-top off"
+    // choice). The pending 15s thread will wake later and re-assert,
+    // which is a no-op since flags are already set.
+    if (status == vr::VREvent_ProcessConnected
+        && app_name == app_name_
+        && app_pid == app_pid_
+        && focus_pre_disconnect_.load()
+        && !man_on_top_.load())
+    {
+        is_on_top_  = true;
+        man_on_top_ = true;
+        focus_pre_disconnect_.store(false);
+        return;
+    }
+
     if ((app_name != app_name_ || app_pid != app_pid_) && status == vr::VREvent_ProcessConnected)
     {
         app_name_ = app_name;
@@ -1295,6 +1329,9 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         }
 
         SetAsync(config.async_enable);
+        // Mirror the freshly-loaded profile's auto_focus to the live atomic
+        // observed by presenter focus loops.
+        auto_focus_.store(config.auto_focus);
 
         if (config.auto_focus) {
             // Run off-thread: this is called from RunFrame, and a 10s sleep
@@ -1330,8 +1367,16 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
     }
     else if (status == vr::VREvent_ProcessDisconnected)
     {
+        // Capture the user's pre-disconnect focus preference so both the
+        // 15s grace thread and the quick-reconnect path can honor a user
+        // "always-on-top off" choice instead of forcing focus back on.
+        const bool was_focused = man_on_top_.load();
+        focus_pre_disconnect_.store(was_focused);
+
         is_on_top_ = false;
         man_on_top_ = false;
+
+        if (!was_focused) return;
 
         // Some games briefly disconnect from SteamVR (compositor blip,
         // scene-app handoff) and immediately reconnect with the same exe
@@ -1344,6 +1389,7 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
             if (app_pid_.load() == pid && IsProcessRunning(pid)) {
                 is_on_top_ = true;
                 man_on_top_ = true;
+                focus_pre_disconnect_.store(false);
             }
         }).detach();
     }

@@ -126,13 +126,17 @@ void MyDeviceProvider::RunFrame()
     vr::VREvent_t vrEvent;
     while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent)))
     {
-        if ((vrEvent.eventType == vr::VREvent_ProcessConnected ||
+        // Connect-side events are NOT gated by wait_count_. When a mod (e.g.
+        // RealVR) re-inits VR after an FoV/resolution change, the reconnect
+        // event lands inside the post-disconnect cool-off window; dropping it
+        // would leave the renderer stuck in paused_for_disconnect_ with no
+        // further chance to resume.
+        if (vrEvent.eventType == vr::VREvent_ProcessConnected ||
             vrEvent.eventType == vr::VREvent_ActionBindingReloaded ||
             vrEvent.eventType == vr::VREvent_SceneApplicationChanged ||
-            vrEvent.eventType == vr::VREvent_Input_BindingLoadFailed || 
+            vrEvent.eventType == vr::VREvent_Input_BindingLoadFailed ||
             vrEvent.eventType == vr::VREvent_Input_BindingLoadSuccessful ||
-            vrEvent.eventType == vr::VREvent_Input_ActionManifestReloaded) &&
-            wait_count_ == 0)
+            vrEvent.eventType == vr::VREvent_Input_ActionManifestReloaded)
         {
             auto appName = GetProcessName(vrEvent.data.process.pid);
             auto lowerAppName = appName;

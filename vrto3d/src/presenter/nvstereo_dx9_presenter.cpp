@@ -1292,6 +1292,7 @@ void NvStereoDx9Presenter::FocusThreadLoop()
         const bool is_on_top   = focus_.is_on_top   && focus_.is_on_top->load();
         const bool man_on_top  = focus_.man_on_top  && focus_.man_on_top->load();
         const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
+        const bool auto_focus  = focus_.auto_focus  ? focus_.auto_focus->load() : auto_focus_;
 
         const bool app_running = platform::IsProcessRunning(pid);
         if (pid == 0 || !app_running) {
@@ -1312,7 +1313,7 @@ void NvStereoDx9Presenter::FocusThreadLoop()
             bool want_on_top = false;
             if (man_on_top || is_on_top) {
                 want_on_top = true;
-            } else if (auto_focus_ && app_running && pid != 0
+            } else if (auto_focus && app_running && pid != 0
                        && pid != last_auto_focused_pid) {
                 if (focus_.is_on_top)  focus_.is_on_top->store(true);
                 if (focus_.man_on_top) focus_.man_on_top->store(true);
