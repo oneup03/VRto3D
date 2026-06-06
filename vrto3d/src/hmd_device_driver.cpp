@@ -476,13 +476,18 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 uint32_t pid = app_pid_.load();
                 LOG() << "request_game_focus fired pid=" << pid;
                 if (pid == 0 || !IsProcessRunning(pid)) return;
-                std::thread([pid]() {
+                std::thread([this, pid]() {
                     // Let any held hotkey modifiers (Ctrl+Home was likely
                     // just used to close the menu) settle before we try
                     // to take foreground — the ALT-key trick inside
                     // ForceFocus misbehaves when Ctrl is still held.
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
                     for (int i = 0; i < 5; ++i) {
+                        if (!man_on_top_.load()) {
+                            LOG() << "request_game_focus iter=" << i
+                                  << " bail: user disabled always-on-top";
+                            return;
+                        }
                         HWND game_hwnd = GetHWNDFromPID(pid);
                         if (game_hwnd) {
                             ForceFocus(game_hwnd,
@@ -1305,12 +1310,14 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
                 std::this_thread::sleep_for(std::chrono::seconds(4));
                 if (!is_active_) return;
                 if (app_pid_.load() != pid) return;
+                if (!man_on_top_.load()) return;
                 for (int i = 0; i < 3; ++i) {
                     const std::string tag = "auto_focus#" + std::to_string(i + 1);
-                    vrto3d::TriggerOpenVRRecenter(tag.c_str());
+                    if (vrto3d::TriggerOpenVRRecenter(tag.c_str())) return;
                     if (i < 2) std::this_thread::sleep_for(std::chrono::seconds(2));
                     if (!is_active_) return;
                     if (app_pid_.load() != pid) return;
+                    if (!man_on_top_.load()) return;
                 }
             }).detach();
         }

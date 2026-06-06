@@ -848,8 +848,9 @@ void WindowPresenter::FocusThreadLoop()
                 // (vrmonitor / status window) may grab foreground after
                 // our first ForceFocus. Run a watch loop that re-asserts
                 // focus whenever the foreground drifts off the game.
-                std::thread([pid]() {
+                std::thread([pid, man_on_top = focus_.man_on_top]() {
                     for (int i = 0; i < 15; ++i) {
+                        if (man_on_top && !man_on_top->load()) return;
                         HWND game_hwnd = GetHWNDFromPID(pid);
                         if (game_hwnd && GetForegroundWindow() != game_hwnd) {
                             ForceFocus(game_hwnd,
