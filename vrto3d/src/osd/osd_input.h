@@ -100,6 +100,16 @@ private:
     std::array<bool, 256> keys_prev_{};
     uint16_t              pad_curr_ = 0;
     uint16_t              pad_prev_ = 0;
+    // Analog axes from XInput port 0, normalized to [-1,1] for sticks and
+    // [0,1] for triggers. Fed to ImGui as analog gamepad keys so stick nav
+    // and analog scroll work in the OSD menu.
+    float                 pad_lx_ = 0.0f;
+    float                 pad_ly_ = 0.0f;
+    float                 pad_rx_ = 0.0f;
+    float                 pad_ry_ = 0.0f;
+    float                 pad_lt_ = 0.0f;
+    float                 pad_rt_ = 0.0f;
+    bool                  pad_connected_ = false;
     bool                  capturing_ = false;
     bool                  capture_combo_ = false;
     bool                  had_any_press_ = false;
