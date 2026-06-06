@@ -381,8 +381,9 @@ void WibbleWobblePresenter::FocusThreadLoop() {
             // foreground after the first attempt — re-asserting once per
             // second for 15s handles both cases.
             if (want_on_top && !was_on_top && pid != 0) {
-                std::thread([pid]() {
+                std::thread([pid, man_on_top = focus_.man_on_top]() {
                     for (int i = 0; i < 15; ++i) {
+                        if (man_on_top && !man_on_top->load()) return;
                         HWND game_hwnd = GetHWNDFromPID(pid);
                         if (game_hwnd && GetForegroundWindow() != game_hwnd) {
                             ForceFocus(game_hwnd,

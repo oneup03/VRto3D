@@ -1340,8 +1340,9 @@ void NvStereoDx9Presenter::FocusThreadLoop()
                 // and SteamVR's status window often grabs foreground
                 // mid-bring-up; run a watch loop that re-asserts focus
                 // whenever it drifts off the game.
-                std::thread([pid]() {
+                std::thread([pid, man_on_top = focus_.man_on_top]() {
                     for (int i = 0; i < 15; ++i) {
+                        if (man_on_top && !man_on_top->load()) return;
                         HWND game_hwnd = GetHWNDFromPID(pid);
                         if (game_hwnd && GetForegroundWindow() != game_hwnd) {
                             ForceFocus(game_hwnd,
