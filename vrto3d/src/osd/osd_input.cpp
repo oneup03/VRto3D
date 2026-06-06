@@ -186,12 +186,32 @@ void OsdInput::Poll() {
         keys_curr_[vk] = (GetAsyncKeyState(vk) & 0x8000) != 0;
     }
     // XInput poll — only port 0; matches existing PollHotkeysThread scope.
+    // `pad_curr_` keeps the raw 16-bit `wButtons` mask (no triggers) so the
+    // existing chord-capture iteration stays valid; trigger pressure and
+    // stick deflection are tracked separately for ImGui analog nav.
     XINPUT_STATE st{};
     pad_prev_ = pad_curr_;
     if (XInputGetState(0, &st) == ERROR_SUCCESS) {
+        pad_connected_ = true;
         pad_curr_ = st.Gamepad.wButtons;
+        auto norm_stick = [](SHORT v, SHORT dz) {
+            int a = (v >= 0) ? v : -v;
+            if (a <= dz) return 0.0f;
+            float n = (a - dz) / static_cast<float>(32767 - dz);
+            if (n > 1.0f) n = 1.0f;
+            return (v < 0) ? -n : n;
+        };
+        pad_lx_ = norm_stick(st.Gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+        pad_ly_ = norm_stick(st.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+        pad_rx_ = norm_stick(st.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+        pad_ry_ = norm_stick(st.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+        pad_lt_ = st.Gamepad.bLeftTrigger  / 255.0f;
+        pad_rt_ = st.Gamepad.bRightTrigger / 255.0f;
     } else {
+        pad_connected_ = false;
         pad_curr_ = 0;
+        pad_lx_ = pad_ly_ = pad_rx_ = pad_ry_ = 0.0f;
+        pad_lt_ = pad_rt_ = 0.0f;
     }
 }
 
@@ -285,6 +305,46 @@ void OsdInput::FeedImGui(ImGuiIO& io, const OsdSurface& surface) {
                 }
             }
         }
+    }
+
+    // XInput → ImGui gamepad nav keys. ImGui ignores gamepad input unless
+    // both ConfigFlags_NavEnableGamepad AND BackendFlags_HasGamepad are set
+    // — toggle the backend bit with controller-connected so keyboard-only
+    // users don't get phantom nav highlights when there's no pad attached.
+    // Defaults: A=activate, B=cancel, X=text-input, Y=tweak-slower, D-pad +
+    // left stick navigate, shoulders page through tabs, right stick scrolls.
+    if (pad_connected_) io.BackendFlags |=  ImGuiBackendFlags_HasGamepad;
+    else                io.BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
+    {
+        auto pad_bit = [&](uint16_t mask) -> bool { return (pad_curr_ & mask) != 0; };
+        io.AddKeyEvent(ImGuiKey_GamepadFaceDown,  pad_bit(XINPUT_GAMEPAD_A));
+        io.AddKeyEvent(ImGuiKey_GamepadFaceRight, pad_bit(XINPUT_GAMEPAD_B));
+        io.AddKeyEvent(ImGuiKey_GamepadFaceLeft,  pad_bit(XINPUT_GAMEPAD_X));
+        io.AddKeyEvent(ImGuiKey_GamepadFaceUp,    pad_bit(XINPUT_GAMEPAD_Y));
+        io.AddKeyEvent(ImGuiKey_GamepadDpadLeft,  pad_bit(XINPUT_GAMEPAD_DPAD_LEFT));
+        io.AddKeyEvent(ImGuiKey_GamepadDpadRight, pad_bit(XINPUT_GAMEPAD_DPAD_RIGHT));
+        io.AddKeyEvent(ImGuiKey_GamepadDpadUp,    pad_bit(XINPUT_GAMEPAD_DPAD_UP));
+        io.AddKeyEvent(ImGuiKey_GamepadDpadDown,  pad_bit(XINPUT_GAMEPAD_DPAD_DOWN));
+        io.AddKeyEvent(ImGuiKey_GamepadL1,        pad_bit(XINPUT_GAMEPAD_LEFT_SHOULDER));
+        io.AddKeyEvent(ImGuiKey_GamepadR1,        pad_bit(XINPUT_GAMEPAD_RIGHT_SHOULDER));
+        io.AddKeyEvent(ImGuiKey_GamepadL3,        pad_bit(XINPUT_GAMEPAD_LEFT_THUMB));
+        io.AddKeyEvent(ImGuiKey_GamepadR3,        pad_bit(XINPUT_GAMEPAD_RIGHT_THUMB));
+        io.AddKeyEvent(ImGuiKey_GamepadStart,     pad_bit(XINPUT_GAMEPAD_START));
+        io.AddKeyEvent(ImGuiKey_GamepadBack,      pad_bit(XINPUT_GAMEPAD_BACK));
+
+        auto axis = [&](ImGuiKey k, float v) {
+            io.AddKeyAnalogEvent(k, v > 0.0f, v);
+        };
+        axis(ImGuiKey_GamepadL2,           pad_lt_);
+        axis(ImGuiKey_GamepadR2,           pad_rt_);
+        axis(ImGuiKey_GamepadLStickLeft,   pad_lx_ < 0.0f ? -pad_lx_ : 0.0f);
+        axis(ImGuiKey_GamepadLStickRight,  pad_lx_ > 0.0f ?  pad_lx_ : 0.0f);
+        axis(ImGuiKey_GamepadLStickUp,     pad_ly_ > 0.0f ?  pad_ly_ : 0.0f);
+        axis(ImGuiKey_GamepadLStickDown,   pad_ly_ < 0.0f ? -pad_ly_ : 0.0f);
+        axis(ImGuiKey_GamepadRStickLeft,   pad_rx_ < 0.0f ? -pad_rx_ : 0.0f);
+        axis(ImGuiKey_GamepadRStickRight,  pad_rx_ > 0.0f ?  pad_rx_ : 0.0f);
+        axis(ImGuiKey_GamepadRStickUp,     pad_ry_ > 0.0f ?  pad_ry_ : 0.0f);
+        axis(ImGuiKey_GamepadRStickDown,   pad_ry_ < 0.0f ? -pad_ry_ : 0.0f);
     }
 
     // Capture sampling.

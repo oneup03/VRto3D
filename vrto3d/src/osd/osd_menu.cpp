@@ -862,7 +862,7 @@ void OsdMenu::Impl::DrawSystemTab() {
             cfg.launch_script = buf;
             dirty = true;
         }
-        if (ImGui::Checkbox("Disable Hotkeys (Ctrl+Home still toggles menu)",
+        if (ImGui::Checkbox("Disable Hotkeys (Ctrl+Home / Start+Back still toggle menu)",
                             &cfg.disable_hotkeys)) {
             dirty = true;
         }

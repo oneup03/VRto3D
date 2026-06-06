@@ -1026,9 +1026,15 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
     while (is_active_) {
         auto cfg = stereo_display_component_->GetConfig();
 
-        // Ctrl+Home toggles the OSD menu. Always polled (independent of
-        // disable_hotkeys) so users can always recover from a runaway config.
-        if (isCtrlDown() && isDown(VK_HOME) && sleep.menu == 0) {
+        // Ctrl+Home (keyboard) or Start+Back (gamepad) toggles the OSD menu.
+        // Always polled (independent of disable_hotkeys) so users can always
+        // recover from a runaway config.
+        DWORD menu_pad = 0;
+        const bool menu_pad_chord =
+            GetXInputButtonState(menu_pad) &&
+            ((menu_pad & (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_BACK)) ==
+                        (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_BACK));
+        if (((isCtrlDown() && isDown(VK_HOME)) || menu_pad_chord) && sleep.menu == 0) {
             if (auto* osd = getOsd()) {
                 osd->ToggleMenu();
                 osd->SetAppName(app_name_);
