@@ -21,6 +21,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_map>
 
@@ -70,6 +71,10 @@ public:
         // valid region into a picture-in-picture inside an oversized eye.
         vr::VRTextureBounds_t bounds_left  { 0.f, 0.f, 1.f, 1.f };
         vr::VRTextureBounds_t bounds_right { 0.f, 0.f, 1.f, 1.f };
+        // Pid that allocated the underlying swap texture set. Used only by
+        // the Present-time diagnostic log so we can correlate a misbehaving
+        // overlay layer with the process responsible for filling it.
+        uint32_t pid = 0;
     };
     static constexpr int kMaxLayers = 8;
 
@@ -240,11 +245,13 @@ private:
 
     // Composite pipeline state — used to alpha-blend overlay layers (layer
     // 1+) onto out_sbs_. Layer 0 is still a straight CopySubresourceRegion.
-    Microsoft::WRL::ComPtr<ID3D11VertexShader>     composite_vs_;
-    Microsoft::WRL::ComPtr<ID3D11PixelShader>      composite_ps_;
-    Microsoft::WRL::ComPtr<ID3D11SamplerState>     composite_sampler_;
-    Microsoft::WRL::ComPtr<ID3D11BlendState>       composite_blend_;
-    Microsoft::WRL::ComPtr<ID3D11RasterizerState>  composite_raster_;
+    Microsoft::WRL::ComPtr<ID3D11VertexShader>      composite_vs_;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader>       composite_ps_;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState>      composite_sampler_;
+    Microsoft::WRL::ComPtr<ID3D11BlendState>        composite_blend_;
+    Microsoft::WRL::ComPtr<ID3D11RasterizerState>   composite_raster_;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilState> composite_depth_;
+
     // Cached RTV on out_sbs_, recreated whenever out_sbs_ is recreated.
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> out_sbs_rtv_;
     bool                   composite_pipeline_ready_ = false;
