@@ -63,6 +63,9 @@ struct MenuCallbacks {
     // Kick off a download of the latest vrto3d_profiles.zip from GitHub
     // releases and extract into the config folder. Reports progress via toast.
     std::function<void()> download_latest_profiles;
+    // Push the Async Reprojection toggle to SteamVR for every known AppID so
+    // it takes effect without waiting for a profile reload or driver restart.
+    std::function<void(bool)> set_async;
 
     // Auto-depth feature: toggle + comfort-target slider (fraction of one
     // eye's width). The Stereo tab binds these to read/write the live
