@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -204,6 +205,20 @@ struct OsdRenderer::Impl {
             }
             styles_overridden = true;
             styled_hwnd = hwnd;
+            // Steal foreground so gamepad / keyboard / mouse routed by the
+            // OS go to our window instead of the game underneath. Skip the
+            // NvidiaDX9 presenter — it holds the D3D9Ex device in FSE on
+            // this same HWND, and a foreground change there drops the
+            // exclusive cooperative level (and risks a TDR). ForceFocus
+            // does ~100ms of sleeps + AttachThreadInput, so dispatch to a
+            // detached thread so we don't block presentation.
+            if (active_output_mode != OutputMode::NvidiaDX9) {
+                std::thread([hwnd]() {
+                    ForceFocus(hwnd,
+                               GetCurrentThreadId(),
+                               GetWindowThreadProcessId(hwnd, nullptr));
+                }).detach();
+            }
         } else if (!now_visible && styles_overridden) {
             HWND target = styled_hwnd && IsWindow(styled_hwnd) ? styled_hwnd : hwnd;
             if (target) {
