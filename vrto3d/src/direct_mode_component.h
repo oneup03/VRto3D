@@ -97,6 +97,11 @@ private:
     // dimension lines aren't spammed every frame.
     int last_logged_layer_dim_count_ = -1;
 
+    // Last-logged count of sub-threshold layers dropped by the placeholder
+    // filter — emitted once per change so we know UEVR's marker quads are
+    // being suppressed correctly.
+    int last_logged_filtered_tiny_ = 0;
+
     // pid → executable name cache for the per-layer diagnostic log. Avoids
     // an OpenProcess call every time the layer-count changes.
     std::unordered_map<uint32_t, std::string> pid_name_cache_;
