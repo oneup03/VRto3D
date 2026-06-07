@@ -1,0 +1,27 @@
+{
+    "hmd_height": 1.0,
+    "fov": 73.0,
+    "depth": 0.125,
+    "convergence": 2.0,
+    "async_enable": false,
+    "auto_depth_enabled": true,
+    "auto_depth_target_disparity": 0.004999999888241291,
+    "auto_depth_smoothing": 0.07999999821186066,
+    "pitch_enable": false,
+    "yaw_enable": false,
+    "pose_reset_key": "VK_NUMPAD7",
+    "ctrl_toggle_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
+    "ctrl_toggle_type": "toggle",
+    "pitch_radius": 0.0,
+    "ctrl_deadzone": 0.05000000074505806,
+    "ctrl_sensitivity": 1.0,
+    "user_settings": [
+        {
+            "user_load_key": "VK_NUMPAD1",
+            "user_key_type": "switch",
+            "user_depth": 0.125,
+            "user_convergence": 2.0,
+            "user_fov": 73.0
+        }
+    ]
+}
