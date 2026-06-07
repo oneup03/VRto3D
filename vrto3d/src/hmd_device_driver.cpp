@@ -384,17 +384,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             cb.save_game_profile = [this](std::string toast) {
                 if (prev_name_.empty()) return;
                 auto cfg = stereo_display_component_->GetConfig();
-                cfg.depth       = stereo_display_component_->GetDepth();
-                cfg.convergence = stereo_display_component_->GetConvergence();
-                cfg.fov         = stereo_display_component_->GetFoV();
                 JsonManager().SaveProfileToJson(prev_name_ + "_config.json", cfg);
                 if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
             };
             cb.save_default_profile = [this](std::string toast) {
                 auto cfg = stereo_display_component_->GetConfig();
-                cfg.depth       = stereo_display_component_->GetDepth();
-                cfg.convergence = stereo_display_component_->GetConvergence();
-                cfg.fov         = stereo_display_component_->GetFoV();
                 // SaveFullConfigToJson writes every key (display_index,
                 // output_mode, render dims, OpenTrack, track filter, LeiaSR,
                 // launch_script, etc.) — required so System-tab edits persist.
@@ -1090,10 +1084,10 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             // Ctrl+F7 Store settings into game profile
             if (isCtrlDown() && isDown(VK_F7) && sleep.save == 0) {
                 if (!prev_name_.empty()) {
-                    cfg.depth = stereo_display_component_->GetDepth();
-                    cfg.convergence = stereo_display_component_->GetConvergence();
-                    cfg.fov = stereo_display_component_->GetFoV();
-                    JsonManager().SaveProfileToJson(prev_name_ + "_config.json", cfg);
+                    // Re-fetch so any depth/conv adjust earlier this tick is
+                    // reflected in the saved file.
+                    auto save_cfg = stereo_display_component_->GetConfig();
+                    JsonManager().SaveProfileToJson(prev_name_ + "_config.json", save_cfg);
                     BeepSuccess();
                     setOverlay("Saved " + prev_name_ + "_config.json profile");
                 }
@@ -1610,7 +1604,14 @@ void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32
 StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    return config_;
+    StereoDisplayDriverConfiguration cfg = config_;
+    // depth/convergence/fov live in atomics during runtime — config_ only
+    // holds the last JSON-loaded values. Sync them so callers that round-trip
+    // a snapshot through LoadSettings don't clobber live hotkey adjustments.
+    cfg.depth       = depth_.load(std::memory_order_relaxed);
+    cfg.convergence = convergence_.load(std::memory_order_relaxed);
+    cfg.fov         = fov_.load(std::memory_order_relaxed);
+    return cfg;
 }
 
 
