@@ -19,6 +19,7 @@
 #include "platform.h"
 
 #include <windows.h>
+#include <d3d10.h>      // ID3D10Multithread
 #include <d3d11_1.h>
 #include <dxgi1_4.h>
 
@@ -199,7 +200,21 @@ bool CreateD3D11Device(LUID adapter_luid,
                                D3D11_SDK_VERSION, &out_device, &got, &out_context);
     }
 #endif
-    return SUCCEEDED(hr);
+    if (FAILED(hr)) return false;
+
+    // Turn on D3D11's per-call immediate-context lock. Our own code serializes
+    // context access with a mutex, but external present-chain hooks (RTSS,
+    // Discord overlay, Steam overlay, OBS game-capture) draw their overlay
+    // from inside IDXGISwapChain::Present using the *same* immediate context,
+    // outside our mutex. Without this flag the runtime assumes single-threaded
+    // context use and the overlay's draws can race our compositor thread's
+    // OnDirectModeFrame work — manifesting as a device-removed crash within
+    // seconds (reported against RTSS at 7680x2160 + Cyberpunk).
+    Microsoft::WRL::ComPtr<ID3D10Multithread> mt;
+    if (SUCCEEDED(out_context.As(&mt)) && mt) {
+        mt->SetMultithreadProtected(TRUE);
+    }
+    return true;
 }
 
 
