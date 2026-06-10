@@ -27,6 +27,7 @@
 #include "vr_recenter.h"
 
 #include <shellapi.h>
+#include <shlobj.h>
 #include <urlmon.h>
 #pragma comment(lib, "urlmon.lib")
 #include "vrto3dlib/app_id_mgr.h"
@@ -498,6 +499,13 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 std::string steam = GetSteamInstallPath();
                 if (steam.empty()) return;
                 std::string path = steam + "\\config\\vrto3d";
+                ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            };
+            cb.open_screenshot_folder = [this]() {
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string path = steam + "\\steamapps\\common\\SteamVR\\screenshots";
+                SHCreateDirectoryExA(nullptr, path.c_str(), nullptr);
                 ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             };
             cb.set_async = [this](bool on) {

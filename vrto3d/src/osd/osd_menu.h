@@ -56,6 +56,8 @@ struct MenuCallbacks {
     std::function<bool()> always_on_top;
     // Open the vrto3d Steam config folder in the OS file manager.
     std::function<void()> open_config_folder;
+    // Open the SteamVR screenshots folder in the OS file manager.
+    std::function<void()> open_screenshot_folder;
     // Re-assert input focus on the connected game window. Called when the
     // OSD menu closes — while the menu was open the VR window held focus,
     // and the user expects keystrokes to land back in the game.

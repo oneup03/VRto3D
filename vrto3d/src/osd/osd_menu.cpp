@@ -882,6 +882,12 @@ void OsdMenu::Impl::DrawSystemTab() {
                 callbacks.open_config_folder();
             }
         }
+        if (callbacks.open_screenshot_folder) {
+            if (callbacks.open_config_folder) ImGui::SameLine();
+            if (ImGui::Button("Open Screenshot Folder")) {
+                callbacks.open_screenshot_folder();
+            }
+        }
     }
 
     if (ImGui::CollapsingHeader("About", ImGuiTreeNodeFlags_DefaultOpen)) {
