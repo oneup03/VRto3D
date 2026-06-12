@@ -28,9 +28,6 @@
 #include <sstream>
 #include <thread>
 
-// SSSE3 — for the per-frame R/B byte swap in PresentFrame.
-#include <tmmintrin.h>
-
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <delayimp.h>
@@ -48,22 +45,6 @@ using Microsoft::WRL::ComPtr;
 namespace vrto3d {
 
 namespace {
-
-// NV3D packed-stereo signature stored in the (H)th (extra) row of the packed
-// surface. Driver scans for this signature on PresentEx and routes left/right
-// halves of the surface to alternate eyes.
-constexpr DWORD kNvStereoSignature = 0x4433564eu;   // 'N','V','3','D'
-
-#pragma pack(push, 1)
-struct NvStereoImageHeader {
-    DWORD signature;
-    DWORD width;     // per-eye width
-    DWORD height;
-    DWORD bpp;       // bits per pixel
-    DWORD flags;     // 0 = normal, 1 = swap eyes
-};
-#pragma pack(pop)
-
 
 // Force `hwnd` to be the foreground/focus window by attaching this thread's
 // input queue to the current foreground thread for the duration of the call.
@@ -530,19 +511,21 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
         }
     }
 
-    // 2b. Force stereo driver mode to AUTOMATIC. The NV3D-signed packed back-
-    //     buffer route only works in AUTOMATIC mode — the driver scans for
-    //     the signature and routes left/right halves per-eye. DIRECT mode
-    //     disables that auto-detection: the emitter still turns on but the
-    //     panel just blits the SbS surface as-is (verified empirically).
-    //     We set it explicitly in case a prior session left it on DIRECT.
+    // 2b. Force stereo driver mode to DIRECT. We explicitly drive per-eye
+    //     routing via NvAPI_Stereo_SetActiveEye + StretchRect each frame.
+    //     AUTOMATIC mode (driver-side signature scanning) was tried with our
+    //     shared-handle source pipeline and left NV3D's internal left-eye
+    //     buffer stuck on the prior frame's content (proven with a ColorFill
+    //     diagnostic). DIRECT mode bypasses that auto-detection: app calls
+    //     SetActiveEye(LEFT)/SetActiveEye(RIGHT) and the driver writes to the
+    //     corresponding eye's internal buffer. Matches 3D-Vision-Direct-exp_dx9_dm.
     {
-        NvAPI_Status s = NvAPI_Stereo_SetDriverMode(NVAPI_STEREO_DRIVER_MODE_AUTOMATIC);
+        NvAPI_Status s = NvAPI_Stereo_SetDriverMode(NVAPI_STEREO_DRIVER_MODE_DIRECT);
         if (s != NVAPI_OK) {
-            LOG() << "NvStereoDx9Presenter: NvAPI_Stereo_SetDriverMode(AUTOMATIC) failed status="
+            LOG() << "NvStereoDx9Presenter: NvAPI_Stereo_SetDriverMode(DIRECT) failed status="
                   << static_cast<int>(s);
         } else {
-            LOG() << "NvStereoDx9Presenter: stereo driver mode = AUTOMATIC";
+            LOG() << "NvStereoDx9Presenter: stereo driver mode = DIRECT";
         }
     }
 
@@ -578,7 +561,7 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     }
     HWND hwnd = static_cast<HWND>(window_->NativeHandle());
 
-    // 4-10. Build D3D9Ex device + packed surfaces + activate stereo
+    // 4-10. Build D3D9Ex device + activate stereo
     if (!BuildD3D9Stack(hwnd, primary.width, primary.height, primary.refresh_hz)) {
         LOG() << "NvStereoDx9Presenter: BuildD3D9Stack failed";
         DisableLightBoost();
@@ -603,6 +586,24 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
           << (activation_retries_left_ > 0 ? " (deferred retries armed)" : "");
 
     while (!window_stop_.load(std::memory_order_relaxed)) {
+        if (d3d9_dead_.load(std::memory_order_relaxed)) {
+            // Once the GPU is wedged, calling Release() on any D3D9Ex object
+            // blocks in the kernel-mode driver waiting for GPU work that will
+            // never complete. We can't safely recover from this state — even
+            // a 2-second TDR window isn't enough if the user-mode driver
+            // can't return from Release. Anything we do here contributes to
+            // SteamVR's server_main watchdog (10s).
+            //
+            // Best we can do: exit the loop FAST so the existing teardown
+            // gets a chance to run. The teardown itself uses Detach (not
+            // Reset) on D3D9 resources when d3d9_dead_ is set, so we don't
+            // block on Release. The leaked refs stay alive until vrserver
+            // exits and the OS reclaims them — bounded duration.
+            LOG() << "NvStereoDx9Presenter: device dead — exiting window thread "
+                     "fast; FSE will be released by process death. Restart "
+                     "SteamVR to re-enable 3D Vision output.";
+            break;
+        }
         renderer->WaitAndDrawPending(33);
         if (window_) window_->PollEvents();
     }
@@ -644,23 +645,51 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     //                             no longer FSE-locked at this point.
     //   5. NvAPI_Unload         — mirrors XR3DV's pattern.
     //   6. Destroy present window.
+    // d3d9_dead_ short-circuits the risky calls below. Once the GPU is
+    // wedged, calling Release() on any D3D9Ex object blocks in the kernel-
+    // mode driver waiting for GPU work that never completes. Detach() drops
+    // our ComPtr ref without invoking Release; the leaked underlying object
+    // stays alive until vrserver exits and Windows reclaims the process —
+    // bounded duration. NvAPI calls that talk to the rendering pipeline
+    // (Stereo_DestroyHandle) are similarly skipped; the NvAPI side gets
+    // cleaned up by process exit.
+    const bool dead = d3d9_dead_.load(std::memory_order_acquire);
+
     LOG() << "NvStereoDx9Presenter: teardown step 1 — remove FSE WndProc subclass";
     RemoveFseSubclass();
 
     if (stereo_handle_) {
-        LOG() << "NvStereoDx9Presenter: teardown step 2 — destroy NvAPI stereo handle";
-        NvAPI_Stereo_DestroyHandle(stereo_handle_);
-        stereo_handle_ = nullptr;
+        if (dead) {
+            LOG() << "NvStereoDx9Presenter: teardown step 2 — SKIP Stereo_DestroyHandle "
+                     "(device dead, NvAPI call could block on wedged GPU)";
+            stereo_handle_ = nullptr;  // leak the handle; NvAPI cleans on Unload
+        } else {
+            LOG() << "NvStereoDx9Presenter: teardown step 2 — destroy NvAPI stereo handle";
+            NvAPI_Stereo_DestroyHandle(stereo_handle_);
+            stereo_handle_ = nullptr;
+        }
     }
 
-    LOG() << "NvStereoDx9Presenter: teardown step 3 — release D3D9 objects (drops FSE)";
-    back_buffer_.Reset();
-    packed_default_.Reset();
-    packed_input_default_.Reset();
-    packed_sysmem_.Reset();
-    staging_.Reset();
-    device9_.Reset();
-    d3d9_.Reset();
+    LOG() << "NvStereoDx9Presenter: teardown step 3 — release D3D9 objects "
+          << (dead ? "(device dead — Detach to avoid blocking)" : "(drops FSE)");
+    if (dead) {
+        // Detach() releases the ComPtr without calling IUnknown::Release.
+        // The underlying COM object is leaked but the call is non-blocking.
+        // Process exit cleans up.
+        (void)back_buffer_.Detach();
+        (void)shared_input_sfc_.Detach();
+        (void)shared_input_tex_.Detach();
+        sync_query_.Reset();    // DX11 query; safe even when D3D9 is dead
+        (void)device9_.Detach();
+        (void)d3d9_.Detach();
+    } else {
+        back_buffer_.Reset();
+        shared_input_sfc_.Reset();
+        shared_input_tex_.Reset();
+        sync_query_.Reset();
+        device9_.Reset();
+        d3d9_.Reset();
+    }
 
     LOG() << "NvStereoDx9Presenter: teardown step 4 — disable LightBoost";
     DisableLightBoost();
@@ -840,7 +869,7 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
     // Tell the driver to flag every render target / back buffer this device
     // creates as stereo-capable. Required when the device wasn't created in
     // FSE on a 3D Vision panel — without this, the back buffer is mono and
-    // the NV3D-signed packed surface just blits as plain SbS pixels.
+    // SetActiveEye has nothing to route writes into.
     NvAPI_Stereo_SetSurfaceCreationMode(stereo_handle_, NVAPI_STEREO_SURFACECREATEMODE_FORCESTEREO);
 
     s = NvAPI_Stereo_Activate(stereo_handle_);
@@ -868,114 +897,98 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
 }
 
 
-bool NvStereoDx9Presenter::EnsurePackedSurfaces(uint32_t input_w_per_eye, uint32_t input_h)
+bool NvStereoDx9Presenter::EnsureSharedSurface(ID3D11Texture2D* sbs)
 {
-    // Input-side dims (CPU memcpy target + UpdateSurface upload pair).
-    const uint32_t in_pw = input_w_per_eye * 2u;
-    const uint32_t in_ph = input_h;
-    // Output-side dims (panel-sized so the LINEAR scale gives uniform
-    // per-eye quality and the NV3D squash to back-buffer is clean 2:1).
-    const uint32_t out_pw = monitor_w_ * 2u;
-    const uint32_t out_ph = monitor_h_ + 1u;   // +1 row for NV3D signature
+    if (!device9_ || !sbs) return false;
 
-    const bool input_unchanged  = packed_sysmem_ && packed_w_in_  == in_pw && packed_h_in_  == in_ph;
-    const bool output_unchanged = packed_default_ && packed_w_out_ == out_pw && packed_h_out_ == monitor_h_;
-    if (input_unchanged && output_unchanged) return true;
+    D3D11_TEXTURE2D_DESC desc{};
+    sbs->GetDesc(&desc);
 
-    HRESULT hr = S_OK;
-
-    if (!input_unchanged) {
-        packed_sysmem_.Reset();
-        packed_input_default_.Reset();
-        hr = device9_->CreateOffscreenPlainSurface(
-            in_pw, in_ph, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &packed_sysmem_, nullptr);
-        if (FAILED(hr)) {
-            LOG() << "NvStereoDx9Presenter: CreateOffscreenPlainSurface(packed_sysmem) failed hr=0x"
-                  << std::hex << hr;
-            return false;
-        }
-        hr = device9_->CreateOffscreenPlainSurface(
-            in_pw, in_ph, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &packed_input_default_, nullptr);
-        if (FAILED(hr)) {
-            LOG() << "NvStereoDx9Presenter: CreateOffscreenPlainSurface(packed_input_default) failed hr=0x"
-                  << std::hex << hr;
-            packed_sysmem_.Reset();
-            return false;
-        }
-        packed_w_in_ = in_pw;
-        packed_h_in_ = in_ph;
+    // Identity-cache hit. out_sbs_ keeps the same pointer across frames; it
+    // only changes when Dx11Renderer::EnsureOutputTexture recreates it (game
+    // start/exit, resize). Avoid the QI+GetSharedHandle+CreateTexture round
+    // trip on every frame.
+    if (shared_src_ptr_ == static_cast<void*>(sbs) &&
+        shared_src_w_   == desc.Width &&
+        shared_src_h_   == desc.Height &&
+        shared_src_fmt_ == desc.Format &&
+        shared_input_sfc_) {
+        return true;
     }
 
-    if (!output_unchanged) {
-        packed_default_.Reset();
-        sig_valid_ = false;  // surface recreated → signature row needs rewriting
-        // Lockable render target — see header comment for why both RT and
-        // lockable. LINEAR stretch dest + byte-exact signature LockRect.
-        hr = device9_->CreateRenderTarget(
-            out_pw, out_ph, D3DFMT_X8R8G8B8,
-            D3DMULTISAMPLE_NONE, 0,
-            TRUE,                        // lockable
-            &packed_default_, nullptr);
-        if (FAILED(hr)) {
-            LOG() << "NvStereoDx9Presenter: CreateRenderTarget(packed_default panel, lockable) failed hr=0x"
-                  << std::hex << hr;
-            return false;
-        }
-        packed_w_out_ = out_pw;
-        packed_h_out_ = monitor_h_;
+    shared_input_sfc_.Reset();
+    shared_input_tex_.Reset();
+    shared_src_ptr_    = nullptr;
+    shared_src_handle_ = nullptr;
+    shared_src_w_      = 0;
+    shared_src_h_      = 0;
+    shared_src_fmt_    = DXGI_FORMAT_UNKNOWN;
+
+    // Sanity: dx11_renderer.cpp:EnsureOutputTexture always sets MISC_SHARED,
+    // but defend against a hypothetical regression that strips it.
+    if ((desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED) == 0) {
+        LOG() << "NvStereoDx9Presenter: EnsureSharedSurface: out_sbs lacks MISC_SHARED — cannot import";
+        return false;
     }
 
-    LOG() << "NvStereoDx9Presenter: packed pipeline input=" << in_pw << "x" << in_ph
-          << " (per-eye " << input_w_per_eye << "x" << input_h << ")"
-          << "  output=" << out_pw << "x" << monitor_h_
-          << " (per-eye " << monitor_w_ << "x" << monitor_h_ << ")";
+    // The Dx11Renderer side forces BGRA (B8G8R8A8_UNORM) for NvidiaDX9 mode
+    // so the D3D9 view as D3DFMT_A8R8G8B8 matches byte-for-byte. Any other
+    // format here means upstream contract was violated — log and fail.
+    if (desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM &&
+        desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB) {
+        LOG() << "NvStereoDx9Presenter: EnsureSharedSurface: unexpected out_sbs format "
+              << desc.Format << " (expected BGRA8) — Dx11Renderer should force BGRA in NvidiaDX9 mode";
+        return false;
+    }
+
+    Microsoft::WRL::ComPtr<IDXGIResource> dxgi_res;
+    HRESULT hr = sbs->QueryInterface(IID_PPV_ARGS(&dxgi_res));
+    if (FAILED(hr) || !dxgi_res) {
+        LOG() << "NvStereoDx9Presenter: EnsureSharedSurface: QueryInterface(IDXGIResource) failed hr=0x"
+              << std::hex << hr;
+        return false;
+    }
+
+    HANDLE h = nullptr;
+    hr = dxgi_res->GetSharedHandle(&h);
+    if (FAILED(hr) || !h) {
+        LOG() << "NvStereoDx9Presenter: EnsureSharedSurface: GetSharedHandle failed hr=0x"
+              << std::hex << hr << " handle=" << h;
+        return false;
+    }
+
+    hr = device9_->CreateTexture(
+        desc.Width, desc.Height, 1,
+        D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT,
+        &shared_input_tex_, &h);
+    if (FAILED(hr) || !shared_input_tex_) {
+        LOG() << "NvStereoDx9Presenter: EnsureSharedSurface: device9_->CreateTexture(pSharedHandle) "
+                 "failed hr=0x" << std::hex << hr
+              << " dims=" << desc.Width << "x" << desc.Height
+              << " (adapter mismatch between DX11 compositor and DX9 presenter?)";
+        return false;
+    }
+
+    hr = shared_input_tex_->GetSurfaceLevel(0, &shared_input_sfc_);
+    if (FAILED(hr) || !shared_input_sfc_) {
+        LOG() << "NvStereoDx9Presenter: EnsureSharedSurface: GetSurfaceLevel(0) failed hr=0x"
+              << std::hex << hr;
+        shared_input_tex_.Reset();
+        return false;
+    }
+
+    shared_src_ptr_    = sbs;
+    shared_src_handle_ = h;
+    shared_src_w_      = desc.Width;
+    shared_src_h_      = desc.Height;
+    shared_src_fmt_    = desc.Format;
+
+    LOG() << "NvStereoDx9Presenter: GPU-shared input imported "
+          << desc.Width << "x" << desc.Height
+          << " fmt=" << desc.Format
+          << " handle=" << h;
+
     return true;
-}
-
-
-void NvStereoDx9Presenter::RefreshSignatureIfNeeded()
-{
-    if (!packed_default_) return;
-
-    bool live_swap = eye_swap_;
-    if (renderer_ && renderer_->Component()) {
-        live_swap = renderer_->Component()->GetConfig().eye_swap;
-    }
-
-    if (sig_valid_ &&
-        sig_width_  == monitor_w_ &&
-        sig_height_ == monitor_h_ &&
-        sig_swap_   == live_swap) {
-        return;
-    }
-
-    NvStereoImageHeader hdr{};
-    hdr.signature = kNvStereoSignature;
-    hdr.width     = monitor_w_;
-    hdr.height    = monitor_h_;
-    hdr.bpp       = 32;
-    hdr.flags     = live_swap ? 1u : 0u;
-
-    RECT hdr_lock{ 0, static_cast<LONG>(packed_h_out_), 5,
-                   static_cast<LONG>(packed_h_out_) + 1 };
-    D3DLOCKED_RECT hlr{};
-    HRESULT lhr = packed_default_->LockRect(&hlr, &hdr_lock, 0);
-    if (FAILED(lhr)) {
-        static std::atomic<bool> logged{false};
-        bool e = false;
-        if (logged.compare_exchange_strong(e, true))
-            LOG() << "NvStereoDx9Presenter: LockRect(header row) failed hr=0x"
-                  << std::hex << lhr;
-        (void)CheckAndMarkD3D9Dead(lhr, "LockRect(header)");
-        return;
-    }
-    std::memcpy(hlr.pBits, &hdr, sizeof(hdr));
-    packed_default_->UnlockRect();
-
-    sig_width_  = monitor_w_;
-    sig_height_ = monitor_h_;
-    sig_swap_   = live_swap;
-    sig_valid_  = true;
 }
 
 
@@ -993,7 +1006,7 @@ void NvStereoDx9Presenter::StereoActivationRetry()
     NvAPI_Stereo_IsActivated(stereo_handle_, &active);
     stereo_activated_ = (active != 0);
     LOG() << "NvStereoDx9Presenter: stereo activation retry -> "
-          << (stereo_activated_ ? "ACTIVE" : "still inactive (packed-surface fallback handles it)");
+          << (stereo_activated_ ? "ACTIVE" : "still inactive");
 }
 
 
@@ -1020,194 +1033,129 @@ void NvStereoDx9Presenter::RecordComposite(ID3D11Texture2D* sbs_input)
         }
     }
 
-    ID3D11Device*        dev = renderer_->Device();
     ID3D11DeviceContext* ctx = renderer_->Context();
 
     D3D11_TEXTURE2D_DESC td{};
     sbs_input->GetDesc(&td);
 
-    // Recreate the DX11 STAGING texture on dimension/format change.
-    if (!staging_ || staging_w_ != td.Width || staging_h_ != td.Height || staging_fmt_ != td.Format) {
-        staging_.Reset();
-        D3D11_TEXTURE2D_DESC sd = td;
-        sd.Usage          = D3D11_USAGE_STAGING;
-        sd.BindFlags      = 0;
-        sd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-        sd.MiscFlags      = 0;
-        if (FAILED(dev->CreateTexture2D(&sd, nullptr, &staging_))) {
+    // Dx11Renderer pins out_sbs_ to panel-derived dims (panel_w*2 × panel_h)
+    // in NvidiaDX9 mode, so the shared D3D9 view is imported ONCE per session
+    // and never re-imported. NV3D's per-eye routing sees a stable source.
+    if (!EnsureSharedSurface(sbs_input)) return;
+
+    // Cross-device fence: end + flush a D3D11_QUERY_EVENT, then poll until
+    // GetData succeeds. This blocks the window thread until ALL D3D11 work
+    // queued before this point (the compositor's per-eye shader writes
+    // followed by the OSD's alpha-blend read-modify-write) has completed
+    // on the GPU. Only then is it safe for the D3D9 device to read the
+    // shared resource via StretchRect — without this, NVIDIA's legacy
+    // MISC_SHARED cross-device ordering is too weak and one eye stays
+    // stuck on the prior frame's content (the OSD read races the shader
+    // commit and writes the OLD pixels back through alpha-blend).
+    //
+    // Bounded poll (50ms) mirrors the OLD Map(MAP_READ) deadline. On
+    // timeout we mark the device dead and bail — same circuit-breaker
+    // behaviour as before.
+    if (!sync_query_) {
+        D3D11_QUERY_DESC qd{};
+        qd.Query = D3D11_QUERY_EVENT;
+        HRESULT qhr = renderer_->Device()->CreateQuery(&qd, &sync_query_);
+        if (FAILED(qhr) || !sync_query_) {
             static std::atomic<bool> logged{false};
             bool e = false;
             if (logged.compare_exchange_strong(e, true))
-                LOG() << "NvStereoDx9Presenter: CreateTexture2D(staging) failed";
-            return;
+                LOG() << "NvStereoDx9Presenter: CreateQuery(EVENT) failed hr=0x"
+                      << std::hex << qhr << " — falling back to Flush-only sync";
         }
-        staging_w_   = td.Width;
-        staging_h_   = td.Height;
-        staging_fmt_ = td.Format;
     }
-
-    // GPU copy out_sbs_ → staging. The subsequent Map(MAP_READ) below acts
-    // as the implicit GPU→CPU sync point (waits for the GPU to finish).
-    ctx->CopyResource(staging_.Get(), sbs_input);
-
-    const uint32_t per_eye_w = td.Width / 2u;
-    if (!EnsurePackedSurfaces(per_eye_w, td.Height)) return;
-
-    // GPU→CPU sync point. Use DO_NOT_WAIT + bounded poll instead of a
-    // blocking Map: if the GPU is wedged (LightBoost+FSE+NV3D init has hit
-    // bad-state races on startup), an indefinite Map blocks this thread
-    // forever while holding context_mutex_, which then blocks the
-    // compositor and the runtime appears frozen. With a deadline we mark
-    // the D3D device dead, bail this frame, and the next frame's
-    // circuit-breaker takes over instead of hanging.
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    {
-        HRESULT mhr = E_FAIL;
-        const auto map_deadline = std::chrono::steady_clock::now()
-                                  + std::chrono::milliseconds(50);
-        // One-time diagnostic log so if we *do* hang here next time, we
-        // know it's the staging Map and not something later.
-        static std::atomic<bool> logged_first{false};
-        bool expected = false;
-        if (logged_first.compare_exchange_strong(expected, true)) {
-            LOG() << "NvStereoDx9Presenter: first PresentFrame about to Map(staging, MAP_READ) "
-                  << "— if no further logs appear, the GPU is wedged at this point.";
-        }
+    if (sync_query_) {
+        ctx->End(sync_query_.Get());
+        ctx->Flush();
+        // 500ms deadline. The fence is the analogue of the OLD CPU-readback
+        // path's Map(MAP_READ); both bound how long we tolerate the GPU
+        // taking before declaring the device wedged. A heavy game frame
+        // (observed with Psychonauts) can blow past 50ms transiently and
+        // still recover, so we err on the side of waiting longer rather
+        // than killing the D3D9 device — which cascades into a
+        // DirectModeComponent CreateTexture2D spam loop that wedges
+        // vrcompositor.
+        const auto deadline = std::chrono::steady_clock::now()
+                              + std::chrono::milliseconds(500);
+        BOOL done = FALSE;
         while (true) {
-            mhr = ctx->Map(staging_.Get(), 0, D3D11_MAP_READ,
-                            D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
-            if (SUCCEEDED(mhr)) break;
-            if (mhr != DXGI_ERROR_WAS_STILL_DRAWING) {
-                static std::atomic<bool> err_logged{false};
+            HRESULT qhr = ctx->GetData(sync_query_.Get(),
+                                       &done, sizeof(done), 0);
+            if (SUCCEEDED(qhr) && done) break;
+            if (FAILED(qhr)) {
+                static std::atomic<bool> logged{false};
                 bool e = false;
-                if (err_logged.compare_exchange_strong(e, true))
-                    LOG() << "NvStereoDx9Presenter: Map(staging) failed hr=0x"
-                          << std::hex << mhr;
-                return;
+                if (logged.compare_exchange_strong(e, true))
+                    LOG() << "NvStereoDx9Presenter: GetData(EVENT) failed hr=0x"
+                          << std::hex << qhr;
+                break;
             }
-            if (std::chrono::steady_clock::now() >= map_deadline) {
+            if (std::chrono::steady_clock::now() >= deadline) {
                 static std::atomic<bool> to_logged{false};
                 bool e = false;
                 if (to_logged.compare_exchange_strong(e, true))
-                    LOG() << "NvStereoDx9Presenter: Map(staging) DO_NOT_WAIT polled past "
-                             "50ms deadline — GPU appears wedged; marking device dead.";
-                // Mark DX9 dead so PresentFrame becomes a no-op on subsequent
-                // frames. Also poke the DX11 renderer so its own circuit-
-                // breaker doesn't keep submitting work into the wedge.
-                (void)CheckAndMarkD3D9Dead(D3DERR_DEVICEHUNG, "Map(staging) timeout");
+                    LOG() << "NvStereoDx9Presenter: sync_query_ polled past 500ms "
+                             "deadline — GPU appears wedged; marking device dead. "
+                             "If the desktop becomes unresponsive after this, NVIDIA's "
+                             "TDR (timeout detection & recovery) didn't fire — verify "
+                             "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers "
+                             "TdrLevel=3 and TdrDelay>=2 are set.";
+                (void)CheckAndMarkD3D9Dead(D3DERR_DEVICEHUNG, "sync_query timeout");
                 return;
             }
             std::this_thread::yield();
         }
+    } else {
+        ctx->Flush();
     }
 
-    // ----- Stage 1 [CPU copy + format normalize]: pack staging into
-    // packed_sysmem_. Source byte layout depends on what the compositor
-    // submitted:
-    //   - DXGI_FORMAT_R8G8B8A8 family (fmt 28/29): bytes are [R,G,B,A].
-    //     D3D9 X8R8G8B8 stores [B,G,R,X] — we swap R↔B per pixel.
-    //     SSSE3 _mm_shuffle_epi8 does 4 pixels per instruction.
-    //   - DXGI_FORMAT_B8G8R8A8 family (fmt 87/91): bytes are [B,G,R,A] —
-    //     already match D3D9 byte order, just a memcpy + alpha normalize.
-    const bool src_is_rgba = (td.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
-                              td.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-    D3DLOCKED_RECT lr{};
-    if (SUCCEEDED(packed_sysmem_->LockRect(&lr, nullptr, 0))) {
-        const uint32_t copy_h    = td.Height;
-        const uint32_t row_bytes = packed_w_in_ * 4u;
-        if (src_is_rgba) {
-            // SSSE3 byte-shuffle: read 16 bytes (4 pixels RGBA), write 16
-            // bytes (4 pixels BGRA with alpha forced to 0xFF).
-            const __m128i shuf = _mm_setr_epi8(
-                2,1,0,3, 6,5,4,7, 10,9,8,11, 14,13,12,15);
-            const __m128i alpha_mask = _mm_set1_epi32(static_cast<int>(0xFF000000u));
-            for (uint32_t y = 0; y < copy_h; ++y) {
-                const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + y * mapped.RowPitch;
-                uint8_t*       dst = static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch;
-                uint32_t x = 0;
-                for (; x + 16 <= row_bytes; x += 16) {
-                    __m128i v       = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + x));
-                    __m128i swapped = _mm_shuffle_epi8(v, shuf);
-                    __m128i out     = _mm_or_si128(swapped, alpha_mask);
-                    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + x), out);
-                }
-                // Scalar tail (typical row widths are a multiple of 16, so
-                // this only fires for unusual resolutions).
-                for (; x < row_bytes; x += 4) {
-                    dst[x + 0] = src[x + 2];
-                    dst[x + 1] = src[x + 1];
-                    dst[x + 2] = src[x + 0];
-                    dst[x + 3] = 0xFF;
-                }
-            }
-        } else {
-            // BGRA → BGRA: straight memcpy + SIMD alpha-byte normalize.
-            const __m128i alpha_mask = _mm_set1_epi32(static_cast<int>(0xFF000000u));
-            for (uint32_t y = 0; y < copy_h; ++y) {
-                const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + y * mapped.RowPitch;
-                uint8_t*       dst = static_cast<uint8_t*>(lr.pBits) + y * lr.Pitch;
-                std::memcpy(dst, src, row_bytes);
-                uint32_t x = 0;
-                for (; x + 16 <= row_bytes; x += 16) {
-                    __m128i v   = _mm_loadu_si128(reinterpret_cast<__m128i*>(dst + x));
-                    __m128i out = _mm_or_si128(v, alpha_mask);
-                    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst + x), out);
-                }
-                for (; x < row_bytes; x += 4) {
-                    dst[x + 3] = 0xFF;
-                }
-            }
+    // DIRECT mode per-eye routing from the STABLE shared input.
+    //
+    // shared_input_sfc_ is panel_w*2 × panel_h (pinned by Dx11Renderer).
+    // Source pointer is stable for the entire session. Per eye:
+    //   SetActiveEye(EYE) — driver writes to that eye's back-buffer plane.
+    //   StretchRect(shared, half-rect, back_buffer, full, POINT) — 1:1 copy.
+    bool live_swap = eye_swap_;
+    if (renderer_ && renderer_->Component()) {
+        live_swap = renderer_->Component()->GetConfig().eye_swap;
+    }
+
+    const LONG eye_w  = static_cast<LONG>(td.Width / 2u);
+    const LONG eye_h  = static_cast<LONG>(td.Height);
+    RECT left_src  { 0,     0, eye_w,         eye_h };
+    RECT right_src { eye_w, 0, eye_w * 2,     eye_h };
+
+    auto blit_eye = [&](NV_STEREO_ACTIVE_EYE eye, const RECT& src,
+                        const char* eye_name) -> bool {
+        NvAPI_Status ns = NvAPI_Stereo_SetActiveEye(stereo_handle_, eye);
+        if (ns != NVAPI_OK) {
+            static std::atomic<bool> logged{false};
+            bool e = false;
+            if (logged.compare_exchange_strong(e, true))
+                LOG() << "NvStereoDx9Presenter: SetActiveEye(" << eye_name << ") failed status="
+                      << static_cast<int>(ns);
         }
-        packed_sysmem_->UnlockRect();
-    }
-    ctx->Unmap(staging_.Get(), 0);
+        HRESULT bhr = device9_->StretchRect(shared_input_sfc_.Get(), &src,
+                                             back_buffer_.Get(), nullptr,
+                                             D3DTEXF_POINT);
+        if (FAILED(bhr)) {
+            static std::atomic<bool> logged{false};
+            bool e = false;
+            if (logged.compare_exchange_strong(e, true))
+                LOG() << "NvStereoDx9Presenter: StretchRect(shared->backbuf, " << eye_name
+                      << ") failed hr=0x" << std::hex << bhr;
+            (void)CheckAndMarkD3D9Dead(bhr, "StretchRect(shared->backbuf)");
+            return false;
+        }
+        return true;
+    };
 
-    // ----- Stage 2 [GPU upload]: SYSMEM → DEFAULT plain (input-sized).
-    RECT  in_body { 0, 0, static_cast<LONG>(packed_w_in_), static_cast<LONG>(td.Height) };
-    POINT origin{ 0, 0 };
-    HRESULT hr = device9_->UpdateSurface(packed_sysmem_.Get(), &in_body,
-                                          packed_input_default_.Get(), &origin);
-    if (FAILED(hr)) {
-        static std::atomic<bool> logged{false};
-        bool e = false;
-        if (logged.compare_exchange_strong(e, true))
-            LOG() << "NvStereoDx9Presenter: UpdateSurface(body) failed hr=0x" << std::hex << hr;
-        (void)CheckAndMarkD3D9Dead(hr, "UpdateSurface");
-        return;
-    }
-
-    // ----- Stage 3 [uniform LINEAR scale]: input-sized DEFAULT plain →
-    // panel-sized lockable RT. Each eye gets a uniform per-axis scale here.
-    RECT out_body{ 0, 0, static_cast<LONG>(packed_w_out_), static_cast<LONG>(packed_h_out_) };
-    hr = device9_->StretchRect(packed_input_default_.Get(), &in_body,
-                                packed_default_.Get(),       &out_body,
-                                D3DTEXF_LINEAR);
-    if (FAILED(hr)) {
-        static std::atomic<bool> logged{false};
-        bool e = false;
-        if (logged.compare_exchange_strong(e, true))
-            LOG() << "NvStereoDx9Presenter: StretchRect(input->panel) failed hr=0x" << std::hex << hr;
-        (void)CheckAndMarkD3D9Dead(hr, "StretchRect(input->panel)");
-        return;
-    }
-
-    // ----- Stage 4 [signature]: ensure the NV3D header row is current.
-    // No-op on the common path (only re-writes on dim/eye-swap changes).
-    RefreshSignatureIfNeeded();
-
-    // ----- Stage 5 [final squash]: lockable RT → back buffer. NV3D sees
-    // the signature row, splits the body horizontally, and unsquashes each
-    // half back to full panel width per eye on the stereo back buffer.
-    hr = device9_->StretchRect(packed_default_.Get(), &out_body,
-                                back_buffer_.Get(), nullptr, D3DTEXF_LINEAR);
-    if (FAILED(hr)) {
-        static std::atomic<bool> logged{false};
-        bool e = false;
-        if (logged.compare_exchange_strong(e, true))
-            LOG() << "NvStereoDx9Presenter: StretchRect(panel->backbuf) failed hr=0x" << std::hex << hr;
-        (void)CheckAndMarkD3D9Dead(hr, "StretchRect(panel->backbuf)");
-        return;
-    }
+    if (!blit_eye(NVAPI_STEREO_EYE_LEFT,  live_swap ? right_src : left_src,  "LEFT"))  return;
+    if (!blit_eye(NVAPI_STEREO_EYE_RIGHT, live_swap ? left_src  : right_src, "RIGHT")) return;
 
     // RecordComposite ends here — PresentEx + activation retry happen in
     // Present(), called by Dx11Renderer after context_mutex_ is released so
@@ -1254,18 +1202,10 @@ void NvStereoDx9Presenter::Present()
                   << (60 - activation_retries_left_) << " present cycle(s)";
         } else if (activation_retries_left_ == 0 && !activation_summary_logged_) {
             activation_summary_logged_ = true;
-            // Don't alarm the user — NvAPI_Stereo_IsActivated returning false
-            // does NOT mean stereo isn't engaging. Our packed back-buffer carries
-            // the NV3D signature in its last row, which the driver detects on
-            // every PresentEx and uses to route left/right halves per-eye via
-            // the IR emitter. That path engages stereo at the driver level
-            // independent of the NvAPI app-registration state queried here.
-            // If you see correct frame-sequential 3D output, this is the
-            // expected behaviour — just ignore the IsActivated state.
             LOG() << "NvStereoDx9Presenter: NvAPI_Stereo_IsActivated remains false "
-                     "after 60 retries. The NV3D packed-surface signature path "
-                     "should still drive per-eye routing at the driver level. "
-                     "If you genuinely see mono output, verify:";
+                     "after 60 retries. SetActiveEye writes should still route "
+                     "to the per-eye planes if the IR emitter is paired. If you "
+                     "see mono output, verify:";
             LOG() << "  1) NVIDIA 3D Vision driver installed (use 3D Fix Manager)";
             LOG() << "  2) NVIDIA Control Panel > 'Set up stereoscopic 3D' > "
                      "enabled, with a paired IR emitter + glasses.";

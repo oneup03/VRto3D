@@ -149,6 +149,21 @@ bool Dx11Renderer::Init(LUID adapter_luid,
     LOG() << "Dx11Renderer: adapter='" << narrow << "' LUID=" << desc.AdapterLuid.HighPart
           << ":" << desc.AdapterLuid.LowPart;
 
+    output_mode_ = cfg.output_mode;
+    // For NvidiaDX9, resolve the panel dims so EnsureOutputTexture can pin
+    // out_sbs_ to fixed dims (panel_w*2 × panel_h) — stable shared handle.
+    if (output_mode_ == OutputMode::NvidiaDX9) {
+        platform::MonitorInfo p{}, s{};
+        if (platform::ResolveTargetMonitors(cfg.display_index, false, p, s)) {
+            nv_panel_w_ = p.width;
+            nv_panel_h_ = p.height;
+            LOG() << "Dx11Renderer: NvidiaDX9 panel dims pinned to "
+                  << nv_panel_w_ << "x" << nv_panel_h_;
+        } else {
+            LOG() << "Dx11Renderer: NvidiaDX9 ResolveTargetMonitors failed; "
+                     "shared handle will recreate on dim change (stereo routing may break)";
+        }
+    }
     presenter_ = vrto3d::MakePresenter(cfg.output_mode);
     if (!presenter_) {
         LOG() << "Dx11Renderer: MakePresenter returned null for mode=" << OutputModeToString(cfg.output_mode);
@@ -194,6 +209,15 @@ bool Dx11Renderer::Init(LUID adapter_luid,
         bd.RenderTarget[0].BlendOpAlpha   = D3D11_BLEND_OP_ADD;
         bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
         if (FAILED(device_->CreateBlendState(&bd, &composite_blend_))) break;
+
+        // Opaque (no blend) — used by the layer-0 shader fallback when the
+        // per-eye source format doesn't match out_sbs_ (e.g. RGBA8 source
+        // into BGRA-forced out_sbs_ for NvidiaDX9 mode). The sampler handles
+        // the byte-order conversion; we just want a straight replace.
+        D3D11_BLEND_DESC bdo{};
+        bdo.RenderTarget[0].BlendEnable           = FALSE;
+        bdo.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        if (FAILED(device_->CreateBlendState(&bdo, &composite_blend_opaque_))) break;
 
         D3D11_RASTERIZER_DESC rd{};
         rd.FillMode = D3D11_FILL_SOLID;
@@ -310,11 +334,24 @@ void Dx11Renderer::OnAppDisconnect()
     composite_srv_cache_.clear();
     // out_sbs_ is sized for the previous game's resolution; the next game may
     // submit a different size. Drop it so it gets recreated cleanly.
-    out_sbs_.Reset();
-    out_sbs_rtv_.Reset();
-    sbs_width_ = sbs_height_ = 0;
-    sbs_format_ = DXGI_FORMAT_UNKNOWN;
-    LOG() << "Dx11Renderer: app-disconnect — caches cleared, renderer paused";
+    //
+    // EXCEPT in NvidiaDX9 mode where out_sbs_ is pinned to fixed panel dims
+    // (and is its own composite target — game source dims don't change its
+    // size). Recreating out_sbs_ here would invalidate the cross-device
+    // shared handle that NvStereoDx9Presenter has imported, and NV3D's
+    // per-eye routing wouldn't recover for subsequent games. Keep out_sbs_
+    // alive so the shared handle stays valid across disconnect/connect.
+    if (output_mode_ != OutputMode::NvidiaDX9 ||
+        !nv_panel_w_ || !nv_panel_h_) {
+        out_sbs_.Reset();
+        out_sbs_rtv_.Reset();
+        sbs_width_ = sbs_height_ = 0;
+        sbs_format_ = DXGI_FORMAT_UNKNOWN;
+    }
+    LOG() << "Dx11Renderer: app-disconnect — caches cleared, renderer paused"
+          << ((output_mode_ == OutputMode::NvidiaDX9 && nv_panel_w_ && nv_panel_h_)
+                ? " (out_sbs_ preserved for stable NvidiaDX9 shared handle)"
+                : "");
 }
 
 
@@ -327,28 +364,55 @@ void Dx11Renderer::OnAppConnect()
 
 void Dx11Renderer::EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming)
 {
+    // NvidiaDX9 forces BGRA byte order on out_sbs_ because the D3D9 import
+    // path (IDXGIResource::GetSharedHandle → IDirect3DDevice9Ex::CreateTexture
+    // with D3DFMT_A8R8G8B8) only matches BGRA. If the per-eye source is RGBA,
+    // OnDirectModeFrame routes layer 0 through the composite-shader path so
+    // the sampler converts byte order on read. Other output modes preserve
+    // the source format so layer 0's CopySubresourceRegion stays byte-exact.
+    DXGI_FORMAT effective_fmt = incoming.Format;
+    if (output_mode_ == OutputMode::NvidiaDX9) {
+        if (effective_fmt == DXGI_FORMAT_R8G8B8A8_UNORM ||
+            effective_fmt == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
+            effective_fmt = DXGI_FORMAT_B8G8R8A8_UNORM;
+        }
+    }
+
+    // NvidiaDX9 also pins out_sbs_ to fixed panel-derived dims so the
+    // cross-device shared handle stays stable across landscape↔game
+    // transitions. Without this, NV3D's per-eye routing gets stuck on the
+    // left eye when shared_input_sfc_ is recreated. The layer composite
+    // shader path scales source pixels to fill the panel-sized halves.
+    UINT effective_w = incoming.Width;
+    UINT effective_h = incoming.Height;
+    if (output_mode_ == OutputMode::NvidiaDX9 && nv_panel_w_ && nv_panel_h_) {
+        effective_w = nv_panel_w_ * 2u;
+        effective_h = nv_panel_h_;
+    }
+
     if (out_sbs_ &&
-        sbs_width_  == incoming.Width &&
-        sbs_height_ == incoming.Height &&
-        sbs_format_ == incoming.Format) {
+        sbs_width_  == effective_w &&
+        sbs_height_ == effective_h &&
+        sbs_format_ == effective_fmt) {
         return;
     }
 
     D3D11_TEXTURE2D_DESC d{};
-    d.Width              = incoming.Width;
-    d.Height             = incoming.Height;
+    d.Width              = effective_w;
+    d.Height             = effective_h;
     d.MipLevels          = 1;
     d.ArraySize          = 1;
-    d.Format             = incoming.Format;
+    d.Format             = effective_fmt;
     d.SampleDesc.Count   = 1;
     d.Usage              = D3D11_USAGE_DEFAULT;
     d.BindFlags          = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
     d.CPUAccessFlags     = 0;
-    // SHARED so cross-device presenters (WibbleWobble's in-process client uses
-    // its own internal D3D11 device) can call OpenSharedResource on this
-    // texture's GetSharedHandle() without us having to copy into a separate
-    // shared staging buffer. Other presenters that use out_sbs_ on the same
-    // device (Window/LeiaSR/NvStereoDX9) ignore the flag.
+    // SHARED so cross-device presenters can call OpenSharedResource on this
+    // texture's GetSharedHandle():
+    //   - WibbleWobble's in-process client uses its own internal D3D11 device.
+    //   - NvStereoDX9 imports the handle into D3D9Ex via CreateTexture
+    //     (pSharedHandle) for a GPU-side StretchRect into its packed surface.
+    // Other on-device presenters (Window/LeiaSR) ignore the flag.
     d.MiscFlags          = D3D11_RESOURCE_MISC_SHARED;
 
     out_sbs_.Reset();
@@ -360,9 +424,9 @@ void Dx11Renderer::EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming)
         (void)CheckAndMarkDeviceDead(hr, "EnsureOutputTexture/CreateTexture2D");
         return;
     }
-    sbs_width_  = incoming.Width;
-    sbs_height_ = incoming.Height;
-    sbs_format_ = incoming.Format;
+    sbs_width_  = effective_w;
+    sbs_height_ = effective_h;
+    sbs_format_ = effective_fmt;
 
     // Build the RTV used by the multi-layer composite path. Failure here just
     // disables overlay blending; layer 0 still flows through CopySubresourceRegion.
@@ -391,6 +455,11 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     // of the original "thousands of CreateTexture2D failures per second" log
     // pattern that contributed to the GPU driver freeze.
     if (device_dead_.load(std::memory_order_acquire)) return;
+    // If the presenter has died (e.g. NvStereoDx9Presenter detected a wedged
+    // GPU via the sync_query fence), stop composing too. Continuing to push
+    // shader work to a wedged GPU prevents NVIDIA's TDR from recovering and
+    // has been observed to cause full-PC freezes.
+    if (presenter_ && !presenter_->IsAlive()) return;
     // Pause-on-disconnect: skip frames between VR apps so we don't try to
     // import stale shared-texture handles from a process that just exited.
     if (paused_for_disconnect_.load(std::memory_order_acquire)) return;
@@ -461,8 +530,18 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     // eyes are normally identical; if they diverge, use the left as the
     // canonical eye size — sampling a sub-rect of the right that ends up a
     // pixel off in width is far less visible than a stretched composite.
-    const UINT eff_eye_w = lsw;
-    const UINT eff_eye_h = lsh;
+    //
+    // NvidiaDX9 mode overrides this and pins per-eye to panel dims so
+    // out_sbs_ stays at fixed (panel_w*2 × panel_h) across all transitions —
+    // the cross-device shared handle remains stable and NV3D's per-eye
+    // routing doesn't get stuck. The shader path scales the source
+    // (which may be a different aspect / resolution) to fill the panel.
+    UINT eff_eye_w = lsw;
+    UINT eff_eye_h = lsh;
+    if (output_mode_ == OutputMode::NvidiaDX9 && nv_panel_w_ && nv_panel_h_) {
+        eff_eye_w = nv_panel_w_;
+        eff_eye_h = nv_panel_h_;
+    }
 
     // One-line-per-change diagnostic. Effective dims and "(bounds applied)"
     // are only reported when the submitted bounds actually shrink the source
@@ -540,28 +619,49 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
         }
     }
 
-    // Layer 0 — base scene, byte-pass-through via CopySubresourceRegion.
-    // Source rect honors the submitted bounds (when applicable) so an
-    // oversized eye texture with bounds=(0,0,<1,<1) doesn't degenerate
-    // into picture-in-picture.
-    D3D11_BOX lbox{ lsx, lsy, 0, lsx + lsw, lsy + lsh, 1 };
-    D3D11_BOX rbox{ rsx, rsy, 0, rsx + rsw, rsy + rsh, 1 };
-    context_->CopySubresourceRegion(out_sbs_.Get(), 0,
-                                    0, 0, 0,
-                                    left,           0,
-                                    &lbox);
-    context_->CopySubresourceRegion(out_sbs_.Get(), 0,
-                                    eff_eye_w, 0, 0,
-                                    right,          0,
-                                    &rbox);
+    // Format-mismatch detection: when out_sbs_ was forced to BGRA (NvidiaDX9
+    // mode) but the per-eye source is RGBA, CopySubresourceRegion will refuse
+    // the copy (different byte-order families). Route layer 0 through the
+    // shader instead — the sampler converts byte order on read. Bounds in
+    // this fallback are best-effort: full-texture sampling rather than the
+    // box-based sub-rect that the Copy path supports.
+    //
+    // NvidiaDX9 mode also pins out_sbs_ to panel dims (not source dims),
+    // which means CopySubresourceRegion would fail on the size mismatch
+    // even when formats match — always force the shader path for that mode.
+    const bool fmt_mismatch =
+        sbs_format_ != strip_srgb(eye_desc.Format) ||
+        sbs_format_ != strip_srgb(right_desc.Format) ||
+        (output_mode_ == OutputMode::NvidiaDX9 && nv_panel_w_ && nv_panel_h_);
 
-    // Layers 1+ — alpha-blended overlay via shader composite.
-    if (layer_count > 1 && composite_pipeline_ready_ && out_sbs_rtv_) {
+    if (!fmt_mismatch) {
+        // Layer 0 — base scene, byte-pass-through via CopySubresourceRegion.
+        // Source rect honors the submitted bounds (when applicable) so an
+        // oversized eye texture with bounds=(0,0,<1,<1) doesn't degenerate
+        // into picture-in-picture.
+        D3D11_BOX lbox{ lsx, lsy, 0, lsx + lsw, lsy + lsh, 1 };
+        D3D11_BOX rbox{ rsx, rsy, 0, rsx + rsw, rsy + rsh, 1 };
+        context_->CopySubresourceRegion(out_sbs_.Get(), 0,
+                                        0, 0, 0,
+                                        left,           0,
+                                        &lbox);
+        context_->CopySubresourceRegion(out_sbs_.Get(), 0,
+                                        eff_eye_w, 0, 0,
+                                        right,          0,
+                                        &rbox);
+    }
+
+    // Shader composite path. Entered when either:
+    //   - There are overlay layers (1+) that need alpha blending onto the base.
+    //   - The per-eye source format doesn't match out_sbs_ (NvidiaDX9 BGRA
+    //     forcing + RGBA source) — layer 0 also routes through here with the
+    //     opaque blend state.
+    const bool need_shader = (layer_count > 1) || fmt_mismatch;
+    if (need_shader && composite_pipeline_ready_ && out_sbs_rtv_) {
         ID3D11RenderTargetView* rtv = out_sbs_rtv_.Get();
         const float blend_factor[4] = { 1, 1, 1, 1 };
 
         context_->OMSetRenderTargets(1, &rtv, nullptr);
-        context_->OMSetBlendState(composite_blend_.Get(), blend_factor, 0xFFFFFFFF);
         context_->OMSetDepthStencilState(composite_depth_.Get(), 0);
         context_->RSSetState(composite_raster_.Get());
         context_->IASetInputLayout(nullptr);
@@ -613,9 +713,21 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
             context_->PSSetShaderResources(0, 1, null_srv);
         };
 
-        for (int li = 1; li < layer_count; ++li) {
-            blit_half(layers[li].left.Get(),  0);
-            blit_half(layers[li].right.Get(), half_w);
+        // Layer 0 fallback (opaque replace) — only when format mismatch
+        // skipped the CopySubresourceRegion path.
+        if (fmt_mismatch) {
+            context_->OMSetBlendState(composite_blend_opaque_.Get(), blend_factor, 0xFFFFFFFF);
+            blit_half(left,  0);
+            blit_half(right, half_w);
+        }
+
+        // Layers 1+ — alpha-blended overlay.
+        if (layer_count > 1) {
+            context_->OMSetBlendState(composite_blend_.Get(), blend_factor, 0xFFFFFFFF);
+            for (int li = 1; li < layer_count; ++li) {
+                blit_half(layers[li].left.Get(),  0);
+                blit_half(layers[li].right.Get(), half_w);
+            }
         }
 
         ID3D11RenderTargetView* null_rtv = nullptr;
@@ -674,6 +786,13 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
 {
     if (!initialized_ || !device_) return false;
     if (device_dead_.load(std::memory_order_acquire)) return false;
+    // Presenter terminal state (e.g. NvStereoDx9Presenter sync_query timeout):
+    // skip OSD render + RecordComposite + Present so we stop adding GPU work.
+    // Sleep instead of busy-looping so the dead state doesn't burn CPU.
+    if (presenter_ && !presenter_->IsAlive()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms));
+        return false;
+    }
 
     // Wait for the compositor thread to signal "fresh composite ready"
     // (matches the old IVRVirtualDisplay path: window thread paced by

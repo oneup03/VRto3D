@@ -55,6 +55,22 @@ void DirectModeComponent::CreateSwapTextureSet(uint32_t unPid,
 {
     if (!pDesc || !pOut || !renderer_ || !renderer_->Device()) return;
 
+    // Once the DX11 device is terminally dead, every CreateTexture2D below
+    // fails with DXGI_ERROR_DEVICE_REMOVED (0x887a0005). SteamVR retries
+    // CreateSwapTextureSet on each failure, which becomes a hot spam loop
+    // that has been observed to wedge vrcompositor and bring SteamVR down.
+    // Refuse early so the swap-texture set comes back empty and the caller
+    // eventually surfaces the failure instead of pounding the dead device.
+    if (renderer_->IsDeviceDead()) {
+        static std::atomic<bool> logged{false};
+        bool e = false;
+        if (logged.compare_exchange_strong(e, true)) {
+            LOG() << "DirectModeComponent::CreateSwapTextureSet pid=" << unPid
+                  << " refused — DX11 device is dead, SteamVR restart required";
+        }
+        return;
+    }
+
     LOG() << "DirectModeComponent::CreateSwapTextureSet pid=" << unPid
           << " " << pDesc->nWidth << "x" << pDesc->nHeight
           << " fmt=" << pDesc->nFormat
@@ -82,6 +98,10 @@ void DirectModeComponent::CreateSwapTextureSet(uint32_t unPid,
         if (FAILED(hr) || !set->textures[i]) {
             LOG() << "DirectModeComponent: CreateTexture2D[" << i << "] failed hr=0x"
                   << std::hex << hr;
+            // If the failure is a terminal DXGI device state, latch the
+            // renderer so subsequent CreateSwapTextureSet calls bail at the
+            // top instead of spam-failing.
+            (void)renderer_->MarkDeviceDeadIfTerminal(hr, "DirectModeComponent::CreateTexture2D");
             ok = false;
             break;
         }
