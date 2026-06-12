@@ -214,7 +214,7 @@
     <ClCompile Include="src\presenter\window_presenter.cpp" />
     <ClCompile Include="src\presenter\leiasr_presenter.cpp" />
     <ClCompile Include="src\presenter\nvstereo_dx9_presenter.cpp" />
-    <ClCompile Include="src\presenter\nvd3dum_osd_patcher.cpp" />
+    <ClCompile Include="src\presenter\nv_3dvision_suppressor.cpp" />
     <ClCompile Include="src\presenter\wibblewobble_presenter.cpp" />
     <ClCompile Include="src\presenter\display_timing_helper.cpp" />
     <ClCompile Include="src\osd\osd_renderer.cpp" />
@@ -249,7 +249,7 @@
     <ClInclude Include="src\presenter\window_presenter.h" />
     <ClInclude Include="src\presenter\leiasr_presenter.h" />
     <ClInclude Include="src\presenter\nvstereo_dx9_presenter.h" />
-    <ClInclude Include="src\presenter\nvd3dum_osd_patcher.h" />
+    <ClInclude Include="src\presenter\nv_3dvision_suppressor.h" />
     <ClInclude Include="src\presenter\wibblewobble_presenter.h" />
     <ClInclude Include="src\presenter\display_timing_helper.h" />
     <ClInclude Include="src\presenter\display_utils.h" />

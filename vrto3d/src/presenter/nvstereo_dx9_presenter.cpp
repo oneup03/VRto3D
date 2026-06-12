@@ -655,12 +655,13 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     // cleaned up by process exit.
     const bool dead = d3d9_dead_.load(std::memory_order_acquire);
 
-    // Remove the nvd3dumx.dll OSD warning hook BEFORE D3D9 teardown begins.
-    // The dispatcher we patched lives in the DX9 UMD; once the D3D9Ex device
-    // is released the driver stops calling into it anyway, but unhooking
+    // Remove the NVIDIA 3D Vision suppression hooks (OSD dispatcher, rating
+    // overlay, GetAsyncKeyState hotkey blocker) BEFORE D3D9 teardown begins.
+    // The dispatchers we patched live in the DX9 UMD; once the D3D9Ex device
+    // is released the driver stops calling into them anyway, but unhooking
     // here keeps the lifetimes well-ordered and means the driver is in a
     // pristine state if vrserver re-creates the presenter later.
-    osd_patcher_.Uninstall();
+    nv_suppressor_.Uninstall();
 
     LOG() << "NvStereoDx9Presenter: teardown step 1 — remove FSE WndProc subclass";
     RemoveFseSubclass();
@@ -900,13 +901,16 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
         return false;
     }
 
-    // Install the OSD patcher now that nvd3dumx.dll is loaded (Direct3DCreate9Ex
-    // pulls it in). The patcher signature-scans the DX9 UMD's .text section for
-    // NVIDIA's OSD warning dispatcher and detours it to clear bit 10 of the
-    // warnings bitmask — the "non-stereo display mode" slot — leaving every
-    // other driver warning intact. Failure is non-fatal: the warning will
-    // still fire, but stereo activation works.
-    osd_patcher_.Install();
+    // Install the NVIDIA 3D Vision suppressor now that nvd3dumx.dll is loaded
+    // (Direct3DCreate9Ex pulls it in). This sets up:
+    //   - OSD bitmask dispatcher hook (depth-amount slider + "non-stereo display
+    //     mode" overlay suppression);
+    //   - rating / info overlay function hook ("not rated by NVIDIA Corp." +
+    //     companion lines);
+    //   - user32!GetAsyncKeyState hook with caller-filtered Ctrl+F-key blocklist.
+    // Failure of any individual hook is non-fatal — the rest still apply and
+    // stereo activation works either way.
+    nv_suppressor_.Install();
 
     return true;
 }
