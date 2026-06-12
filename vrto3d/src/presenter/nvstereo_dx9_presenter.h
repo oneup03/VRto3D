@@ -32,6 +32,7 @@
 #include <nvapi.h>
 
 #include "platform.h"
+#include "presenter/nvd3dum_osd_patcher.h"
 #include "presenter/output_presenter.h"
 #include "vrto3dlib/stereo_config.h"
 
@@ -229,6 +230,12 @@ private:
     // Throttles per-frame Stereo_Activate retries so the 60-retry budget
     // can't burn through in <1s during driver contention.
     DWORD                  last_stereo_activate_tick_ = 0;
+
+    // Suppresses NVIDIA's DX9 UMD "non-stereo display mode" red-text OSD by
+    // detouring the driver's OSD warning dispatcher in nvd3dumx.dll. Installed
+    // after the D3D9Ex device is built (so nvd3dumx.dll is loaded), removed at
+    // the start of Shutdown teardown.
+    platform::Nvd3dumOsdPatcher osd_patcher_;
 
 };
 

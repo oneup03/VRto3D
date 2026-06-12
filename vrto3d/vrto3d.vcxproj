@@ -98,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -125,7 +125,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -152,7 +152,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -179,7 +179,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -214,6 +214,7 @@
     <ClCompile Include="src\presenter\window_presenter.cpp" />
     <ClCompile Include="src\presenter\leiasr_presenter.cpp" />
     <ClCompile Include="src\presenter\nvstereo_dx9_presenter.cpp" />
+    <ClCompile Include="src\presenter\nvd3dum_osd_patcher.cpp" />
     <ClCompile Include="src\presenter\wibblewobble_presenter.cpp" />
     <ClCompile Include="src\presenter\display_timing_helper.cpp" />
     <ClCompile Include="src\osd\osd_renderer.cpp" />
@@ -224,6 +225,15 @@
     <ClCompile Include="..\external\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\external\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\external\imgui\backends\imgui_impl_dx11.cpp" />
+    <ClCompile Include="..\external\minhook\src\buffer.c" />
+    <ClCompile Include="..\external\minhook\src\hook.c" />
+    <ClCompile Include="..\external\minhook\src\trampoline.c" />
+    <ClCompile Include="..\external\minhook\src\hde\hde64.c">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\external\minhook\src\hde\hde32.c">
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
@@ -239,6 +249,7 @@
     <ClInclude Include="src\presenter\window_presenter.h" />
     <ClInclude Include="src\presenter\leiasr_presenter.h" />
     <ClInclude Include="src\presenter\nvstereo_dx9_presenter.h" />
+    <ClInclude Include="src\presenter\nvd3dum_osd_patcher.h" />
     <ClInclude Include="src\presenter\wibblewobble_presenter.h" />
     <ClInclude Include="src\presenter\display_timing_helper.h" />
     <ClInclude Include="src\presenter\display_utils.h" />
