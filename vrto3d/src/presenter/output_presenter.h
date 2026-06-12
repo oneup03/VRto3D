@@ -57,6 +57,13 @@ public:
     // thread-safe (typically just an atomic flag the render/track thread
     // reads on the next iteration).
     virtual void RequestCalibrate() {}
+
+    // Returns false once the presenter has hit a terminal device state and
+    // can no longer produce output. The renderer uses this to short-circuit
+    // OSD render + RecordComposite — submitting GPU work to a wedged GPU
+    // can prevent NVIDIA's TDR from recovering, and we've seen full-PC
+    // freezes when this isn't stopped. Default true (presenter is alive).
+    virtual bool IsAlive() const { return true; }
 };
 
 std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode);

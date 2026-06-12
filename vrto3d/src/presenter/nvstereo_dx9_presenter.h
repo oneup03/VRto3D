@@ -60,13 +60,27 @@ private:
     std::unordered_map<std::string, NvTimingsEntry> data_;
 };
 
-// NVIDIA 3D Vision via NVAPI + D3D9Ex.
+// NVIDIA 3D Vision via NVAPI + D3D9Ex (DIRECT driver mode).
 //
-// D3D9Ex device is created on the user's chosen 3D-Vision-capable display, and
-// each frame the SBS DX11 texture from the compositor is copied into a packed-
-// stereo D3D9 surface (2W x (H+1)) carrying the NVSTEREOIMAGEHEADER signature
-// in its extra row. The NVIDIA driver detects the signature on PresentEx and
-// routes left/right halves to alternate eyes through the 3D Vision IR emitter.
+// D3D9Ex device is created on the user's chosen 3D-Vision-capable display.
+// Dx11Renderer pins out_sbs_ to panel-derived dims (panel_w*2 × panel_h,
+// BGRA) when output_mode is NvidiaDX9, so its shared handle is stable
+// across landscape↔game transitions. We import that handle once into
+// D3D9Ex via IDXGIResource::GetSharedHandle and reuse it for the entire
+// session.
+//
+// Per frame:
+//   1. Fence: ID3D11Query EVENT to wait for DX11 writes to complete.
+//   2. NvAPI_Stereo_SetActiveEye(LEFT) + StretchRect(shared, left half →
+//      back_buffer, POINT). Driver routes write to LEFT eye plane.
+//   3. SetActiveEye(RIGHT) + StretchRect(shared, right half → back_buffer).
+//   4. PresentEx — driver alternates eye planes via the IR emitter.
+//
+// DIRECT mode (not AUTOMATIC) is required because NV3D's AUTOMATIC-mode
+// signature scanning got the LEFT eye plane stuck on the prior frame's
+// content when the source resource changed, even with a stable signed RT
+// in the chain (proven with a ColorFill diagnostic). DIRECT mode bypasses
+// the auto-detection: SetActiveEye is authoritative.
 class NvStereoDx9Presenter : public IOutputPresenter {
 public:
     NvStereoDx9Presenter() = default;
@@ -78,6 +92,9 @@ public:
     void RecordComposite(ID3D11Texture2D* sbs_input) override;
     void Present() override;
     void Shutdown() override;
+    bool IsAlive() const override {
+        return !d3d9_dead_.load(std::memory_order_acquire);
+    }
 
 private:
     void WindowThreadLoop(Dx11Renderer* renderer,
@@ -86,14 +103,13 @@ private:
                         uint32_t monitor_w,
                         uint32_t monitor_h,
                         float    refresh_hz);
-    // Ensures input-side packed_sysmem_/packed_input_default_ are sized to
-    // input dims, and panel-side packed_default_ is sized to monitor dims.
-    bool EnsurePackedSurfaces(uint32_t input_w_per_eye, uint32_t input_h);
 
-    // Refresh the NV3D signature row if any of (panel dims, eye swap) have
-    // changed since last write. LockRect's per-frame GPU sync is skipped on
-    // the common "nothing changed" path.
-    void RefreshSignatureIfNeeded();
+    // Open the DX11 SbS composite texture as a D3D9 IDirect3DTexture9 via the
+    // legacy DXGI shared-handle path. Cached by source pointer + dims + fmt;
+    // because Dx11Renderer pins out_sbs_ to fixed dims for NvidiaDX9 mode,
+    // this is a cache-hit after the first frame.
+    bool EnsureSharedSurface(ID3D11Texture2D* sbs);
+
     void StereoActivationRetry();
     void FocusThreadLoop();
     void InstallFseSubclass(HWND hwnd);
@@ -148,51 +164,25 @@ private:
     Microsoft::WRL::ComPtr<IDirect3DDevice9Ex>     device9_;
     Microsoft::WRL::ComPtr<IDirect3DSurface9>      back_buffer_;
 
-    // Three-stage packed-surface pipeline. The intermediate step exists so
-    // each eye gets a UNIFORM per-axis stretch to panel resolution before
-    // NV3D's 2:1 horizontal squash, instead of a single non-uniform stretch
-    // that distorted detail (e.g. 2880x1620 source → 1280x1440 per-eye
-    // region had different X/Y scales — the visible "squashy" artifact).
-    //
-    //   1. staging_              (DX11 STAGING, input-sized) — Map(READ) target
-    //   2. packed_sysmem_        (SYSTEMMEM,    input-sized) — CPU memcpy lands here
-    //   3. packed_input_default_ (DEFAULT plain, input-sized) — UpdateSurface target
-    //   4. packed_default_       (LOCKABLE RT,  panel-sized + header row) — final SbS
-    //
-    // Why CPU readback rather than cross-API texture sharing: NVIDIA's
-    // legacy DXGI shared-handle path between D3D11 and D3D9Ex is unreliable
-    // for our workload (observed right-eye-stuck artifacts even with
-    // event-query CPU waits). Map(MAP_READ) on a STAGING texture is the
-    // proven-correct sync primitive — slower but reliable.
-    //
-    // packed_default_ is a LOCKABLE render target — the LINEAR stretch
-    // destination has to be a render target (NVIDIA refuses LINEAR
-    // offscreen-plain → offscreen-plain), and lockable lets us LockRect
-    // the header row to write the 20-byte NV3D signature with all four
-    // bytes per pixel intact (incl. the X byte that holds 'D').
-    Microsoft::WRL::ComPtr<ID3D11Texture2D>        staging_;
-    uint32_t                                       staging_w_ = 0;
-    uint32_t                                       staging_h_ = 0;
-    DXGI_FORMAT                                    staging_fmt_ = DXGI_FORMAT_UNKNOWN;
+    // D3D9Ex view of the DX11 out_sbs_ MISC_SHARED texture, opened via
+    // IDXGIResource::GetSharedHandle → device9_->CreateTexture(pSharedHandle).
+    // Because Dx11Renderer pins out_sbs_ to fixed panel-derived dims in
+    // NvidiaDX9 mode, this is imported once per session and the identity
+    // cache hits every subsequent frame.
+    Microsoft::WRL::ComPtr<IDirect3DTexture9>      shared_input_tex_;
+    Microsoft::WRL::ComPtr<IDirect3DSurface9>      shared_input_sfc_;
+    void*                                          shared_src_ptr_    = nullptr;
+    HANDLE                                         shared_src_handle_ = nullptr;
+    uint32_t                                       shared_src_w_      = 0;
+    uint32_t                                       shared_src_h_      = 0;
+    DXGI_FORMAT                                    shared_src_fmt_    = DXGI_FORMAT_UNKNOWN;
 
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_sysmem_;
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_input_default_;
-    uint32_t                                       packed_w_in_ = 0;  // 2 * input per-eye width
-    uint32_t                                       packed_h_in_ = 0;  // input body height
-
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      packed_default_;
-
-    // Output dims (panel per-eye × 2, panel height) — packed_default_.
-    uint32_t                                      packed_w_out_ = 0;  // 2 * panel per-eye width
-    uint32_t                                      packed_h_out_ = 0;  // panel body height (no header)
-
-    // Cached NV3D signature state. The header row in packed_default_ only
-    // needs to be re-written when one of these changes (or the surface is
-    // recreated) — saves a per-frame LockRect+GPU-sync.
-    uint32_t                                      sig_width_  = 0;
-    uint32_t                                      sig_height_ = 0;
-    bool                                          sig_swap_   = false;
-    bool                                          sig_valid_  = false;
+    // Cross-device fence. D3D11_QUERY_EVENT signalled at the end of the
+    // window thread's D3D11 work (compositor writes + OSD draws), polled
+    // before the D3D9 StretchRect that reads the shared resource. The
+    // analogue of the OLD CPU-readback path's Map(MAP_READ) implicit
+    // sync — guarantees DX11 shader writes are visible to the D3D9 device.
+    Microsoft::WRL::ComPtr<ID3D11Query>            sync_query_;
 
     uint32_t                                      monitor_w_ = 0;
     uint32_t                                      monitor_h_ = 0;

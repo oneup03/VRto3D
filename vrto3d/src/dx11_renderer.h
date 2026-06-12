@@ -151,6 +151,22 @@ public:
     uint32_t                SbsWidth()  const { return sbs_width_;  }
     uint32_t                SbsHeight() const { return sbs_height_; }
 
+    // Latched once a DXGI_ERROR_DEVICE_REMOVED/RESET/HUNG is observed.
+    // Callers (e.g. DirectModeComponent::CreateSwapTextureSet) must check
+    // this and stop submitting work — otherwise they spam-fail on the dead
+    // device, which has been observed to take down vrcompositor.
+    bool                    IsDeviceDead() const {
+        return device_dead_.load(std::memory_order_acquire);
+    }
+
+    // Public mark-dead entry point for callers outside this class that get
+    // DEVICE_REMOVED/RESET/HUNG from their own D3D11 calls (e.g.
+    // DirectModeComponent::CreateTexture2D). Returns true if the HRESULT
+    // was a terminal device state.
+    bool                    MarkDeviceDeadIfTerminal(HRESULT hr, const char* origin) {
+        return CheckAndMarkDeviceDead(hr, origin);
+    }
+
     // Frame counter + last-vsync timestamp (QPC seconds), updated each time
     // the window thread completes a present.
     uint64_t FrameCounter()    const { return frame_counter_.load(std::memory_order_relaxed); }
@@ -244,13 +260,37 @@ private:
     bool                   initialized_         = false;
 
     // Composite pipeline state — used to alpha-blend overlay layers (layer
-    // 1+) onto out_sbs_. Layer 0 is still a straight CopySubresourceRegion.
+    // 1+) onto out_sbs_. Layer 0 is normally a straight CopySubresourceRegion,
+    // but when the per-eye source format differs from out_sbs_'s format
+    // (e.g. RGBA8 source and BGRA-forced out_sbs_ in NvidiaDX9 mode) layer 0
+    // also routes through this shader path so the sampler does the byte-order
+    // conversion. The opaque blend state is used for that layer-0 pass so the
+    // base scene fully overwrites the target.
     Microsoft::WRL::ComPtr<ID3D11VertexShader>      composite_vs_;
     Microsoft::WRL::ComPtr<ID3D11PixelShader>       composite_ps_;
     Microsoft::WRL::ComPtr<ID3D11SamplerState>      composite_sampler_;
-    Microsoft::WRL::ComPtr<ID3D11BlendState>        composite_blend_;
+    Microsoft::WRL::ComPtr<ID3D11BlendState>        composite_blend_;         // straight-alpha (layers 1+)
+    Microsoft::WRL::ComPtr<ID3D11BlendState>        composite_blend_opaque_;  // replace (layer 0 fallback)
     Microsoft::WRL::ComPtr<ID3D11RasterizerState>   composite_raster_;
     Microsoft::WRL::ComPtr<ID3D11DepthStencilState> composite_depth_;
+
+    // NvidiaDX9 mode forces out_sbs_ to DXGI_FORMAT_B8G8R8A8_UNORM regardless
+    // of the per-eye source format, because the D3D9 import path
+    // (NvStereoDx9Presenter) maps the shared handle as D3DFMT_A8R8G8B8 which
+    // requires BGRA byte order. Other output modes keep out_sbs_ at the
+    // source format.
+    OutputMode              output_mode_ = OutputMode::SbS;
+
+    // NvidiaDX9 mode also forces out_sbs_ to FIXED panel-derived dimensions
+    // (panel_w*2 × panel_h) regardless of source per-eye size. This keeps
+    // the cross-device shared handle stable across landscape↔game
+    // transitions — empirically NV3D's per-eye routing gets stuck on the
+    // left eye when shared_input_sfc_ is recreated at a transition. With
+    // a fixed-size out_sbs_, the shared handle is imported once and never
+    // re-imported, and NV3D sees a stable resource for the session.
+    // Layer composite scales per-eye source to fill the panel-sized halves.
+    uint32_t                nv_panel_w_ = 0;
+    uint32_t                nv_panel_h_ = 0;
 
     // Cached RTV on out_sbs_, recreated whenever out_sbs_ is recreated.
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> out_sbs_rtv_;
