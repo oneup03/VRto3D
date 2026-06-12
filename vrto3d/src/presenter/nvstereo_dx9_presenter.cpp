@@ -655,6 +655,13 @@ void NvStereoDx9Presenter::WindowThreadLoop(Dx11Renderer* renderer, platform::Mo
     // cleaned up by process exit.
     const bool dead = d3d9_dead_.load(std::memory_order_acquire);
 
+    // Remove the nvd3dumx.dll OSD warning hook BEFORE D3D9 teardown begins.
+    // The dispatcher we patched lives in the DX9 UMD; once the D3D9Ex device
+    // is released the driver stops calling into it anyway, but unhooking
+    // here keeps the lifetimes well-ordered and means the driver is in a
+    // pristine state if vrserver re-creates the presenter later.
+    osd_patcher_.Uninstall();
+
     LOG() << "NvStereoDx9Presenter: teardown step 1 — remove FSE WndProc subclass";
     RemoveFseSubclass();
 
@@ -892,6 +899,14 @@ bool NvStereoDx9Presenter::BuildD3D9Stack(HWND hwnd, uint32_t monitor_w, uint32_
         LOG() << "NvStereoDx9Presenter: GetBackBuffer failed hr=0x" << std::hex << hr;
         return false;
     }
+
+    // Install the OSD patcher now that nvd3dumx.dll is loaded (Direct3DCreate9Ex
+    // pulls it in). The patcher signature-scans the DX9 UMD's .text section for
+    // NVIDIA's OSD warning dispatcher and detours it to clear bit 10 of the
+    // warnings bitmask — the "non-stereo display mode" slot — leaving every
+    // other driver warning intact. Failure is non-fatal: the warning will
+    // still fire, but stereo activation works.
+    osd_patcher_.Install();
 
     return true;
 }
@@ -1779,6 +1794,27 @@ void NvStereoDx9Presenter::EnableLightBoost()
                  "after the trial — proceeding under the assumption that the "
                  "modeset succeeded (TryCustomDisplay returned OK).";
     }
+
+    // Sync GDI's display mode to the new wire timing — TryCustomDisplay
+    // programs the panel without updating DEVMODE, so without this push
+    // compositors and apps that query GDI keep seeing the original refresh.
+    if (has_original_devmode_ && !target_gdi_device_.empty() &&
+        monitor_timings_.refresh_int > 0) {
+        DEVMODEW dm = original_devmode_;
+        dm.dmDisplayFrequency = monitor_timings_.refresh_int;
+        dm.dmFields |= DM_DISPLAYFREQUENCY;
+        LOG() << "EnableLightBoost: syncing GDI to "
+              << dm.dmPelsWidth << "x" << dm.dmPelsHeight << "@"
+              << dm.dmDisplayFrequency << "Hz";
+        LONG rc = ChangeDisplaySettingsExW(target_gdi_device_.c_str(), &dm,
+                                            nullptr, CDS_FULLSCREEN, nullptr);
+        if (rc != DISP_CHANGE_SUCCESSFUL) {
+            LOG() << "EnableLightBoost: ChangeDisplaySettingsExW rc=" << rc;
+        } else {
+            WaitForModesetSettle(500);
+        }
+    }
+
     RestoreDisplayPositions(posSnapshot);
     RestoreProcessWindows(wndSnapshot);
 

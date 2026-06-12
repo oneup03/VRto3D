@@ -19,6 +19,7 @@ set(DRIVER_SOURCES
     src/presenter/window_presenter.cpp
     src/presenter/leiasr_presenter.cpp
     src/presenter/nvstereo_dx9_presenter.cpp
+    src/presenter/nvd3dum_osd_patcher.cpp
     src/presenter/wibblewobble_presenter.cpp
     src/presenter/display_timing_helper.cpp
     src/osd/osd_renderer.cpp
@@ -38,6 +39,24 @@ set(IMGUI_SOURCES
 )
 list(APPEND DRIVER_SOURCES ${IMGUI_SOURCES})
 
+# MinHook (vendored as submodule at external/minhook). Pure-C library compiled
+# directly into the driver — same pattern as imgui. Used to detour the OSD
+# warning dispatcher inside nvd3dumx.dll so the 3D Vision "non-stereo display
+# mode" red overlay can be suppressed on panels that aren't NV-certified.
+# HDE disassembler source is arch-specific.
+set(MINHOOK_DIR "${ROOT}/external/minhook")
+set(MINHOOK_SOURCES
+    ${MINHOOK_DIR}/src/buffer.c
+    ${MINHOOK_DIR}/src/hook.c
+    ${MINHOOK_DIR}/src/trampoline.c
+)
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    list(APPEND MINHOOK_SOURCES ${MINHOOK_DIR}/src/hde/hde64.c)
+else()
+    list(APPEND MINHOOK_SOURCES ${MINHOOK_DIR}/src/hde/hde32.c)
+endif()
+list(APPEND DRIVER_SOURCES ${MINHOOK_SOURCES})
+
 add_library(driver_vrto3d SHARED ${DRIVER_SOURCES})
 
 target_include_directories(driver_vrto3d PRIVATE
@@ -52,6 +71,7 @@ target_include_directories(driver_vrto3d PRIVATE
     ${ROOT}/utils/vrmath
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
+    ${MINHOOK_DIR}/include
 )
 
 # VRto3DLib submodule — compile its sources directly. No transitive target yet.
