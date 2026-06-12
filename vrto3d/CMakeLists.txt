@@ -19,7 +19,7 @@ set(DRIVER_SOURCES
     src/presenter/window_presenter.cpp
     src/presenter/leiasr_presenter.cpp
     src/presenter/nvstereo_dx9_presenter.cpp
-    src/presenter/nvd3dum_osd_patcher.cpp
+    src/presenter/nv_3dvision_suppressor.cpp
     src/presenter/wibblewobble_presenter.cpp
     src/presenter/display_timing_helper.cpp
     src/osd/osd_renderer.cpp
