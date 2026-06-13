@@ -96,6 +96,7 @@ Find your display type and use the listed Output Mode(s):
 - `WibbleWobble` requires the WibbleWobbleClient - select `Install WibbleWobble for Frame Sequential 3D` in the VRto3D Installer. Follow the [WibbleWobble SteamVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup) (skip the `VR Config` step, but do the rest). When framerate is low, you will have eye flickering
 - `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset. Should be more stable on single-display setups.
 - For both of these modes, it is recommended to start SteamVR before starting the game, as they change monitor modes, which might break games
+- Either one may require `Swap Eyes` to be set depending on how your display initializes
 
 </details>
 
