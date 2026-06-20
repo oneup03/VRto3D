@@ -1616,7 +1616,12 @@ StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
     // depth/convergence/fov live in atomics during runtime — config_ only
     // holds the last JSON-loaded values. Sync them so callers that round-trip
     // a snapshot through LoadSettings don't clobber live hotkey adjustments.
-    cfg.depth       = depth_.load(std::memory_order_relaxed);
+    // For depth specifically, report manual_depth_ (the user's intended
+    // ceiling) rather than the live, possibly auto-modulated depth_ — otherwise
+    // any OSD control that round-trips cfg through LoadSettings while
+    // auto-depth is active would bake the auto-attenuated value into the
+    // ceiling and defeat the snap-back on disable.
+    cfg.depth       = manual_depth_.load(std::memory_order_relaxed);
     cfg.convergence = convergence_.load(std::memory_order_relaxed);
     cfg.fov         = fov_.load(std::memory_order_relaxed);
     return cfg;

@@ -292,7 +292,14 @@ void OsdMenu::Impl::DrawFooter() {
 void OsdMenu::Impl::DrawStereoTab() {
     auto cfg = component->GetConfig();
 
-    float depth = component->GetDepth();
+    // While auto-depth is on, the slider edits the user's ceiling (manual_depth_)
+    // rather than the live, auto-modulated depth — otherwise nudging the slider
+    // would clobber the ceiling with whatever value the auto loop has currently
+    // attenuated to. The live value is surfaced separately in the Auto-Depth
+    // section below.
+    const bool auto_on = callbacks.get_auto_depth_enabled
+                         && callbacks.get_auto_depth_enabled();
+    float depth = auto_on ? component->GetManualDepth() : component->GetDepth();
     if (ImGui::SliderFloat("Depth", &depth, 0.0f, 0.5f, "%.3f")) {
         component->AdjustDepth(depth, false);
         // Mirror Ctrl+Shift+F3/F4 — re-sync projection so the new depth
@@ -323,6 +330,8 @@ void OsdMenu::Impl::DrawStereoTab() {
             callbacks.set_auto_depth_enabled(ad);
         }
         ImGui::SameLine(); ImGui::TextDisabled("(Ctrl+F11)");
+
+        ImGui::Text("Current Auto Depth: %.3f", component->GetDepth());
 
         if (callbacks.get_auto_depth_target && callbacks.set_auto_depth_target) {
             float target = callbacks.get_auto_depth_target();
