@@ -40,7 +40,7 @@ struct MenuCallbacks {
     std::function<void(std::string toast)> reload_game_profile;
     // Reload "default_config.json" into the live config.
     std::function<void(std::string toast)> reload_default_profile;
-    // Reset projection (mirrors Ctrl+Shift+F3).
+    // Reset projection (mirrors Ctrl+F3).
     std::function<void()> reset_projection;
     // Snap the current LeiaSR head pose as the neutral zero. No-op when the
     // active presenter isn't LeiaSR.

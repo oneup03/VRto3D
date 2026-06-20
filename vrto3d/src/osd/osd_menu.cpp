@@ -302,7 +302,7 @@ void OsdMenu::Impl::DrawStereoTab() {
     float depth = auto_on ? component->GetManualDepth() : component->GetDepth();
     if (ImGui::SliderFloat("Depth", &depth, 0.0f, 0.5f, "%.3f")) {
         component->AdjustDepth(depth, false);
-        // Mirror Ctrl+Shift+F3/F4 — re-sync projection so the new depth
+        // Mirror Ctrl+F3/F4 — re-sync projection so the new depth
         // takes effect immediately rather than waiting for the next
         // convergence change or profile reload.
         if (callbacks.reset_projection) callbacks.reset_projection();

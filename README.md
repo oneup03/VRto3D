@@ -147,8 +147,8 @@ Most adjustments now happen in the [On-Screen Menu](#user-presets-via-osd) — o
 - Open / close the OSD menu with `Ctrl + Home` or the `Start + D-Pad Down` gamepad chord
     - Once open, the menu accepts mouse, keyboard, and gamepad navigation (D-pad / left stick to move, `A` to activate, `B` to cancel the current widget, `LB`/`RB` to page through tabs, right stick to scroll)
     - Tap `X` (Xbox) / `Square` (PS) to jump nav up to the title bar (where the `X` close button lives — press `A` to dismiss); hold the same button to enter ImGui's *windowing mode* (left stick moves the window, D-pad resizes it, `LB`/`RB` cycle windows)
-- Adjust Depth (Separation) with `Ctrl + F3` and `Ctrl + F4`
-    - Hold `Shift` to also re-sync the projection so the change is visible immediately (some VR mods otherwise need a reload to pick it up)
+- Adjust Depth (Separation) with `Ctrl + F3` and `Ctrl + F4` - re-syncs the projection so the change is visible immediately (some VR mods otherwise need a reload to pick it up)
+    - Hold `Shift` to skip the projection re-sync (bare depth nudge)
 - Adjust Convergence with `Ctrl + F5` and `Ctrl + F6` - this often has issues in VR mods
 - Save current Depth / Convergence / FoV (and other profile fields marked with `"+"` under [Configuration](#configuration)) to the running game's `Game.exe_config.json` with `Ctrl + F7` - a beep indicates success
 - Reload the running game's `Game.exe_config.json` with `Ctrl + F10`, or reload `default_config.json` with `Ctrl + Shift + F10` - a beep indicates success
