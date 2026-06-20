@@ -1067,16 +1067,16 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         }
 
         if (!cfg.disable_hotkeys) {
-            // Ctrl+F3 Decrease Depth
+            // Ctrl+F3 Decrease Depth (re-sync projection; hold Shift to skip the sync)
             if (isCtrlDown() && isDown(VK_F3)) {
                 stereo_display_component_->AdjustDepth(-0.001f, true);
-                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
+                if (!isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
                 setOverlay(fmtDepthConv());
             }
-            // Ctrl+F4 Increase Depth
+            // Ctrl+F4 Increase Depth (re-sync projection; hold Shift to skip the sync)
             else if (isCtrlDown() && isDown(VK_F4)) {
                 stereo_display_component_->AdjustDepth(0.001f, true);
-                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
+                if (!isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F5 Decrease Convergence
