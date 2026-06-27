@@ -98,6 +98,76 @@ float4 main(VsOut i) : SV_Target {
 }
 )hlsl";
 
+// ---------------------------------------------------------------------------
+// Display-correction post-process pass — runs once on out_sbs_ (post-OSD,
+// pre-presenter) and applies user-tunable Lift / Gamma / Gain + extended
+// SCurve. Defaults all pass-through; the pass is skipped entirely when
+// disabled. Operates in sRGB byte space (matches ReShade's default workflow
+// and the LiftGammaGain.fx / SCurve.fx references the user supplied).
+// ---------------------------------------------------------------------------
+const char* kAdjustVsHlsl = R"hlsl(
+struct VsOut {
+    float4 pos : SV_Position;
+    float2 uv  : TEXCOORD0;
+};
+VsOut main(uint id : SV_VertexID) {
+    VsOut o;
+    float2 uv = float2((id << 1) & 2, id & 2);
+    o.uv  = uv;
+    o.pos = float4(uv * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.0, 1.0);
+    return o;
+}
+)hlsl";
+
+const char* kAdjustPsHlsl = R"hlsl(
+Texture2D    g_src : register(t0);
+SamplerState g_smp : register(s0);
+cbuffer Params : register(b0) {
+    float4 lift;      // .rgb used
+    float4 gamma;     // .rgb used
+    float4 gain;      // .rgb used
+    float  curve;     // 1.0 = pass-through; <1 reduces, >1 increases midtone contrast
+    float  off_low;
+    float  off_high;
+    float  off_both;
+};
+struct VsOut {
+    float4 pos : SV_Position;
+    float2 uv  : TEXCOORD0;
+};
+float4 main(VsOut i) : SV_Target {
+    float3 col = g_src.Sample(g_smp, i.uv).rgb;
+
+    // Extended SCurve.fx — at curve=1.0 the lerp degenerates to pass-through.
+    float3 low  = pow(abs(col), curve)       + off_low;
+    float3 high = pow(abs(col), 1.0 / curve) + off_high;
+    float3 t    = saturate(col + off_both);
+    col = lerp(low, high, t);
+
+    // LiftGammaGain.fx (operates in sRGB byte space — matches ReShade default).
+    col = col * (1.5 - 0.5 * lift.rgb) + 0.5 * lift.rgb - 0.5;
+    col = saturate(col);
+    col *= gain.rgb;
+    col = pow(abs(col), 1.0 / gamma.rgb);
+
+    return float4(saturate(col), 1.0);
+}
+)hlsl";
+
+// Constant buffer pushed to the shader each frame. 16-byte aligned to match
+// the cbuffer layout (float4 + float4 + float4 + 4*float = 64 bytes).
+struct AdjustCB {
+    float lift[4];
+    float gamma[4];
+    float gain[4];
+    float curve;
+    float off_low;
+    float off_high;
+    float off_both;
+};
+static_assert(sizeof(AdjustCB) == 64, "AdjustCB must stay 16-byte-aligned");
+
+
 bool CompileShaderBlob(const char* src, const char* entry, const char* profile,
                        Microsoft::WRL::ComPtr<ID3DBlob>& out_blob) {
     Microsoft::WRL::ComPtr<ID3DBlob> err;
@@ -445,6 +515,185 @@ void Dx11Renderer::EnsureOutputTexture(const D3D11_TEXTURE2D_DESC& incoming)
 }
 
 
+// ---------------------------------------------------------------------------
+// Display-correction pipeline init. One-shot: builds shaders + static states
+// the first time ApplyDisplayCorrection() is called with the feature enabled.
+// Machines that never enable the shader pay no init cost. Returns true if
+// (already) ready, false on failure (caller skips the pass).
+// ---------------------------------------------------------------------------
+bool Dx11Renderer::EnsureDisplayCorrectionPipeline()
+{
+    if (adj_pipeline_ready_) return true;
+    if (adj_pipeline_tried_) return false;   // failed previously — don't retry every frame
+    adj_pipeline_tried_ = true;
+
+    if (!device_) return false;
+
+    Microsoft::WRL::ComPtr<ID3DBlob> vsb, psb;
+    if (!CompileShaderBlob(kAdjustVsHlsl, "main", "vs_5_0", vsb)) return false;
+    if (!CompileShaderBlob(kAdjustPsHlsl, "main", "ps_5_0", psb)) return false;
+    if (FAILED(device_->CreateVertexShader(vsb->GetBufferPointer(), vsb->GetBufferSize(),
+                                           nullptr, &adj_vs_))) return false;
+    if (FAILED(device_->CreatePixelShader (psb->GetBufferPointer(), psb->GetBufferSize(),
+                                           nullptr, &adj_ps_))) return false;
+
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sd.AddressU       = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressV       = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressW       = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.MaxLOD         = D3D11_FLOAT32_MAX;
+    if (FAILED(device_->CreateSamplerState(&sd, &adj_sampler_))) return false;
+
+    D3D11_BUFFER_DESC cbd{};
+    cbd.ByteWidth      = sizeof(AdjustCB);
+    cbd.Usage          = D3D11_USAGE_DYNAMIC;
+    cbd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+    cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    if (FAILED(device_->CreateBuffer(&cbd, nullptr, &adj_cb_))) return false;
+
+    // Opaque blend — straight write, no alpha math.
+    D3D11_BLEND_DESC bd{};
+    bd.RenderTarget[0].BlendEnable           = FALSE;
+    bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    if (FAILED(device_->CreateBlendState(&bd, &adj_blend_))) return false;
+
+    D3D11_RASTERIZER_DESC rd{};
+    rd.FillMode = D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_NONE;
+    if (FAILED(device_->CreateRasterizerState(&rd, &adj_raster_))) return false;
+
+    D3D11_DEPTH_STENCIL_DESC dsd{};
+    dsd.DepthEnable   = FALSE;
+    dsd.StencilEnable = FALSE;
+    if (FAILED(device_->CreateDepthStencilState(&dsd, &adj_depth_))) return false;
+
+    adj_pipeline_ready_ = true;
+    LOG() << "Dx11Renderer: display-correction pipeline initialized";
+    return true;
+}
+
+
+// ---------------------------------------------------------------------------
+// In-place display-correction pass on out_sbs_. Skipped when shader_enabled
+// is false (zero cost). Otherwise: lazy-init the pipeline, lazy-create the
+// scratch texture to match out_sbs_'s dims/format, copy out_sbs_ -> scratch,
+// then draw a fullscreen triangle reading scratch through the adjustment
+// shader and writing back to out_sbs_.
+// ---------------------------------------------------------------------------
+void Dx11Renderer::ApplyDisplayCorrection()
+{
+    if (!osd_component_) return;
+    StereoDisplayDriverConfiguration cfg = osd_component_->GetConfig();
+    if (!cfg.shader_enabled) return;
+    if (!out_sbs_ || !out_sbs_rtv_ || !context_ || !device_) return;
+    if (sbs_width_ == 0 || sbs_height_ == 0) return;
+
+    if (!EnsureDisplayCorrectionPipeline()) return;
+
+    // (Re)create scratch when dims/format change. Local-only, no SHARED.
+    if (!adj_scratch_
+        || adj_scratch_w_ != sbs_width_
+        || adj_scratch_h_ != sbs_height_
+        || adj_scratch_format_ != sbs_format_) {
+        adj_scratch_.Reset();
+        adj_scratch_srv_.Reset();
+
+        D3D11_TEXTURE2D_DESC td{};
+        td.Width          = sbs_width_;
+        td.Height         = sbs_height_;
+        td.MipLevels      = 1;
+        td.ArraySize      = 1;
+        td.Format         = sbs_format_;
+        td.SampleDesc     = { 1, 0 };
+        td.Usage          = D3D11_USAGE_DEFAULT;
+        td.BindFlags      = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+        HRESULT hr = device_->CreateTexture2D(&td, nullptr, &adj_scratch_);
+        if (FAILED(hr)) {
+            LOG() << "Dx11Renderer: ApplyDisplayCorrection scratch CreateTexture2D failed hr=0x"
+                  << std::hex << hr;
+            return;
+        }
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvd{};
+        srvd.Format              = sbs_format_;
+        srvd.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvd.Texture2D.MipLevels = 1;
+        hr = device_->CreateShaderResourceView(adj_scratch_.Get(), &srvd, &adj_scratch_srv_);
+        if (FAILED(hr)) {
+            LOG() << "Dx11Renderer: ApplyDisplayCorrection scratch SRV failed hr=0x"
+                  << std::hex << hr;
+            adj_scratch_.Reset();
+            return;
+        }
+        adj_scratch_w_      = sbs_width_;
+        adj_scratch_h_      = sbs_height_;
+        adj_scratch_format_ = sbs_format_;
+    }
+
+    // Push the live config into the constant buffer.
+    D3D11_MAPPED_SUBRESOURCE m{};
+    if (FAILED(context_->Map(adj_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return;
+    {
+        AdjustCB cb{};
+        cb.lift[0]  = cfg.shader_lift[0];
+        cb.lift[1]  = cfg.shader_lift[1];
+        cb.lift[2]  = cfg.shader_lift[2];
+        cb.lift[3]  = 0.0f;
+        cb.gamma[0] = cfg.shader_gamma[0];
+        cb.gamma[1] = cfg.shader_gamma[1];
+        cb.gamma[2] = cfg.shader_gamma[2];
+        cb.gamma[3] = 0.0f;
+        cb.gain[0]  = cfg.shader_gain[0];
+        cb.gain[1]  = cfg.shader_gain[1];
+        cb.gain[2]  = cfg.shader_gain[2];
+        cb.gain[3]  = 0.0f;
+        cb.curve    = cfg.shader_curve;
+        cb.off_low  = cfg.shader_curve_off_low;
+        cb.off_high = cfg.shader_curve_off_high;
+        cb.off_both = cfg.shader_curve_off_both;
+        std::memcpy(m.pData, &cb, sizeof(cb));
+    }
+    context_->Unmap(adj_cb_.Get(), 0);
+
+    // Snapshot the current out_sbs_ contents into the scratch.
+    context_->CopyResource(adj_scratch_.Get(), out_sbs_.Get());
+
+    // Draw scratch -> out_sbs_ through the adjustment shader.
+    D3D11_VIEWPORT vp{};
+    vp.Width    = static_cast<float>(sbs_width_);
+    vp.Height   = static_cast<float>(sbs_height_);
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+
+    ID3D11RenderTargetView* rtv = out_sbs_rtv_.Get();
+    context_->OMSetRenderTargets(1, &rtv, nullptr);
+    context_->OMSetDepthStencilState(adj_depth_.Get(), 0);
+    const float blend_factor[4] = { 1.f, 1.f, 1.f, 1.f };
+    context_->OMSetBlendState(adj_blend_.Get(), blend_factor, 0xFFFFFFFFu);
+    context_->RSSetState(adj_raster_.Get());
+    context_->RSSetViewports(1, &vp);
+    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    context_->IASetInputLayout(nullptr);
+    context_->VSSetShader(adj_vs_.Get(), nullptr, 0);
+    context_->PSSetShader(adj_ps_.Get(), nullptr, 0);
+    ID3D11Buffer* cbs[] = { adj_cb_.Get() };
+    context_->PSSetConstantBuffers(0, 1, cbs);
+    ID3D11ShaderResourceView* srvs[] = { adj_scratch_srv_.Get() };
+    context_->PSSetShaderResources(0, 1, srvs);
+    ID3D11SamplerState* samps[] = { adj_sampler_.Get() };
+    context_->PSSetSamplers(0, 1, samps);
+
+    context_->Draw(3, 0);
+
+    // Unbind the SRV so the same texture can be bound as RTV next frame
+    // (D3D11 forbids simultaneous SRV+RTV on the same resource).
+    ID3D11ShaderResourceView* null_srv[] = { nullptr };
+    context_->PSSetShaderResources(0, 1, null_srv);
+    ID3D11RenderTargetView* null_rtv[] = { nullptr };
+    context_->OMSetRenderTargets(1, null_rtv, nullptr);
+}
+
+
 void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
                                      int layer_count,
                                      vr::SharedTextureHandle_t sync_handle)
@@ -764,6 +1013,16 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
         if (want) CaptureScreenshot(name);
     }
 
+    // Optional display-correction shader pass — applied on the compositor
+    // thread (here, before Flush) rather than the window thread so the GPU
+    // writes are committed by the existing Flush() barrier. Cross-device
+    // consumers (NvidiaDX9 D3D9Ex shared handle, WibbleWobble's own DX11
+    // device, LeiaSR weaver) all rely on that barrier; running the pass on
+    // the window thread races them and produces a per-frame brightness
+    // flicker as some frames are read pre-shader and others post-shader.
+    // Runs after the screenshot drain so saved screenshots stay clean.
+    ApplyDisplayCorrection();
+
     // Force compositor's writes to commit before we release the sync mutex
     // and before the window thread observes a fresh out_sbs_.
     context_->Flush();
@@ -857,7 +1116,10 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
             osd_pending_callbacks_.reset();
         }
 
-        // Composite OSD into out_sbs_ before the presenter sees it.
+        // Composite OSD into out_sbs_ before the presenter sees it. The OSD
+        // is intentionally drawn AFTER the display-correction shader pass (run
+        // upstream on the compositor thread) so the menu text stays at full
+        // fidelity and isn't dimmed by the user's crosstalk-reduction curves.
         if (osd_initialized_ && osd_renderer_) {
             const UINT eye_w = sbs_width_ / 2;
             osd_renderer_->OnResize(eye_w, sbs_height_);
@@ -949,6 +1211,19 @@ void Dx11Renderer::Shutdown()
     composite_raster_.Reset();
     composite_depth_.Reset();
     composite_pipeline_ready_ = false;
+    adj_vs_.Reset();
+    adj_ps_.Reset();
+    adj_sampler_.Reset();
+    adj_cb_.Reset();
+    adj_blend_.Reset();
+    adj_raster_.Reset();
+    adj_depth_.Reset();
+    adj_scratch_srv_.Reset();
+    adj_scratch_.Reset();
+    adj_scratch_w_ = adj_scratch_h_ = 0;
+    adj_scratch_format_ = DXGI_FORMAT_UNKNOWN;
+    adj_pipeline_ready_ = false;
+    adj_pipeline_tried_ = false;
     context_.Reset();
     device_.Reset();
     adapter_.Reset();
