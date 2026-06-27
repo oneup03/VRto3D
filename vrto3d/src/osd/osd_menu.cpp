@@ -347,6 +347,13 @@ void OsdMenu::Impl::DrawStereoTab() {
             }
             ImGui::SameLine(); ImGui::TextDisabled("(higher = snappier)");
         }
+        if (callbacks.get_auto_depth_logging && callbacks.set_auto_depth_logging) {
+            bool log_on = callbacks.get_auto_depth_logging();
+            if (ImGui::Checkbox("Log Disparity Samples", &log_on)) {
+                callbacks.set_auto_depth_logging(log_on);
+            }
+            ImGui::SameLine(); ImGui::TextDisabled("(periodic histogram to vrto3d.txt)");
+        }
         ImGui::Separator();
     }
 
