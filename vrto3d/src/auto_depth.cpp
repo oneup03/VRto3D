@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <sstream>
 
 #include <d3dcompiler.h>
 
@@ -371,6 +372,26 @@ void AutoDepthAnalyzer::Run(ID3D11DeviceContext*    ctx,
             }
 
             component->FeedAutoDepthSample(max_disp, eye_w);
+
+            if (component->IsAutoDepthLoggingEnabled() &&
+                (frame_counter <= 5 || (frame_counter % 120 == 0))) {
+                LOG() << "AutoDepth: max_disp=" << max_disp
+                      << " px (eye_w=" << eye_w
+                      << ", search=" << search_radius
+                      << ", bucket=" << top_bucket
+                      << ", frac=" << (eye_w ? float(max_disp) / float(eye_w) : 0.0f)
+                      << ", matches=" << match_count
+                      << ")";
+                std::ostringstream ss;
+                ss << "AutoDepth hist:";
+                for (int b = 0; b < NUM_BUCKETS - 8; b += 4) {
+                    ss << " [" << b << "]=" << hist[b];
+                }
+                for (int b = NUM_BUCKETS - 8; b < NUM_BUCKETS; ++b) {
+                    ss << " [" << b << "]=" << hist[b];
+                }
+                LOG() << ss.str();
+            }
         }
         // DXGI_ERROR_WAS_STILL_DRAWING -> just try again next frame.
     }

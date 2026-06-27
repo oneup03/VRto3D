@@ -450,6 +450,12 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             cb.set_auto_depth_smoothing = [this](float v) {
                 stereo_display_component_->SetAutoDepthSmoothing(v);
             };
+            cb.get_auto_depth_logging = [this]() {
+                return stereo_display_component_->IsAutoDepthLoggingEnabled();
+            };
+            cb.set_auto_depth_logging = [this](bool on) {
+                stereo_display_component_->SetAutoDepthLoggingEnabled(on);
+            };
             cb.calibrate_leiasr_head = [this]() {
                 if (renderer_ && renderer_->Presenter()) {
                     renderer_->Presenter()->RequestCalibrate();
@@ -1711,6 +1717,18 @@ void StereoDisplayComponent::SetAutoDepthSmoothing(float v)
     if (v < 0.005f) v = 0.005f;
     if (v > 0.25f)  v = 0.25f;
     auto_depth_smoothing_.store(v, std::memory_order_relaxed);
+}
+
+
+bool StereoDisplayComponent::IsAutoDepthLoggingEnabled() const
+{
+    return auto_depth_log_enabled_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthLoggingEnabled(bool enabled)
+{
+    auto_depth_log_enabled_.store(enabled, std::memory_order_relaxed);
 }
 
 

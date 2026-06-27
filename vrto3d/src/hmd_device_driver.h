@@ -73,6 +73,10 @@ public:
     void  SetAutoDepthTargetDisparity(float frac);
     float GetAutoDepthSmoothing() const;
     void  SetAutoDepthSmoothing(float v);
+    // Diagnostic toggle for the AutoDepthAnalyzer's periodic histogram /
+    // disparity logs. Off by default — only useful when tuning thresholds.
+    bool  IsAutoDepthLoggingEnabled() const;
+    void  SetAutoDepthLoggingEnabled(bool enabled);
     void  FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px);
 
     // UE3D Monitor Mode
@@ -121,6 +125,7 @@ private:
     // EMA of incoming disparity-fraction samples (input-side jitter filter).
     // -1 = uninitialized. Reset whenever auto-depth is toggled off.
     std::atomic< float > auto_depth_disp_ema_{ -1.0f };
+    std::atomic< bool >  auto_depth_log_enabled_{ false };
 };
 
 

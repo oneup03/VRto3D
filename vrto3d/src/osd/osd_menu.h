@@ -82,6 +82,8 @@ struct MenuCallbacks {
     std::function<void(float)> set_auto_depth_target;
     std::function<float()>     get_auto_depth_smoothing;
     std::function<void(float)> set_auto_depth_smoothing;
+    std::function<bool()>      get_auto_depth_logging;
+    std::function<void(bool)>  set_auto_depth_logging;
 };
 
 // Renders the 4-tab configuration menu and the persistent chrome (title bar +
