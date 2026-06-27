@@ -72,6 +72,11 @@ struct MenuCallbacks {
     // presenter's focus loop sees the toggle on its next iteration instead
     // of being stuck with the value cached at presenter Init().
     std::function<void(bool)> set_auto_focus;
+    // Cross-process cursor controls (3DVision4All-style hide_cursor /
+    // confine_cursor). Mirrored to the driver's CursorControlThread atomics
+    // so toggles take effect on the next tick without a restart.
+    std::function<void(bool)> set_hide_cursor;
+    std::function<void(bool)> set_lock_cursor;
 
     // Auto-depth feature: toggle + comfort-target slider (fraction of one
     // eye's width). The Stereo tab binds these to read/write the live

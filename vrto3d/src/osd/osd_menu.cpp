@@ -875,6 +875,18 @@ void OsdMenu::Impl::DrawSystemTab() {
             if (callbacks.set_auto_focus) callbacks.set_auto_focus(cfg.auto_focus);
         }
         if (ImGui::Checkbox("Auto Exit SteamVR",  &cfg.auto_exit)) dirty = true;
+        if (ImGui::Checkbox("Hide Cursor",        &cfg.hide_cursor)) {
+            dirty = true;
+            if (callbacks.set_hide_cursor) callbacks.set_hide_cursor(cfg.hide_cursor);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(hide OS cursor over the game window)");
+        if (ImGui::Checkbox("Lock Cursor to Game", &cfg.lock_cursor)) {
+            dirty = true;
+            if (callbacks.set_lock_cursor) callbacks.set_lock_cursor(cfg.lock_cursor);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(clip cursor to game window while focused)");
         char buf[512];
         std::snprintf(buf, sizeof(buf), "%s", cfg.launch_script.c_str());
         if (ImGui::InputText("Launch Script", buf, sizeof(buf))) {

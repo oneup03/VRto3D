@@ -196,6 +196,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         cfg.sleep_count_max   = (int)(floor(1600.0 / (1000.0 / cfg.display_frequency)));
         stereo_display_component_->LoadSettings(cfg);
         auto_focus_.store(cfg.auto_focus);
+        hide_cursor_.store(cfg.hide_cursor);
+        lock_cursor_.store(cfg.lock_cursor);
         LOG() << "Display: target=" << primary.device_name
               << " freq=" << cfg.display_frequency << "Hz"
               << " latency=" << cfg.display_latency << "s";
@@ -358,6 +360,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     open_track_att_ = HmdQuaternion_Identity;
     open_track_pos_ = { 0.0, 0.0, 0.0 };
     track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
+    cursor_thread_ = std::thread(&MockControllerDeviceDriver::CursorControlThread, this);
 
     HANDLE thread_handle = pose_thread_.native_handle();
 
@@ -403,6 +406,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
                     auto_focus_.store(cfg.auto_focus);
+                    hide_cursor_.store(cfg.hide_cursor);
+                    lock_cursor_.store(cfg.lock_cursor);
                     app_name_ = prev_name_;
                     if (renderer_ && renderer_->Osd()) {
                         renderer_->Osd()->SetAppName(app_name_);
@@ -422,6 +427,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
                     auto_focus_.store(cfg.auto_focus);
+                    hide_cursor_.store(cfg.hide_cursor);
+                    lock_cursor_.store(cfg.lock_cursor);
                     app_name_ = "";
                     if (renderer_ && renderer_->Osd()) {
                         renderer_->Osd()->SetAppName(app_name_);
@@ -527,6 +534,8 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     man_on_top_ = false;
                 }
             };
+            cb.set_hide_cursor = [this](bool on) { hide_cursor_.store(on); };
+            cb.set_lock_cursor = [this](bool on) { lock_cursor_.store(on); };
             cb.download_latest_profiles = [this]() {
                 // Re-entrancy guard — ignore clicks while a previous download
                 // is still in flight.
@@ -1126,6 +1135,8 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
                     auto_focus_.store(cfg.auto_focus);
+                    hide_cursor_.store(cfg.hide_cursor);
+                    lock_cursor_.store(cfg.lock_cursor);
                     LOG() << "Loaded " << path.c_str() << " profile";
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
@@ -1292,6 +1303,102 @@ void MockControllerDeviceDriver::MonitorModeThread() {
 
 
 //-----------------------------------------------------------------------------
+// Purpose: Apply hide_cursor / lock_cursor to the connected game's window
+// from out-of-process (we live in vrserver.exe, the game is its own
+// process). Modeled on 3DVision4All's hide_cursor / confine_cursor knobs,
+// but cross-process: instead of subclassing the game's WndProc and
+// rewriting its class cursor (only possible from an injected DLL), we:
+//
+//   1. Poll for the game's main HWND.
+//   2. When the game is the foreground process, AttachThreadInput to its
+//      input queue so SetCursor / ClipCursor calls share state with the
+//      game's thread (Windows otherwise blocks cursor clipping from
+//      non-foreground processes as an anti-trap measure).
+//   3. ClipCursor to the game's window rect (lock_cursor) and/or call
+//      SetCursor(nullptr) (hide_cursor) every tick — repeated assertion is
+//      required because Windows releases the clip on every foreground
+//      transition and the game's WndProc re-issues its own cursor on each
+//      WM_SETCURSOR. ~30 Hz is fast enough to feel instantaneous.
+//
+// Cleanup: when the user disables lock_cursor (or the game loses focus /
+// closes), we release any clip we set. We don't try to "restore" the
+// hidden cursor — the game's next WM_SETCURSOR (fires on mouse motion)
+// brings its own cursor back.
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::CursorControlThread()
+{
+    bool clip_active = false;
+
+    while (is_active_.load(std::memory_order_relaxed)) {
+        const bool want_hide = hide_cursor_.load(std::memory_order_relaxed);
+        const bool want_lock = lock_cursor_.load(std::memory_order_relaxed);
+        // Only act while our VR overlay is actually on top of the game — when
+        // the user toggles topmost off (Ctrl+F8 / OSD) they're back at the
+        // desktop and expect their real cursor / clip back, regardless of
+        // these toggles.
+        const bool on_top    = is_on_top_.load(std::memory_order_relaxed);
+        // Suppress while the OSD menu is open so the user can actually click
+        // ImGui widgets — both knobs would fight the menu's pointer otherwise.
+        const bool menu_open = renderer_ && renderer_->Osd()
+                                && renderer_->Osd()->MenuVisible();
+
+        if (!on_top || menu_open || (!want_hide && !want_lock)) {
+            if (clip_active) {
+                ClipCursor(nullptr);
+                clip_active = false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            continue;
+        }
+
+        const uint32_t pid = app_pid_.load();
+        HWND game = (pid != 0 && IsProcessRunning(pid)) ? GetHWNDFromPID(pid) : nullptr;
+        const bool game_is_fg = game && GetForegroundWindow() == game;
+
+        if (!game_is_fg) {
+            if (clip_active) {
+                ClipCursor(nullptr);
+                clip_active = false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
+        const DWORD game_tid = GetWindowThreadProcessId(game, nullptr);
+        const DWORD my_tid   = GetCurrentThreadId();
+        const BOOL  attached = (game_tid && game_tid != my_tid)
+                                ? AttachThreadInput(my_tid, game_tid, TRUE)
+                                : FALSE;
+
+        if (want_lock) {
+            RECT r;
+            if (GetWindowRect(game, &r)) {
+                ClipCursor(&r);
+                clip_active = true;
+            }
+        } else if (clip_active) {
+            ClipCursor(nullptr);
+            clip_active = false;
+        }
+
+        if (want_hide) {
+            SetCursor(nullptr);
+        }
+
+        if (attached) {
+            AttachThreadInput(my_tid, game_tid, FALSE);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(33));
+    }
+
+    if (clip_active) {
+        ClipCursor(nullptr);
+    }
+}
+
+
+//-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Steam\config\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status)
@@ -1339,6 +1446,8 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         // Mirror the freshly-loaded profile's auto_focus to the live atomic
         // observed by presenter focus loops.
         auto_focus_.store(config.auto_focus);
+        hide_cursor_.store(config.hide_cursor);
+        lock_cursor_.store(config.lock_cursor);
 
         if (config.auto_focus) {
             // Run off-thread: this is called from RunFrame, and a 10s sleep
@@ -1473,6 +1582,9 @@ void MockControllerDeviceDriver::Deactivate()
         }
         if (track_thread_.joinable()) {
             track_thread_.join();
+        }
+        if (cursor_thread_.joinable()) {
+            cursor_thread_.join();
         }
         // Direct-mode component holds a raw Dx11Renderer*; destroy it first
         // so any in-flight SubmitLayer/Present can no longer reach the

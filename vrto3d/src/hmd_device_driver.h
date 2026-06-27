@@ -157,6 +157,10 @@ public:
     void PoseUpdateThread();
     void PollHotkeysThread();
     void MonitorModeThread();
+    // Polls the connected game window and asserts cursor visibility / clip
+    // state per the live hide_cursor_ / lock_cursor_ atomics. Mirrors the
+    // cross-process equivalent of 3DVision4All's hide_cursor / confine_cursor.
+    void CursorControlThread();
 
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
     void SetAsync(bool enable);
@@ -208,6 +212,10 @@ private:
     // Updated whenever a profile/config is (re)loaded so the presenter's
     // focus loop sees toggles immediately. Default true matches stereo_config.h.
     std::atomic< bool > auto_focus_{ true };
+    // Live mirrors of the corresponding cfg fields. Polled by CursorControlThread
+    // so OSD toggles take effect without a restart.
+    std::atomic< bool > hide_cursor_{ false };
+    std::atomic< bool > lock_cursor_{ false };
     std::atomic< bool > launch_script_executed_;
 
     std::mutex pose_mutex_;
@@ -223,6 +231,7 @@ private:
     std::thread hotkey_thread_;
     std::thread monitor_thread_;
     std::thread track_thread_;
+    std::thread cursor_thread_;
 
     vr::HmdQuaternion_t open_track_att_;
     std::array<double, 3> open_track_pos_;
