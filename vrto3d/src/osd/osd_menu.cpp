@@ -51,6 +51,7 @@ struct OsdMenu::Impl {
     void DrawStereoTab();
     void DrawUserHotkeysTab(OsdInput& input);
     void DrawTrackingTab(OsdInput& input);
+    void DrawShaderTab();
     void DrawSystemTab();
     void DrawFooter();
     void DrawTitleChrome();
@@ -158,6 +159,7 @@ void OsdMenu::BuildUI(OsdInput& input) {
         draw_tab("Stereo",       "##scroll_stereo", [&]{ s.DrawStereoTab(); });
         draw_tab("User Hotkeys", "##scroll_user",   [&]{ s.DrawUserHotkeysTab(input); });
         draw_tab("Tracking",     "##scroll_track",  [&]{ s.DrawTrackingTab(input); });
+        draw_tab("Shader",       "##scroll_shader", [&]{ s.DrawShaderTab(); });
         draw_tab("System",       "##scroll_system", [&]{ s.DrawSystemTab(); });
         ImGui::EndTabBar();
     }
@@ -805,6 +807,64 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
             cfg.sr_track_mode = track_modes[sel];
             dirty = true;
         }
+    }
+
+    if (dirty) {
+        component->LoadSettings(cfg);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shader tab — display-correction post-process pass (Lift / Gamma / Gain +
+// extended S-Curve). All defaults are pass-through; pipeline is skipped
+// entirely when disabled, so a user who never opens this tab pays nothing.
+// Intended for users with crosstalk-prone 3D displays (e.g. passive row-
+// interlaced monitors), where lowering Gain and reducing the curve below
+// 1.0 trades some brightness/contrast for sharply less visible crosstalk.
+// ---------------------------------------------------------------------------
+void OsdMenu::Impl::DrawShaderTab() {
+    auto cfg = component->GetConfig();
+    bool dirty = false;
+
+    if (ImGui::Checkbox("Enable Display Correction Shader", &cfg.shader_enabled)) {
+        dirty = true;
+    }
+    ImGui::TextWrapped("Reduces high-contrast crosstalk on some 3D displays "
+                       "(e.g. passive row-interlaced monitors). Sacrifices "
+                       "brightness and contrast — disable when not needed.");
+
+    if (ImGui::CollapsingHeader("Lift / Gamma / Gain",
+                                 ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::SliderFloat3("RGB Lift",  cfg.shader_lift,  0.0f, 2.0f, "%.3f")) dirty = true;
+        ImGui::SameLine(); ImGui::TextDisabled("(shadows)");
+        if (ImGui::SliderFloat3("RGB Gamma", cfg.shader_gamma, 0.0f, 2.0f, "%.3f")) dirty = true;
+        ImGui::SameLine(); ImGui::TextDisabled("(midtones)");
+        if (ImGui::SliderFloat3("RGB Gain",  cfg.shader_gain,  0.0f, 2.0f, "%.3f")) dirty = true;
+        ImGui::SameLine(); ImGui::TextDisabled("(highlights)");
+    }
+
+    if (ImGui::CollapsingHeader("S-Curve",
+                                 ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::SliderFloat("Curve", &cfg.shader_curve, 0.33f, 3.0f, "%.3f")) dirty = true;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("1.0 = pass-through.\n"
+                              "Below 1.0: reduces midtone contrast (helps with crosstalk).\n"
+                              "Above 1.0: increases midtone contrast.");
+        }
+        if (ImGui::SliderFloat("Curve Offset (Low)",  &cfg.shader_curve_off_low,  -1.0f, 1.0f, "%.3f")) dirty = true;
+        if (ImGui::SliderFloat("Curve Offset (High)", &cfg.shader_curve_off_high, -1.0f, 1.0f, "%.3f")) dirty = true;
+        if (ImGui::SliderFloat("Curve Offset (Both)", &cfg.shader_curve_off_both, -1.0f, 1.0f, "%.3f")) dirty = true;
+    }
+
+    if (ImGui::Button("Reset to Defaults")) {
+        cfg.shader_lift[0]  = cfg.shader_lift[1]  = cfg.shader_lift[2]  = 1.0f;
+        cfg.shader_gamma[0] = cfg.shader_gamma[1] = cfg.shader_gamma[2] = 1.0f;
+        cfg.shader_gain[0]  = cfg.shader_gain[1]  = cfg.shader_gain[2]  = 1.0f;
+        cfg.shader_curve          = 1.0f;
+        cfg.shader_curve_off_low  = 0.0f;
+        cfg.shader_curve_off_high = 0.0f;
+        cfg.shader_curve_off_both = 0.0f;
+        dirty = true;
     }
 
     if (dirty) {

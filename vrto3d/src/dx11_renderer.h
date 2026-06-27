@@ -351,4 +351,34 @@ private:
     // Auto-depth disparity analyzer. Owns the compute pipeline + readback
     // ring; lazy-initialized on first frame where auto-depth is enabled.
     std::unique_ptr<vrto3d::AutoDepthAnalyzer> auto_depth_;
+
+    // Display-correction shader pass — fullscreen post-process applied to
+    // out_sbs_ (post-OSD, pre-presenter) to reduce visible crosstalk on
+    // displays prone to it (e.g. passive row-interlaced 3D monitors). Lazy-
+    // initialized on first enable; entirely skipped when cfg.shader_enabled
+    // is false (zero perf cost when off). Scratch texture is local-only
+    // (no MISC_SHARED) since presenters consume out_sbs_, not the scratch.
+    Microsoft::WRL::ComPtr<ID3D11VertexShader>      adj_vs_;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader>       adj_ps_;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState>      adj_sampler_;
+    Microsoft::WRL::ComPtr<ID3D11Buffer>            adj_cb_;
+    Microsoft::WRL::ComPtr<ID3D11BlendState>        adj_blend_;
+    Microsoft::WRL::ComPtr<ID3D11RasterizerState>   adj_raster_;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilState> adj_depth_;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>         adj_scratch_;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> adj_scratch_srv_;
+    uint32_t                                        adj_scratch_w_      = 0;
+    uint32_t                                        adj_scratch_h_      = 0;
+    DXGI_FORMAT                                     adj_scratch_format_ = DXGI_FORMAT_UNKNOWN;
+    bool                                            adj_pipeline_ready_ = false;
+    bool                                            adj_pipeline_tried_ = false;
+
+    // One-shot init for the display-correction pipeline (shaders + states).
+    // Called the first time ApplyDisplayCorrection() runs with the shader
+    // enabled, so machines that never enable it pay no init cost.
+    bool EnsureDisplayCorrectionPipeline();
+    // Runs the pass in-place on out_sbs_. Reads live config via
+    // osd_component_->GetConfig(); no-op when disabled or when out_sbs_/RTV
+    // aren't ready. Recreates the scratch texture on dim/format change.
+    void ApplyDisplayCorrection();
 };

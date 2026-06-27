@@ -213,6 +213,14 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 | `auto_depth_enabled` +        | `bool`  | Enable Auto-Depth (GPU disparity analysis caps depth so the closest object stays comfortable)     | `false`        |
 | `auto_depth_target_disparity` +| `float`| Target max on-screen disparity, as a fraction of one eye's width                                  | `0.005`        |
 | `auto_depth_smoothing` +      | `float` | Auto-Depth smoothing (higher = snappier; lower = smoother)                                        | `0.08`         |
+| `shader_enabled` +            | `bool`  | Enable the display-correction shader pass (Lift/Gamma/Gain + S-Curve) - see [Display Correction](#display-correction-crosstalk-reduction) | `false` |
+| `shader_lift` +               | `[float]` | RGB Lift (shadows), 3-element array, each `0..2`                                                | `[1.0, 1.0, 1.0]` |
+| `shader_gamma` +              | `[float]` | RGB Gamma (midtones), 3-element array, each `0..2`                                              | `[1.0, 1.0, 1.0]` |
+| `shader_gain` +               | `[float]` | RGB Gain (highlights), 3-element array, each `0..2`                                             | `[1.0, 1.0, 1.0]` |
+| `shader_curve` +              | `float` | Extended S-Curve strength (`0.33..3.0`; `1.0` = pass-through; `<1` reduces midtone contrast)      | `1.0`          |
+| `shader_curve_offset_low` +   | `float` | S-Curve low-color offset (`-1..1`)                                                                | `0.0`          |
+| `shader_curve_offset_high` +  | `float` | S-Curve high-color offset (`-1..1`)                                                               | `0.0`          |
+| `shader_curve_offset_both` +  | `float` | S-Curve both-color blend-point offset (`-1..1`)                                                   | `0.0`          |
 | `disable_hotkeys`             | `bool`  | Disable the global hotkeys (Depth/Convergence/profile/save) to avoid conflict with other 3D mods. `Ctrl + Home` and `Start + D-Pad Down` (OSD toggles) are unaffected | `false` |
 | `dash_enable`                 | `bool`  | Enable or disable SteamVR Dashboard and Home                                                      | `false`        |
 | `auto_focus`                  | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground                                | `true`         |
@@ -253,13 +261,33 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 | `user_settings[].user_fov` +         | `float` or `[float]` | The fov value(s) for a user preset; `0` falls back to the global FoV (array = cycle on each press, `toggle` mode only) | `90.0`         |
 
 
-## Notes
+## Additional Settings
 - The game's main window has to be in focus for control input from your mouse/keyboard/controller to work. Auto Focus should do this for you, but sometimes you may need to `Alt + Tab` to the game
 - Overlays generally won't work on this virtual HMD
 - XInput controller is recommended
 - SteamVR doesn't support HDR currently
     - AutoHDR may work, but some games will be too dark or too bright
 - DLSS, TAA, and other temporal based settings can create a halo around objects. Most VR mods have fixes for this, but some may not
+
+#### Display Correction (Crosstalk Reduction)
+- Some 3D displays show visible left/right crosstalk in high-contrast scenes, which can make some games hard to watch. The OSD `Shader` tab runs a configurable post-process pass on the final stereo image that trades some brightness/contrast for sharply less visible crosstalk - toggle it on/off instantly when needed
+- Works with every output mode that produces a side-by-side internal frame (SbS, TaB, Interlaced, Checkerboard, Anaglyph, Mono, LeiaSR, NvidiaDX9, WibbleWobble, etc.)
+- **Controls** on the `Shader` tab:
+    - `Enable Display Correction Shader` - master on/off (defaults off, no perf cost when off)
+    - **Lift / Gamma / Gain** - per-channel RGB controls (`0..2`, default `1.0`): `RGB Lift` raises/lowers shadows, `RGB Gamma` adjusts midtone gamma, `RGB Gain` scales highlights
+    - **S-Curve** - extended contrast curve. `Curve` (range `0.33..3.0`, default `1.0` = pass-through); below `1.0` *reduces* midtone contrast (the crosstalk-fix direction), above `1.0` *increases* it. `Curve Offset (Low / High / Both)` fine-tune the curve's low-end, high-end, and overall blend point (`-1..1`, default `0`)
+    - `Reset to Defaults` - snap everything back to pass-through
+- **Example starting point** for a LeiaSR 3D monitor with heavy crosstalk (Acer/Samsung 27"):
+
+    | Control | Value |
+    |---|---|
+    | `Enable Display Correction Shader` | on |
+    | `RGB Gamma` | `0.6, 0.6, 0.6` |
+    | `Curve` | `0.33` |
+    | `Curve Offset (Both)` | `-1.0` |
+
+- This combination strongly reduces midtone contrast (where most crosstalk is visible) while compressing the overall range. From there, tune `Curve` upward toward `1.0` until you find the smallest correction that hides the crosstalk in your worst-case scene - every step toward `1.0` recovers contrast
+- Save with `Save Game Cfg` (per-game) or `Save Default Cfg` (global) in the OSD footer to persist the settings
 
 #### Controls
 - If you want to use Steam Input
@@ -314,7 +342,8 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 9. Restart the game; you should hear a beep when the profile loads. Continue tuning in-OSD and re-save with `Ctrl + F7` (or the footer button) at any time
 10. Share your `Steam\config\vrto3d\Game.exe_config.json` with others
 
-#### Troubleshooting
+
+## Troubleshooting
 - If SteamVR appears on the wrong display, set `display_index` to the correct display enumeration order (or pick it from the OSD `System` tab) and restart SteamVR
 - If SteamVR crashes and disables add-ons, you will need to re-enable VRto3D in the SteamVR Status window
 - The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Steam\config\vrto3d\default_config.json`
