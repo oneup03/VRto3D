@@ -64,8 +64,8 @@ target_include_directories(driver_vrto3d PRIVATE
     ${ROOT}/external/VRto3DLib/include
     ${ROOT}/external/json/include
     ${ROOT}/external/openvr/headers
-    ${ROOT}/external/LeiaSR/include
-    ${ROOT}/external/LeiaSR/third_party/OpenCV/include
+    ${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/include
+    ${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/third_party/OpenCV/include
     ${ROOT}/external/nvapi
     ${ROOT}/external/adl_sdk/include
     ${ROOT}/utils/vrmath
@@ -87,11 +87,11 @@ else()
 endif()
 target_link_libraries(driver_vrto3d PRIVATE
     "${OPENVR_LIB_DIR}/openvr_api.lib"
-    "${ROOT}/external/LeiaSR/lib/simulatedreality.lib"
-    "${ROOT}/external/LeiaSR/lib/SimulatedRealityCore.lib"
-    "${ROOT}/external/LeiaSR/lib/SimulatedRealityDirectX.lib"
-    "${ROOT}/external/LeiaSR/lib/DimencoWeaving.lib"
-    "${ROOT}/external/LeiaSR/third_party/OpenCV/lib/x64/opencv_core343.lib"
+    "${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/lib/simulatedreality.lib"
+    "${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/lib/SimulatedRealityCore.lib"
+    "${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/lib/SimulatedRealityDirectX.lib"
+    "${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/lib/DimencoWeaving.lib"
+    "${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/third_party/OpenCV/lib/x64/opencv_core343.lib"
     "${ROOT}/external/nvapi/amd64/nvapi64.lib"
     delayimp
     d3d11
