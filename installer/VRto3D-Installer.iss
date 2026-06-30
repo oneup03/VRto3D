@@ -6,7 +6,7 @@
 #define AppURL        "https://github.com/oneup03/VRto3D"
 #define VRto3DReleaseUrl    "https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip"
 #define VRto3DPreReleaseUrl "https://github.com/oneup03/VRto3D/releases/download/latest/VRto3D.zip"
-#define WWZipUrl      "https://github.com/user-attachments/files/28202737/WibbleWobbleBeta9.zip"
+#define WWZipUrl      "https://github.com/user-attachments/files/29488165/WibbleWobbleBeta10.zip"
 #define SteamVRAppId  "250820"
 
 [Setup]
