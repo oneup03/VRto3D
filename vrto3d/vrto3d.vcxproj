@@ -98,14 +98,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
@@ -125,7 +125,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -134,7 +134,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
@@ -152,7 +152,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -161,7 +161,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>
@@ -179,7 +179,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\LeiaSR\include;..\external\LeiaSR\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -190,7 +190,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\LeiaSR\lib;..\external\LeiaSR\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>
