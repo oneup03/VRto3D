@@ -1,0 +1,861 @@
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_UNAME"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "uname"
+    candidate_directories:
+      - "/app/bin/"
+      - "/usr/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+      - "/bin/"
+      - "/usr/local/bin/"
+    searched_directories:
+      - "/app/bin/uname"
+    found: "/usr/bin/uname"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineSystem.cmake:212 (message)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      The system is: Linux - 6.16.12-valve21-1-neptune-616-g6e6a05c0d53f - x86_64
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeNinjaFindMake.cmake:5 (find_program)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_MAKE_PROGRAM"
+    description: "Program used to build from build.ninja files."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "ninja-build"
+      - "ninja"
+      - "samu"
+    candidate_directories:
+      - "/app/bin/"
+      - "/usr/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    searched_directories:
+      - "/app/bin/ninja-build"
+      - "/app/bin/ninja"
+      - "/app/bin/samu"
+      - "/usr/bin/ninja-build"
+    found: "/usr/bin/ninja"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompiler.cmake:73 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:69 (_cmake_find_compiler)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER"
+    description: "CXX compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "c++"
+      - "CC"
+      - "g++"
+      - "aCC"
+      - "cl"
+      - "bcc"
+      - "xlC"
+      - "icpx"
+      - "icx"
+      - "clang++"
+    candidate_directories:
+      - "/app/bin/"
+      - "/usr/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    searched_directories:
+      - "/app/bin/c++"
+    found: "/usr/bin/c++"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:468 (find_file)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:506 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCXXCompilerId.cpp.in"
+    candidate_directories:
+      - "/usr/share/cmake-4.3/Modules/"
+    found: "/usr/share/cmake-4.3/Modules/CMakeCXXCompilerId.cpp.in"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: /usr/bin/c++ 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
+      
+      The CXX compiler identification is GNU, found in:
+        /home/deck/Documents/claude/VRto3D/vrto3d/probe/build/CMakeFiles/4.3.3/CompilerIdCXX/a.out
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_AR"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "ar"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/ar"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_RANLIB"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "ranlib"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/ranlib"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_STRIP"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "strip"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/strip"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_LINKER"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "ld"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/ld"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_NM"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "nm"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/nm"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_OBJDUMP"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "objdump"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/objdump"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_OBJCOPY"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "objcopy"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/objcopy"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_READELF"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "readelf"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/readelf"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_DLLTOOL"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "dlltool"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    searched_directories:
+      - "/usr/bin/dlltool"
+      - "/app/bin/dlltool"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/dlltool"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_ADDR2LINE"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "addr2line"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    found: "/usr/bin/addr2line"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:206 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_TAPI"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "tapi"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    searched_directories:
+      - "/usr/bin/tapi"
+      - "/app/bin/tapi"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/tapi"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/Compiler/GNU-FindBinUtils.cmake:18 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:207 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER_AR"
+    description: "A wrapper around 'ar' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "gcc-ar-15.2"
+      - "gcc-ar-15"
+      - "gcc-ar15"
+      - "gcc-ar"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    searched_directories:
+      - "/usr/bin/gcc-ar-15.2"
+      - "/app/bin/gcc-ar-15.2"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/gcc-ar-15.2"
+      - "/usr/bin/gcc-ar-15"
+      - "/app/bin/gcc-ar-15"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/gcc-ar-15"
+      - "/usr/bin/gcc-ar15"
+      - "/app/bin/gcc-ar15"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/gcc-ar15"
+    found: "/usr/bin/gcc-ar"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/Compiler/GNU-FindBinUtils.cmake:30 (find_program)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCXXCompiler.cmake:207 (include)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER_RANLIB"
+    description: "A wrapper around 'ranlib' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "gcc-ranlib-15.2"
+      - "gcc-ranlib-15"
+      - "gcc-ranlib15"
+      - "gcc-ranlib"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/app/bin/"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/"
+    searched_directories:
+      - "/usr/bin/gcc-ranlib-15.2"
+      - "/app/bin/gcc-ranlib-15.2"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/gcc-ranlib-15.2"
+      - "/usr/bin/gcc-ranlib-15"
+      - "/app/bin/gcc-ranlib-15"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/gcc-ranlib-15"
+      - "/usr/bin/gcc-ranlib15"
+      - "/app/bin/gcc-ranlib15"
+      - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin/gcc-ranlib15"
+    found: "/usr/bin/gcc-ranlib"
+    search_context:
+      ENV{PATH}:
+        - "/app/bin"
+        - "/app/bin"
+        - "/app/bin"
+        - "/usr/bin"
+        - "/home/deck/.var/app/com.visualstudio.code/data/node_modules/bin"
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/usr/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:5 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "/home/deck/Documents/claude/VRto3D/vrto3d/probe/build/CMakeFiles/CMakeScratch/TryCompile-yqbGAe"
+      binary: "/home/deck/Documents/claude/VRto3D/vrto3d/probe/build/CMakeFiles/CMakeScratch/TryCompile-yqbGAe"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_CXX_STDLIB_MODULES_JSON: ""
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/deck/Documents/claude/VRto3D/vrto3d/probe/build/CMakeFiles/CMakeScratch/TryCompile-yqbGAe'
+        
+        Run Build Command(s): /usr/bin/ninja -v cmTC_0c647
+        [1/2] /usr/bin/c++   -v -o CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/c++
+        Target: x86_64-unknown-linux-gnu
+        Configured with: ../configure --prefix=/usr --exec-prefix=/usr --bindir=/usr/bin --sbindir=/usr/bin --sysconfdir=/etc --datadir=/usr/share --includedir=/usr/include --libdir=/usr/lib --libexecdir=/usr/libexec --localstatedir=/var --sharedstatedir=/usr/com --mandir=/usr/share/man --infodir=/usr/share/info --enable-shared --build=x86_64-unknown-linux-gnu --host=x86_64-unknown-linux-gnu lt_cv_sys_lib_dlsearch_path_spec=/usr/lib/x86_64-linux-gnu --target=x86_64-unknown-linux-gnu --disable-multilib --enable-multiarch --disable-bootstrap --enable-languages=c,c++,fortran,objc,obj-c++ --enable-default-pie --enable-default-ssp --with-isl --disable-libssp --enable-linker-build-id --disable-libstdcxx-filesystem-ts --enable-cet --with-system-zlib --with-zstd --with-tune=generic --with-arch_64=x86-64
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0c647.dir/'
+         /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_0c647.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/ccV83QtC.s
+        GNU C++17 (GCC) version 15.2.0 (x86_64-unknown-linux-gnu)
+        	compiled by GNU C version 15.2.0, GMP version 6.3.0, MPFR version 4.2.2, MPC version 1.3.1, isl version isl-0.27-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"
+        ignoring nonexistent directory "/usr/local/include"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed/x86_64-linux-gnu"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0
+         /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-unknown-linux-gnu
+         /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward
+         /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include
+         /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed
+         /usr/include/x86_64-linux-gnu
+         /usr/include
+        End of search list.
+        Compiler executable checksum: 8928cee658ee0f53f83e4e59cdf7fe1e
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0c647.dir/'
+         /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/as -v --64 -o CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccV83QtC.s
+        GNU assembler version 2.46.1 (x86_64-unknown-linux-gnu) using BFD version (GNU Binutils) 2.46.1
+        COMPILER_PATH=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/
+        LIBRARY_PATH=/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib64/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.'
+        [2/2] : && /usr/bin/c++  -v -Wl,-v CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_0c647   && :
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/c++
+        COLLECT_LTO_WRAPPER=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/lto-wrapper
+        Target: x86_64-unknown-linux-gnu
+        Configured with: ../configure --prefix=/usr --exec-prefix=/usr --bindir=/usr/bin --sbindir=/usr/bin --sysconfdir=/etc --datadir=/usr/share --includedir=/usr/include --libdir=/usr/lib --libexecdir=/usr/libexec --localstatedir=/var --sharedstatedir=/usr/com --mandir=/usr/share/man --infodir=/usr/share/info --enable-shared --build=x86_64-unknown-linux-gnu --host=x86_64-unknown-linux-gnu lt_cv_sys_lib_dlsearch_path_spec=/usr/lib/x86_64-linux-gnu --target=x86_64-unknown-linux-gnu --disable-multilib --enable-multiarch --disable-bootstrap --enable-languages=c,c++,fortran,objc,obj-c++ --enable-default-pie --enable-default-ssp --with-isl --disable-libssp --enable-linker-build-id --disable-libstdcxx-filesystem-ts --enable-cet --with-system-zlib --with-zstd --with-tune=generic --with-arch_64=x86-64
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (GCC) 
+        COMPILER_PATH=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/
+        LIBRARY_PATH=/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib64/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_0c647' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_0c647.'
+         /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/collect2 -plugin /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccDCFgEr.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0c647 /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtbeginS.o -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib64 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtendS.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crtn.o
+        collect2 version 15.2.0
+        /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/ld -plugin /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccDCFgEr.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0c647 /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtbeginS.o -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib64 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtendS.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crtn.o
+        GNU ld (GNU Binutils) 2.46.1
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_0c647' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_0c647.'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:217 (message)"
+      - "/usr/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Parsed CXX implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0]
+          add: [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-unknown-linux-gnu]
+          add: [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward]
+          add: [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include]
+          add: [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed]
+          add: [/usr/include/x86_64-linux-gnu]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0] ==> [/usr/include/c++/15.2.0]
+        collapse include dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-unknown-linux-gnu] ==> [/usr/include/c++/15.2.0/x86_64-unknown-linux-gnu]
+        collapse include dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward] ==> [/usr/include/c++/15.2.0/backward]
+        collapse include dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include] ==> [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include]
+        collapse include dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed] ==> [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed]
+        collapse include dir [/usr/include/x86_64-linux-gnu] ==> [/usr/include/x86_64-linux-gnu]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/usr/include/c++/15.2.0;/usr/include/c++/15.2.0/x86_64-unknown-linux-gnu;/usr/include/c++/15.2.0/backward;/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include;/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed;/usr/include/x86_64-linux-gnu;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:253 (message)"
+      - "/usr/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Parsed CXX implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/deck/Documents/claude/VRto3D/vrto3d/probe/build/CMakeFiles/CMakeScratch/TryCompile-yqbGAe']
+        ignore line: []
+        ignore line: [Run Build Command(s): /usr/bin/ninja -v cmTC_0c647]
+        ignore line: [[1/2] /usr/bin/c++   -v -o CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/c++]
+        ignore line: [Target: x86_64-unknown-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/usr --exec-prefix=/usr --bindir=/usr/bin --sbindir=/usr/bin --sysconfdir=/etc --datadir=/usr/share --includedir=/usr/include --libdir=/usr/lib --libexecdir=/usr/libexec --localstatedir=/var --sharedstatedir=/usr/com --mandir=/usr/share/man --infodir=/usr/share/info --enable-shared --build=x86_64-unknown-linux-gnu --host=x86_64-unknown-linux-gnu lt_cv_sys_lib_dlsearch_path_spec=/usr/lib/x86_64-linux-gnu --target=x86_64-unknown-linux-gnu --disable-multilib --enable-multiarch --disable-bootstrap --enable-languages=c c++ fortran objc obj-c++ --enable-default-pie --enable-default-ssp --with-isl --disable-libssp --enable-linker-build-id --disable-libstdcxx-filesystem-ts --enable-cet --with-system-zlib --with-zstd --with-tune=generic --with-arch_64=x86-64]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0c647.dir/']
+        ignore line: [ /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.3/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_0c647.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -o /tmp/ccV83QtC.s]
+        ignore line: [GNU C++17 (GCC) version 15.2.0 (x86_64-unknown-linux-gnu)]
+        ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.3.0  MPFR version 4.2.2  MPC version 1.3.1  isl version isl-0.27-GMP]
+        ignore line: []
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/local/include"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed/x86_64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/include"]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0]
+        ignore line: [ /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/x86_64-unknown-linux-gnu]
+        ignore line: [ /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../include/c++/15.2.0/backward]
+        ignore line: [ /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include]
+        ignore line: [ /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/include-fixed]
+        ignore line: [ /usr/include/x86_64-linux-gnu]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Compiler executable checksum: 8928cee658ee0f53f83e4e59cdf7fe1e]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0c647.dir/']
+        ignore line: [ /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/as -v --64 -o CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccV83QtC.s]
+        ignore line: [GNU assembler version 2.46.1 (x86_64-unknown-linux-gnu) using BFD version (GNU Binutils) 2.46.1]
+        ignore line: [COMPILER_PATH=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib64/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [[2/2] : && /usr/bin/c++  -v -Wl -v CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_0c647   && :]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/c++]
+        ignore line: [COLLECT_LTO_WRAPPER=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/lto-wrapper]
+        ignore line: [Target: x86_64-unknown-linux-gnu]
+        ignore line: [Configured with: ../configure --prefix=/usr --exec-prefix=/usr --bindir=/usr/bin --sbindir=/usr/bin --sysconfdir=/etc --datadir=/usr/share --includedir=/usr/include --libdir=/usr/lib --libexecdir=/usr/libexec --localstatedir=/var --sharedstatedir=/usr/com --mandir=/usr/share/man --infodir=/usr/share/info --enable-shared --build=x86_64-unknown-linux-gnu --host=x86_64-unknown-linux-gnu lt_cv_sys_lib_dlsearch_path_spec=/usr/lib/x86_64-linux-gnu --target=x86_64-unknown-linux-gnu --disable-multilib --enable-multiarch --disable-bootstrap --enable-languages=c c++ fortran objc obj-c++ --enable-default-pie --enable-default-ssp --with-isl --disable-libssp --enable-linker-build-id --disable-libstdcxx-filesystem-ts --enable-cet --with-system-zlib --with-zstd --with-tune=generic --with-arch_64=x86-64]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (GCC) ]
+        ignore line: [COMPILER_PATH=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/libexec/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64/:/lib/x86_64-linux-gnu/:/lib/../lib64/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib64/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/:/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_0c647' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_0c647.']
+        link line: [ /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/collect2 -plugin /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccDCFgEr.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0c647 /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtbeginS.o -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib64 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtendS.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crtn.o]
+          arg [/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/collect2] ==> ignore
+          arg [-plugin] ==> ignore
+          arg [/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/liblto_plugin.so] ==> ignore
+          arg [-plugin-opt=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/lto-wrapper] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccDCFgEr.res] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lc] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
+          arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
+          arg [--build-id] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [elf_x86_64] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+          arg [-pie] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_0c647] ==> ignore
+          arg [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/Scrt1.o] ==> obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/Scrt1.o]
+          arg [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crti.o] ==> obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crti.o]
+          arg [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtbeginS.o]
+          arg [-L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0] ==> dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0]
+          arg [-L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu] ==> dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu]
+          arg [-L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu] ==> dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu]
+          arg [-L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64] ==> dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64]
+          arg [-L/lib/x86_64-linux-gnu] ==> dir [/lib/x86_64-linux-gnu]
+          arg [-L/lib/../lib64] ==> dir [/lib/../lib64]
+          arg [-L/usr/lib/x86_64-linux-gnu] ==> dir [/usr/lib/x86_64-linux-gnu]
+          arg [-L/usr/lib/../lib64] ==> dir [/usr/lib/../lib64]
+          arg [-L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib] ==> dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib]
+          arg [-L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../..] ==> dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../..]
+          arg [-L/lib] ==> dir [/lib]
+          arg [-L/usr/lib] ==> dir [/usr/lib]
+          arg [-v] ==> ignore
+          arg [CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [-lstdc++] ==> lib [stdc++]
+          arg [-lm] ==> lib [m]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [-lc] ==> lib [c]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtendS.o]
+          arg [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crtn.o] ==> obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crtn.o]
+        ignore line: [collect2 version 15.2.0]
+        ignore line: [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/ld -plugin /usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-unknown-linux-gnu/15.2.0/lto-wrapper -plugin-opt=-fresolution=/tmp/ccDCFgEr.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -o cmTC_0c647 /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtbeginS.o -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib64 -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib -L/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_0c647.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtendS.o /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crtn.o]
+        linker tool for 'CXX': /usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/ld
+        collapse obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/Scrt1.o] ==> [/usr/lib/x86_64-linux-gnu/Scrt1.o]
+        collapse obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crti.o] ==> [/usr/lib/x86_64-linux-gnu/crti.o]
+        collapse obj [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu/crtn.o] ==> [/usr/lib/x86_64-linux-gnu/crtn.o]
+        collapse library dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0] ==> [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0]
+        collapse library dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu] ==> [/usr/x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../lib64] ==> [/usr/lib64]
+        collapse library dir [/lib/x86_64-linux-gnu] ==> [/lib/x86_64-linux-gnu]
+        collapse library dir [/lib/../lib64] ==> [/lib64]
+        collapse library dir [/usr/lib/x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib/../lib64] ==> [/usr/lib64]
+        collapse library dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/lib] ==> [/usr/x86_64-unknown-linux-gnu/lib]
+        collapse library dir [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../..] ==> [/usr/lib]
+        collapse library dir [/lib] ==> [/lib]
+        collapse library dir [/usr/lib] ==> [/usr/lib]
+        implicit libs: [stdc++;m;gcc_s;gcc;c;gcc_s;gcc]
+        implicit objs: [/usr/lib/x86_64-linux-gnu/Scrt1.o;/usr/lib/x86_64-linux-gnu/crti.o;/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtbeginS.o;/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/crtendS.o;/usr/lib/x86_64-linux-gnu/crtn.o]
+        implicit dirs: [/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0;/usr/x86_64-unknown-linux-gnu/lib/x86_64-linux-gnu;/usr/lib/x86_64-linux-gnu;/usr/lib64;/lib/x86_64-linux-gnu;/lib64;/usr/x86_64-unknown-linux-gnu/lib;/usr/lib;/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.3/Modules/Internal/CMakeDetermineLinkerId.cmake:38 (message)"
+      - "/usr/share/cmake-4.3/Modules/CMakeDetermineCompilerABI.cmake:299 (cmake_determine_linker_id)"
+      - "/usr/share/cmake-4.3/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Running the CXX compiler's linker: "/usr/lib/gcc/x86_64-unknown-linux-gnu/15.2.0/../../../../x86_64-unknown-linux-gnu/bin/ld" "-v"
+      GNU ld (GNU Binutils) 2.46.1
+...
