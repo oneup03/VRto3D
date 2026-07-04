@@ -1,0 +1,3 @@
+/home/deck/Documents/claude/VRto3D/vrto3d/build/CMakeFiles/driver_vrto3d.dir
+/home/deck/Documents/claude/VRto3D/vrto3d/build/CMakeFiles/edit_cache.dir
+/home/deck/Documents/claude/VRto3D/vrto3d/build/CMakeFiles/rebuild_cache.dir
