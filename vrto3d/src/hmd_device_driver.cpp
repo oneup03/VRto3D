@@ -17,21 +17,33 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
+#ifdef _WIN32
 #include "direct_mode_component.h"
 #include "dx11_renderer.h"
-#include "platform.h"
 #include "vrto3dlib/key_mappings.h"
+#else
+#include "vk/direct_mode_component_vk.h"
+#include "vk/vk_renderer.h"
+#include "vrto3dlib/key_codes.h"
+#endif
+#include "platform.h"
 #include "vrto3dlib/json_manager.h"
 #include "osd/osd_renderer.h"
 #include "osd/osd_menu.h"
 #include "vr_recenter.h"
 
+#ifdef _WIN32
 #include <shellapi.h>
 #include <shlobj.h>
 #include <urlmon.h>
 #pragma comment(lib, "urlmon.lib")
+#endif
 #include "vrto3dlib/app_id_mgr.h"
+#ifdef _WIN32
 #include "vrto3dlib/win32_helper.hpp"
+#else
+#include "vrto3dlib/linux_helper.hpp"
+#endif
 #include "vrmath.h"
 
 #include <string>
@@ -41,11 +53,60 @@
 #include <cstring>
 #include <algorithm>
 
+#ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment (lib, "WSock32.Lib")
 #include <windows.h>
 #include <xinput.h>
+#else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <filesystem>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <sched.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include "vrto3dlib/input_state.h"
+// Socket-compat shims so the shared OpenTrack UDP thread body compiles
+// unchanged against BSD sockets.
+using SOCKET = int;
+using DWORD = uint32_t;
+static constexpr int INVALID_SOCKET = -1;
+static constexpr int SOCKET_ERROR = -1;
+static inline int closesocket(int s) { return close(s); }
+// XINPUT_STATE-shaped snapshot filled from the evdev gamepad backend.
+struct PortableGamepad {
+    uint16_t wButtons = 0;
+    uint8_t  bLeftTrigger = 0, bRightTrigger = 0;
+    int16_t  sThumbLX = 0, sThumbLY = 0, sThumbRX = 0, sThumbRY = 0;
+};
+struct _XINPUT_STATE {
+    uint32_t dwPacketNumber = 0;
+    PortableGamepad Gamepad;
+};
+static inline uint32_t XInputGetStateShim(uint32_t /*idx*/, _XINPUT_STATE* out)
+{
+    const auto pad = vrto3d::input::GetGamepadState();
+    out->Gamepad.wButtons = pad.wButtons;
+    out->Gamepad.bLeftTrigger = pad.bLeftTrigger;
+    out->Gamepad.bRightTrigger = pad.bRightTrigger;
+    out->Gamepad.sThumbLX = pad.sThumbLX;
+    out->Gamepad.sThumbLY = pad.sThumbLY;
+    out->Gamepad.sThumbRX = pad.sThumbRX;
+    out->Gamepad.sThumbRY = pad.sThumbRY;
+    return pad.connected ? 0u : 1167u;  // ERROR_DEVICE_NOT_CONNECTED
+}
+#define _XInputGetState XInputGetStateShim
+#ifndef ERROR_SUCCESS
+#define ERROR_SUCCESS 0u
+#endif
+static inline void SwitchToXinpuGetStateEx() {}
+#ifndef ZeroMemory
+#define ZeroMemory(p, s) memset((p), 0, (s))
+#endif
+#endif
 
 
 // Load settings from default.vrsettings
@@ -111,7 +172,13 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     json_manager.LoadProfileFromJson(DEF_CFG, display_configuration);
 
     // Resolve display-index-driven window bounds from the active desktop layout
+#ifdef _WIN32
     const bool monitor_bounds_applied = ApplyDisplaySelectionToWindowConfig(display_configuration);
+#else
+    // Presenters fullscreen onto the selected output themselves on Linux —
+    // window_x/y bounds are not used for placement.
+    const bool monitor_bounds_applied = false;
+#endif
     LOG()
         << "Pre-init window bounds before StereoDisplayComponent: resolved="
         << (monitor_bounds_applied ? "true" : "false")
@@ -218,9 +285,13 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     // the compositor composites on the same GPU the renderer will use, and
     // signal that we fire VsyncEvent ourselves from the renderer thread.
     {
+#ifdef _WIN32
         LUID luid = platform::PrimaryAdapterLuid();
         uint64_t luid_u64 = (static_cast<uint64_t>(luid.HighPart) << 32) | luid.LowPart;
         vrp->SetUint64Property(container, vr::Prop_GraphicsAdapterLuid_Uint64, luid_u64);
+#endif
+        // No LUID handshake on Linux — the compositor and driver agree on the
+        // GPU implicitly (validated by the M0 probe without the property).
         vrp->SetBoolProperty  (container, vr::Prop_DriverDirectModeSendsVsyncEvents_Bool, true);
     }
     if (stereo_display_component_->GetConfig().dash_enable)
@@ -236,7 +307,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     // Get the current time
     std::time_t t = std::time(nullptr);
     std::tm tm;
+#ifdef _WIN32
     localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
     // Construct the JSON string with variables
     std::stringstream ss;
     ss << R"(
@@ -335,7 +410,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     {
         std::thread([launch_script]() {
             LOG() << "Executing launch_script: " << launch_script.c_str();
+#ifdef _WIN32
             const std::string command = "cmd.exe /C " + launch_script;
+#else
+            const std::string command = launch_script;  // /bin/sh via system()
+#endif
             const int result = std::system(command.c_str());
             if (result == 0) {
                 LOG() << "launch_script completed successfully";
@@ -362,6 +441,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
     cursor_thread_ = std::thread(&MockControllerDeviceDriver::CursorControlThread, this);
 
+#ifdef _WIN32
     HANDLE thread_handle = pose_thread_.native_handle();
 
     // Set the thread priority
@@ -369,19 +449,37 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         // Handle error if setting priority fails
         LOG() << "Failed to set thread priority: " << GetLastError();
     }
-
-    // Direct mode: build the DX11 renderer + selected presenter on the same
-    // adapter LUID we advertised on the HMD's property container, then stand
-    // up the IVRDriverDirectModeComponent that hands per-eye game textures
-    // through to the renderer.
+#else
     {
+        sched_param sch{};
+        sch.sched_priority = 0;
+        pthread_setschedparam(pose_thread_.native_handle(), SCHED_OTHER, &sch);
+        // Global input needs /dev/input access (user in the `input` group).
+        if (!vrto3d::input::Start()) {
+            LOG() << "evdev input unavailable — hotkeys/gamepad dead. "
+                     "Add your user to the `input` group: sudo usermod -aG input $USER";
+        }
+    }
+#endif
+
+    // Direct mode: build the platform renderer + selected presenter, then
+    // stand up the IVRDriverDirectModeComponent that hands per-eye game
+    // textures through to the renderer.
+    {
+        renderer_ = std::make_unique<StereoRenderer>();
+#ifdef _WIN32
         LUID luid = platform::PrimaryAdapterLuid();
-        renderer_ = std::make_unique<Dx11Renderer>();
-        if (!renderer_->Init(luid, stereo_display_component_->GetConfig(), GetFocusContext())) {
-            LOG() << "Dx11Renderer::Init failed; direct-mode path will be inactive";
+        const bool renderer_ok =
+            renderer_->Init(luid, stereo_display_component_->GetConfig(), GetFocusContext());
+#else
+        const bool renderer_ok =
+            renderer_->Init(stereo_display_component_->GetConfig(), GetFocusContext());
+#endif
+        if (!renderer_ok) {
+            LOG() << "Renderer Init failed; direct-mode path will be inactive";
             renderer_.reset();
         } else {
-            direct_mode_component_ = std::make_unique<DirectModeComponent>(renderer_.get());
+            direct_mode_component_ = std::make_unique<StereoDirectMode>(renderer_.get());
             // Wire OSD callbacks. The OsdRenderer is lazy-initialized on the
             // window thread when the first frame arrives.
             vrto3d::osd::MenuCallbacks cb;
@@ -464,11 +562,13 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 stereo_display_component_->SetAutoDepthLoggingEnabled(on);
             };
             cb.calibrate_leiasr_head = [this]() {
+#ifdef _WIN32
                 if (renderer_ && renderer_->Presenter()) {
                     renderer_->Presenter()->RequestCalibrate();
                     if (renderer_->Osd())
                         renderer_->Osd()->SetText("LeiaSR head pose calibrated");
                 }
+#endif  // LeiaSR is a Windows-only presenter
             };
             cb.recenter_pose = [this]() {
                 // Raise the flag; XInputUpdateThread picks it up on its next
@@ -487,6 +587,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 uint32_t pid = app_pid_.load();
                 LOG() << "request_game_focus fired pid=" << pid;
                 if (pid == 0 || !IsProcessRunning(pid)) return;
+#ifndef _WIN32
+                // No cross-client focus stealing on Wayland; X11 raise lives
+                // in the presenter's topmost handling.
+                return;
+#else
                 std::thread([this, pid]() {
                     // Let any held hotkey modifiers (Ctrl+Home was likely
                     // just used to close the menu) settle before we try
@@ -507,7 +612,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     LOG() << "request_game_focus fg_match="
                           << (GetForegroundWindow() == game_hwnd);
                 }).detach();
+#endif
             };
+#ifdef _WIN32
             cb.open_config_folder = [this]() {
                 std::string steam = GetSteamInstallPath();
                 if (steam.empty()) return;
@@ -521,6 +628,23 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 SHCreateDirectoryExA(nullptr, path.c_str(), nullptr);
                 ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             };
+#else
+            cb.open_config_folder = [this]() {
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string cmd = "xdg-open '" + steam + "/config/vrto3d' >/dev/null 2>&1 &";
+                std::system(cmd.c_str());
+            };
+            cb.open_screenshot_folder = [this]() {
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string path = steam + "/steamapps/common/SteamVR/screenshots";
+                std::error_code ec;
+                std::filesystem::create_directories(path, ec);
+                std::string cmd = "xdg-open '" + path + "' >/dev/null 2>&1 &";
+                std::system(cmd.c_str());
+            };
+#endif
             cb.set_async = [this](bool on) {
                 SetAsync(on);
             };
@@ -561,6 +685,29 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                         toast("Profile download failed: Steam path not found");
                         return;
                     }
+#ifndef _WIN32
+                    const std::string folder = steam + "/config/vrto3d";
+                    const std::string zip    = folder + "/vrto3d_profiles.zip";
+                    toast("Downloading latest profiles…", std::chrono::milliseconds(60000));
+                    std::error_code ec;
+                    std::filesystem::create_directories(folder, ec);
+                    const std::string dl =
+                        "curl -fsSL -o '" + zip + "' "
+                        "https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip";
+                    if (std::system(dl.c_str()) != 0) {
+                        toast("Profile download failed (curl)");
+                        return;
+                    }
+                    toast("Extracting profiles", std::chrono::milliseconds(30000));
+                    const std::string ex = "bsdtar -xf '" + zip + "' -C '" + folder + "'";
+                    const int rc = std::system(ex.c_str());
+                    ::remove(zip.c_str());
+                    if (rc != 0) {
+                        toast("Extract failed (bsdtar)");
+                    } else {
+                        toast("Profiles installed to config/vrto3d");
+                    }
+#else
                     const std::string folder = steam + "\\config\\vrto3d";
                     const std::string zip    = folder + "\\vrto3d_profiles.zip";
                     const wchar_t* url =
@@ -621,6 +768,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     } else {
                         toast("Profiles installed to config\\vrto3d");
                     }
+#endif
                 }).detach();
             };
 
@@ -672,7 +820,11 @@ void MockControllerDeviceDriver::OpenTrackThread()
 {
     SOCKET socket_s;
     struct sockaddr_in from = {};
+#ifdef _WIN32
     int from_len = sizeof(from);
+#else
+    socklen_t from_len = sizeof(from);
+#endif
     struct TOpenTrack {
         double X;
         double Y;
@@ -684,6 +836,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
     TOpenTrack open_track;
     auto ot_port = stereo_display_component_->GetConfig().open_track_port;
 
+#ifdef _WIN32
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
@@ -715,6 +868,26 @@ void MockControllerDeviceDriver::OpenTrackThread()
             }
         }
     }
+#else
+    {
+        struct sockaddr_in local = {};
+        local.sin_family = AF_INET;
+        local.sin_port = htons(ot_port);
+        local.sin_addr.s_addr = INADDR_ANY;
+
+        socket_s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (socket_s == INVALID_SOCKET) {
+            LOG() << "OpenTrack socket creation failed: " << errno;
+        } else {
+            fcntl(socket_s, F_SETFL, fcntl(socket_s, F_GETFL, 0) | O_NONBLOCK);
+            if (bind(socket_s, (struct sockaddr*)&local, sizeof(local)) == SOCKET_ERROR) {
+                LOG() << "OpenTrack bind failed: " << errno;
+                closesocket(socket_s);
+                socket_s = INVALID_SOCKET;
+            }
+        }
+    }
+#endif
 
     while (is_active_) {
         // Skip the recv pump entirely when OpenTrack is off; the OSD can flip
@@ -745,7 +918,9 @@ void MockControllerDeviceDriver::OpenTrackThread()
         else std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     closesocket(socket_s);
+#ifdef _WIN32
     WSACleanup();
+#endif
 }
 
 
@@ -1327,6 +1502,13 @@ void MockControllerDeviceDriver::MonitorModeThread() {
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::CursorControlThread()
 {
+#ifndef _WIN32
+    // Cursor clipping/hiding is not implementable from an external process on
+    // Wayland; X11 support could ride on XGrabPointer later. Idle politely.
+    while (is_active_.load(std::memory_order_relaxed))
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    return;
+#else
     bool clip_active = false;
 
     while (is_active_.load(std::memory_order_relaxed)) {
@@ -1395,6 +1577,7 @@ void MockControllerDeviceDriver::CursorControlThread()
     if (clip_active) {
         ClipCursor(nullptr);
     }
+#endif
 }
 
 

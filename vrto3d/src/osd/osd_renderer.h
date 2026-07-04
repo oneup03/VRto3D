@@ -17,11 +17,17 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#ifdef _WIN32
 #include <wrl/client.h>
 #include <d3d11.h>
+#else
+#include <vulkan/vulkan.h>
+namespace vrto3d::vk { struct DeviceCtx; }
+#endif
 
 class StereoDisplayComponent;
 
@@ -45,6 +51,7 @@ public:
     OsdRenderer();
     ~OsdRenderer();
 
+#ifdef _WIN32
     // Initialize ImGui + composite resources. `eye_w`/`eye_h` are the per-eye
     // dimensions of the SbS frame (i.e. width = full_sbs_width / 2).
     // `headset_hwnd` is used for mouse coordinate mapping.
@@ -59,6 +66,19 @@ public:
     // user switched output_mode and the SbS frame size moved). Cheap no-op
     // when the dims match the current target.
     void OnResize(UINT eye_w, UINT eye_h);
+#else
+    // Vulkan/Linux variant. `sbs_format` is out_sbs_'s VkFormat (the OSD
+    // renders straight into out_sbs_ via a LOAD render pass — no offscreen
+    // RT + composite pass like the D3D11 path needs).
+    bool Init(vrto3d::vk::DeviceCtx* ctx,
+              VkFormat sbs_format,
+              uint32_t eye_w, uint32_t eye_h,
+              void* native_window,
+              StereoDisplayComponent* component,
+              MenuCallbacks callbacks);
+
+    void OnResize(uint32_t eye_w, uint32_t eye_h);
+#endif
 
     void Shutdown();
 
@@ -91,7 +111,15 @@ public:
     //   3. toast text widget
     //   4. ImGui::Render → render draw lists into offscreen osd_tex_
     //   5. Two-pass blend onto out_sbs (left half + right half)
+#ifdef _WIN32
     void RenderFrame(ID3D11Texture2D* out_sbs);
+#else
+    // Vulkan variant: records the ImGui draw data twice (left/right eye
+    // viewports) into out_sbs via a loadOp=LOAD render pass, inside the
+    // caller's command buffer. `out_sbs` must be in COLOR_ATTACHMENT_OPTIMAL.
+    void RenderFrame(VkCommandBuffer cmd, VkImage out_sbs, VkImageView out_sbs_view,
+                     uint32_t sbs_w, uint32_t sbs_h);
+#endif
 
     // Plumbing for the menu's app-name display + version strings.
     void SetAppName(const std::string& app_name);

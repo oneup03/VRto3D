@@ -27,7 +27,17 @@
 #include "hmd_device_driver.h"
 #include "platform.h"
 #include "vrto3dlib/stereo_config.h"
+#ifdef _WIN32
 #include "vrto3dlib/key_mappings.h"
+#else
+#include "vrto3dlib/key_codes.h"
+#include "vrto3dlib/key_names.h"
+#include <unordered_map>
+// Keybind-type name map (mirrors key_mappings.h, which is Windows-only).
+static std::unordered_map<std::string, int> KeyBindTypes = {
+    {"switch", SWITCH}, {"toggle", TOGGLE}, {"hold", HOLD}
+};
+#endif
 
 #include <sstream>
 
@@ -388,6 +398,7 @@ void ReparseHotkey(const std::string& s, int32_t& code, bool* xinput) {
     code = 0;
     if (xinput) *xinput = false;
     if (s.empty()) return;
+#ifdef _WIN32
     if (VirtualKeyMappings.find(s) != VirtualKeyMappings.end()) {
         code = VirtualKeyMappings[s];
         if (xinput) *xinput = false;
@@ -402,6 +413,25 @@ void ReparseHotkey(const std::string& s, int32_t& code, bool* xinput) {
         }
         if (xinput) *xinput = true;
     }
+#else
+    // key_names accepts both the portable vocabulary and legacy VK_*/XINPUT_*
+    // spellings, so OSD-entered names parse identically to JsonManager.
+    const int key = vrto3d::keys::KeyCodeFromName(s);
+    if (key >= 0) {
+        code = key;
+        if (xinput) *xinput = false;
+        return;
+    }
+    if (vrto3d::keys::IsGamepadName(s) || s.find('+') != std::string::npos) {
+        std::stringstream ss(s);
+        std::string tok;
+        while (std::getline(ss, tok, '+')) {
+            const int bits = vrto3d::keys::PadBitsFromName(tok);
+            if (bits >= 0) code |= bits;
+        }
+        if (xinput) *xinput = true;
+    }
+#endif
 }
 
 std::vector<float> CsvToFloats(const char* s) {
