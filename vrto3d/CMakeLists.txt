@@ -170,7 +170,11 @@ else()
         src/presenter/wayland_protocols
     )
     find_package(Threads REQUIRED)
+    # libopenvr_api.so is needed for the OpenVR *client* API used by
+    # vr_recenter.cpp (VR_Init/VR_GetGenericInterface); the driver-side
+    # interfaces come in through HmdDriverFactory and need no library.
     target_link_libraries(driver_vrto3d PRIVATE
+        "${ROOT}/external/openvr/lib/linux64/libopenvr_api.so"
         vulkan
         X11
         Xrandr
@@ -217,5 +221,13 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OPENVR_DLL}"
                 "${OUT_DIR}/${BIN_SUBDIR}/openvr_api.dll"
         COMMENT "Staging openvr_api.dll next to driver_vrto3d"
+    )
+else()
+    # RPATH $ORIGIN resolves this staged copy at dlopen time.
+    add_custom_command(TARGET driver_vrto3d POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROOT}/external/openvr/bin/linux64/libopenvr_api.so"
+                "${OUT_DIR}/${BIN_SUBDIR}/libopenvr_api.so"
+        COMMENT "Staging libopenvr_api.so next to driver_vrto3d"
     )
 endif()

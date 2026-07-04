@@ -24,7 +24,7 @@
 12785	24253	1783170869475186237	CMakeFiles/driver_vrto3d.dir/home/deck/Documents/claude/VRto3D/external/VRto3DLib/src/app_id_mgr.cpp.o	7ab66dd8b85649a6
 5931	26142	1783170862621541007	CMakeFiles/driver_vrto3d.dir/home/deck/Documents/claude/VRto3D/external/imgui/imgui.cpp.o	7323fa243889c336
 10563	33533	1783170867253452913	CMakeFiles/driver_vrto3d.dir/home/deck/Documents/claude/VRto3D/external/VRto3DLib/src/json_manager.cpp.o	cbacb866ba2e42f9
-1605	2210	1783171099513171081	driver_vrto3d.so	658e61f65a31f3be
+61	629	1783172575434358066	driver_vrto3d.so	d292b720942029b3
 5	60	1783172575379781489	CMakeFiles/driver_vrto3d.dir/src/presenter/wayland_protocols/wlr-layer-shell-client-protocol.c.o	4e4abda288bbd5bc
 5	61	1783172575378356204	CMakeFiles/driver_vrto3d.dir/src/presenter/wayland_protocols/xdg-shell-client-protocol.c.o	2b6e0c74bb2f6dc5
-61	629	1783172575434358066	driver_vrto3d.so	d292b720942029b3
+5	698	1783173183435275618	driver_vrto3d.so	87da41486d217cc2
