@@ -38,7 +38,7 @@ rule CXX_SHARED_LIBRARY_LINKER__driver_vrto3d_RelWithDebInfo
   depfile = $DEP_FILE
   deps = gcc
   command = $PRE_LINK && /usr/bin/c++ -fPIC $LANGUAGE_COMPILE_FLAGS $ARCH_FLAGS $LINK_FLAGS $SONAME_FLAG$SONAME -o $TARGET_FILE $in $LINK_PATH $LINK_LIBRARIES && $POST_BUILD
-  description = Linking CXX shared library $TARGET_FILE; Staging driver_vrto3d into /home/deck/Documents/claude/VRto3D/vrto3d/build/output/drivers/vrto3d
+  description = Linking CXX shared library $TARGET_FILE; Staging driver_vrto3d into /home/deck/Documents/claude/VRto3D/vrto3d/build/output/drivers/vrto3d; Staging libopenvr_api.so next to driver_vrto3d
   restat = $RESTAT
 
 
