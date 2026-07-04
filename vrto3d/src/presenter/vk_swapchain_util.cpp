@@ -47,10 +47,14 @@ VkSurfaceFormatKHR PickSurfaceFormat(VkPhysicalDevice phys, VkSurfaceKHR surface
     if (formats.empty()) {
         return { VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
     }
-    for (const auto& f : formats) {
-        if (f.format == VK_FORMAT_B8G8R8A8_SRGB
-            && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            return f;
+    // Byte-preserving chain (matches the Windows D3D11 path): the repack
+    // shader reads gamma-encoded values from a UNORM view and must write them
+    // out unmodified, so prefer a UNORM swapchain over sRGB.
+    for (VkFormat want : {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM}) {
+        for (const auto& f : formats) {
+            if (f.format == want && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                return f;
+            }
         }
     }
     return formats.front();

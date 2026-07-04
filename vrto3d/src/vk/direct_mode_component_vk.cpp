@@ -32,6 +32,19 @@ vr::IVRIPCResourceManagerClient* ResourceManager()
     return vr::VRIPCResourceManager();
 }
 
+// The whole present chain is byte-preserving in gamma space, matching the
+// Windows D3D11 path (raw copies, raw sampling, anaglyph matrices designed
+// for gamma-encoded values). Importing the compositor's sRGB images with the
+// UNORM twin format keeps Vulkan from silently linearizing at the blit.
+VkFormat RawTwin(uint32_t vk_format)
+{
+    switch ((VkFormat)vk_format) {
+        case VK_FORMAT_R8G8B8A8_SRGB: return VK_FORMAT_R8G8B8A8_UNORM;
+        case VK_FORMAT_B8G8R8A8_SRGB: return VK_FORMAT_B8G8R8A8_UNORM;
+        default:                      return (VkFormat)vk_format;
+    }
+}
+
 }  // namespace
 
 DirectModeComponentVk::DirectModeComponentVk(VkRenderer* renderer)
@@ -125,7 +138,7 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
     VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     ici.pNext = &ext_img;
     ici.imageType = VK_IMAGE_TYPE_2D;
-    ici.format = (VkFormat)vk_format;
+    ici.format = RawTwin(vk_format);
     ici.extent = {width, height, 1};
     ici.mipLevels = 1;
     ici.arrayLayers = 1;
@@ -195,7 +208,7 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
     VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     vci.image = image;
     vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    vci.format = (VkFormat)vk_format;
+    vci.format = RawTwin(vk_format);
     vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     VkImageView view = VK_NULL_HANDLE;
     if (vrto3d::vk::LogIfFailed(vkCreateImageView(ctx.device, &vci, nullptr, &view),
@@ -213,7 +226,7 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
     tex.view = view;
     tex.width = width;
     tex.height = height;
-    tex.format = (VkFormat)vk_format;
+    tex.format = RawTwin(vk_format);
     tex.pid = pid;
     tex.set_key = set_key;
     auto [it, inserted] = textures_.insert_or_assign(handle, tex);

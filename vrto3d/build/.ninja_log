@@ -28,3 +28,6 @@
 5	60	1783172575379781489	CMakeFiles/driver_vrto3d.dir/src/presenter/wayland_protocols/wlr-layer-shell-client-protocol.c.o	4e4abda288bbd5bc
 5	61	1783172575378356204	CMakeFiles/driver_vrto3d.dir/src/presenter/wayland_protocols/xdg-shell-client-protocol.c.o	2b6e0c74bb2f6dc5
 5	698	1783173183435275618	driver_vrto3d.so	87da41486d217cc2
+7	1744	1783174545614248462	CMakeFiles/driver_vrto3d.dir/src/presenter/vk_swapchain_util.cpp.o	e73993bd6c80c5b7
+6	2553	1783174545613248504	CMakeFiles/driver_vrto3d.dir/src/vk/direct_mode_component_vk.cpp.o	2d1e6b6630dea911
+2553	3024	1783174548160559165	driver_vrto3d.so	87da41486d217cc2
