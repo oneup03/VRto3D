@@ -18,8 +18,13 @@
 #include "openvr_driver.h"
 #include <cstring>
 
+#ifdef _WIN32
 #define HMD_DLL_EXPORT extern "C" __declspec( dllexport )
 #define HMD_DLL_IMPORT extern "C" __declspec( dllimport )
+#else
+#define HMD_DLL_EXPORT extern "C" __attribute__(( visibility( "default" ) ))
+#define HMD_DLL_IMPORT extern "C"
+#endif
 
 MyDeviceProvider device_provider;
 

@@ -1,0 +1,45 @@
+name: Build Linux
+
+on:
+  push:
+    branches:
+      - main
+      - linux_port
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  Linux64:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.SHARED_PAT }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libvulkan-dev libx11-dev \
+            libxrandr-dev libwayland-dev wayland-protocols libxkbcommon-dev
+
+      - name: Configure
+        run: cmake -S vrto3d -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Package driver folder
+        run: |
+          cd build/output
+          tar czf ../../vrto3d-linux64.tar.gz drivers
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vrto3d-linux64
+          path: vrto3d-linux64.tar.gz

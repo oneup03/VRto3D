@@ -21,9 +21,11 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
 #include <wrl/client.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#endif
 
 #include "openvr_driver.h"
 
@@ -54,6 +56,13 @@ bool ResolveTargetMonitors(int32_t display_index,
 // Refresh rate lookup for the resolved primary monitor.
 float QueryRefreshHz(const MonitorInfo& monitor, float fallback_hz = 60.0f);
 
+// Monotonic clock in seconds (QPC on Windows, CLOCK_MONOTONIC on Linux).
+double MonotonicSeconds();
+
+// Short process name for a pid ("game.exe" on Windows, /proc comm on Linux).
+std::string GetProcessNameByPid(uint32_t pid);
+
+#ifdef _WIN32
 // LUID of the default graphics adapter — compositor picks GPU off the HMD's
 // Prop_GraphicsAdapterLuid_Uint64.
 LUID PrimaryAdapterLuid();
@@ -107,6 +116,7 @@ std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
 // awareness. Call from each presenter's window thread before CreatePresentWindow.
 // No-op on pre-Win10-1607.
 void EnablePerMonitorV2DpiAwareness();
+#endif  // _WIN32
 
 
 // Lightweight process helpers (for focus-thread's "is the tracked app still running?" check).

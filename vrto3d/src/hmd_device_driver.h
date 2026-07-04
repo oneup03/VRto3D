@@ -31,8 +31,20 @@
 struct _XINPUT_STATE;
 typedef _XINPUT_STATE XINPUT_STATE;
 
+// Platform renderer pair: D3D11 on Windows, Vulkan on Linux. Same public
+// surface (Init/Shutdown/ConfigureOsd/Osd/RequestScreenshot/OnAppConnect/...),
+// selected at compile time so shared driver code uses the aliases only.
+#ifdef _WIN32
 class Dx11Renderer;
 class DirectModeComponent;
+using StereoRenderer   = Dx11Renderer;
+using StereoDirectMode = DirectModeComponent;
+#else
+class VkRenderer;
+class DirectModeComponentVk;
+using StereoRenderer   = VkRenderer;
+using StereoDirectMode = DirectModeComponentVk;
+#endif
 
 
 class StereoDisplayComponent : public vr::IVRDisplayComponent
@@ -182,8 +194,8 @@ public:
     // Reach the renderer + direct-mode component so the device provider can
     // drain stale shared-texture handles on VREvent_ProcessDisconnected and
     // toggle the renderer's pause-on-disconnect circuit-breaker.
-    Dx11Renderer*         GetRenderer()            { return renderer_.get(); }
-    DirectModeComponent*  GetDirectModeComponent() { return direct_mode_component_.get(); }
+    StereoRenderer*   GetRenderer()            { return renderer_.get(); }
+    StereoDirectMode* GetDirectModeComponent() { return direct_mode_component_.get(); }
 
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;
@@ -200,8 +212,8 @@ private:
 
     std::atomic< bool > is_active_;
     std::atomic< uint32_t > device_index_;         // HMD object id (from Activate)
-    std::unique_ptr< Dx11Renderer > renderer_;
-    std::unique_ptr< DirectModeComponent > direct_mode_component_;
+    std::unique_ptr< StereoRenderer > renderer_;
+    std::unique_ptr< StereoDirectMode > direct_mode_component_;
     std::atomic< bool > is_on_top_;
     std::atomic< bool > man_on_top_;
     // Snapshot of man_on_top_ at the moment of ProcessDisconnected, so a

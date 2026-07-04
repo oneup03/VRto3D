@@ -18,6 +18,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <algorithm>
 #include <thread>
+#ifdef _WIN32
 #include <Windows.h>
 #include <psapi.h>
 #include <tchar.h>
@@ -26,6 +27,17 @@
 #include "device_provider.h"
 #include "dx11_renderer.h"
 #include "direct_mode_component.h"
+#else
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "vrto3dlib/linux_helper.hpp"
+#include "device_provider.h"
+#include "vk/vk_renderer.h"
+#include "vk/direct_mode_component_vk.h"
+#endif
 #include "vr_recenter.h"
 
 namespace {
@@ -57,6 +69,7 @@ void ScheduleAutoExitCheck(uint32_t pid)
 //-----------------------------------------------------------------------------
 vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 {
+#ifdef _WIN32
     global_mtx_ = CreateMutex(NULL, TRUE, kVRto3DMutexName);
 
     // Best-effort process-level DPI elevation. Usually fails because vrserver
@@ -70,6 +83,18 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
             set_proc_ctx(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         }
     }
+#else
+    // Single-instance guard: flock'd file in XDG_RUNTIME_DIR (mirrors the
+    // Global\VRto3DDriver named mutex on Windows).
+    {
+        const char* run = getenv("XDG_RUNTIME_DIR");
+        std::string lock_path = std::string(run ? run : "/tmp") + "/" + kVRto3DLockName;
+        int fd = open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600);
+        if (fd >= 0)
+            flock(fd, LOCK_EX | LOCK_NB);  // advisory; keep fd for process lifetime
+        global_mtx_ = (void*)(intptr_t)fd;
+    }
+#endif
 
     // We need to initialise our driver context to make calls to the server.
     // OpenVR provides a macro to do this for us.
@@ -142,8 +167,13 @@ void MyDeviceProvider::RunFrame()
             auto lowerAppName = appName;
             std::transform(lowerAppName.begin(), lowerAppName.end(), lowerAppName.begin(), ::tolower);
             
-            if (Skip_Processes.find(lowerAppName) == Skip_Processes.end() &&
-                lowerAppName.find("exe") != std::string::npos)
+#ifdef _WIN32
+            const bool name_is_game = lowerAppName.find("exe") != std::string::npos;
+#else
+            // Native Linux games have no .exe suffix; Proton games keep it.
+            const bool name_is_game = !lowerAppName.empty();
+#endif
+            if (Skip_Processes.find(lowerAppName) == Skip_Processes.end() && name_is_game)
             {
                 app_name_ = appName;
                 app_pid_ = vrEvent.data.process.pid;
@@ -225,10 +255,17 @@ void MyDeviceProvider::LeaveStandby()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::Cleanup()
 {
+#ifdef _WIN32
     if (global_mtx_)
     {
         CloseHandle((HANDLE)global_mtx_);
     }
+#else
+    if ((intptr_t)global_mtx_ >= 0)
+    {
+        close((int)(intptr_t)global_mtx_);
+    }
+#endif
 
     // Our controller devices will have already deactivated. Let's now destroy them.
     my_hmd_device_ = nullptr;
