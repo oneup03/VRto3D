@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(vrto3d_driver LANGUAGES CXX)
+project(vrto3d_driver LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
