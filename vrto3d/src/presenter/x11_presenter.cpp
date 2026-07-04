@@ -15,6 +15,7 @@
  * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
  */
 #include "presenter/x11_presenter.h"
+#include "presenter/x11_modeline.h"
 
 #include <cstring>
 #include <mutex>
@@ -209,6 +210,18 @@ bool X11Presenter::Init(vrto3d::vk::DeviceCtx* ctx, const StereoDisplayDriverCon
     width_  = chosen->width + (secondary ? secondary->width : 0);
     height_ = chosen->height;
 
+    // Frame-packed output: switch the target output to the HDMI 1.4 custom
+    // timing at runtime (the Linux analog of the NVAPI/CRU path). Restored in
+    // Shutdown. Only possible in a real X session — under XWayland the mode
+    // set fails and we fall back to the current mode (EDID override route
+    // documented in README-linux.md).
+    if (const FramePackTimingSpec* spec = GetFramePackTimingSpec(cfg.output_mode)) {
+        if (ApplyFramePackedModeX11(dpy, cfg.display_index, *spec, modeline_state_)) {
+            width_ = spec->active_w;
+            height_ = spec->active_h;
+        }
+    }
+
     PresenterLog("X11Presenter: output '%s' %ux%u+%d+%d @%.2fHz%s (display_index=%d)",
                  chosen->name.c_str(), width_, height_, chosen->x, chosen->y,
                  chosen->refresh_hz, secondary ? " (spanning two outputs)" : "",
@@ -321,6 +334,7 @@ void X11Presenter::Shutdown()
     vk_surface_ = VK_NULL_HANDLE;
 
     if (dpy_) {
+        RestoreModeX11(dpy_, modeline_state_);
         if (window_) {
             XDestroyWindow(dpy_, static_cast<Window>(window_));
             window_ = 0;

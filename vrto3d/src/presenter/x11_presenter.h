@@ -22,6 +22,7 @@
 
 #include "presenter/vk_presenter.h"
 #include "presenter/vk_swapchain_util.h"
+#include "presenter/x11_modeline.h"
 
 // Xlib types — kept out of the header so it doesn't leak X11 macros
 // (None/Bool/Status...) into every includer. XID-derived handles are
@@ -75,6 +76,7 @@ private:
     vk::DeviceCtx* ctx_ = nullptr;
 
     _XDisplay*     dpy_ = nullptr;
+    X11ModelineState modeline_state_;
     unsigned long  window_ = 0;           // Window (XID)
     unsigned long  wm_delete_window_ = 0; // Atom
     uint32_t       width_ = 0;
