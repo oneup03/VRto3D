@@ -35,6 +35,7 @@
 #include "openvr_driver.h"
 
 #include "focus_context.h"
+#include "focus_policy.h"
 #include "vk/vk_context.h"
 #include "vrto3dlib/stereo_config.h"
 
@@ -180,5 +181,5 @@ private:
     bool focus_state_init_ = false;
     bool last_on_top_ = false;
     bool last_capture_ = false;
-    uint32_t last_auto_focused_pid_ = 0;
+    vrto3d::FocusLatchState focus_latch_;
 };

@@ -659,34 +659,20 @@ void VkRenderer::PresentThread()
         // an open OSD forces on-top + input capture so clicks/keys drive the
         // GUI rather than the game.
         {
-            const bool menu_open  = osd_renderer_ && osd_renderer_->MenuVisible();
-            const bool is_on_top  = focus_.is_on_top  && focus_.is_on_top->load();
-            const bool man_on_top = focus_.man_on_top && focus_.man_on_top->load();
-            const uint32_t pid    = focus_.app_pid ? focus_.app_pid->load() : 0;
-            const bool auto_focus = focus_.auto_focus ? focus_.auto_focus->load() : true;
-            const bool app_running = pid != 0 && platform::IsProcessRunning(pid);
+            const bool menu_open = osd_renderer_ && osd_renderer_->MenuVisible();
+            vrto3d::FocusInputs fi;
+            fi.is_on_top   = focus_.is_on_top  && focus_.is_on_top->load();
+            fi.man_on_top  = focus_.man_on_top && focus_.man_on_top->load();
+            fi.auto_focus  = focus_.auto_focus ? focus_.auto_focus->load() : true;
+            fi.app_pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
+            fi.app_running = fi.app_pid != 0 && platform::IsProcessRunning(fi.app_pid);
+            fi.force_on_top = menu_open;  // an open OSD must be visible to use
 
-            // Reset the auto-focus latch when the tracked app is gone so a
-            // future launch can re-trigger.
-            if (pid == 0 || !app_running)
-                last_auto_focused_pid_ = 0;
-
-            bool want_on_top = false;
-            if (menu_open) {
-                want_on_top = true;                 // must be visible to use it
-            } else if (man_on_top) {
-                want_on_top = true;
-            } else if (is_on_top && app_running) {
-                want_on_top = true;
-            } else if (auto_focus && !is_on_top && app_running &&
-                       pid != last_auto_focused_pid_) {
-                // Auto-raise once per new app PID; latch is_on_top+man_on_top
-                // so the user can still Ctrl+F8 it back down for this app.
-                if (focus_.is_on_top)  focus_.is_on_top->store(true);
-                if (focus_.man_on_top) focus_.man_on_top->store(true);
-                last_auto_focused_pid_ = pid;
-                want_on_top = true;
-            }
+            bool set_is_on_top = false, set_man_on_top = false;
+            const bool want_on_top =
+                vrto3d::ComputeWantOnTop(fi, focus_latch_, &set_is_on_top, &set_man_on_top);
+            if (set_is_on_top && focus_.is_on_top)  focus_.is_on_top->store(true);
+            if (set_man_on_top && focus_.man_on_top) focus_.man_on_top->store(true);
 
             // Capture input only while the OSD is open (game shielded from menu
             // clicks/typing); otherwise click-through so input reaches the game.
