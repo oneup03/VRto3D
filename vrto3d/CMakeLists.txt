@@ -44,6 +44,7 @@ else()
         src/presenter/wayland_presenter.cpp
         src/presenter/x11_presenter.cpp
         src/presenter/x11_modeline.cpp
+        src/presenter/wibblewobble_presenter_linux.cpp
         src/presenter/wayland_protocols/xdg-shell-client-protocol.c
         src/presenter/wayland_protocols/wlr-layer-shell-client-protocol.c
         src/osd/osd_renderer_vk.cpp
@@ -168,6 +169,7 @@ else()
     target_include_directories(driver_vrto3d PRIVATE
         ${ROOT}/external/stb
         src/presenter/wayland_protocols
+        /usr/include/libdrm
     )
     find_package(Threads REQUIRED)
     # libopenvr_api.so is needed for the OpenVR *client* API used by
@@ -180,6 +182,7 @@ else()
         Xrandr
         wayland-client
         xkbcommon
+        dl
         Threads::Threads
     )
     target_compile_options(driver_vrto3d PRIVATE -fvisibility=hidden -fPIC)
