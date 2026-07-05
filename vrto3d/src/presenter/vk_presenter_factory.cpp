@@ -21,6 +21,7 @@
 
 #include "presenter/vk_swapchain_util.h"
 #include "presenter/wayland_presenter.h"
+#include "presenter/wibblewobble_presenter_linux.h"
 #include "presenter/x11_presenter.h"
 
 namespace vrto3d {
@@ -35,12 +36,18 @@ bool EnvSet(const char* name)
 
 }  // namespace
 
-// Session-based selection. VRTO3D_PRESENTER=x11|wayland forces a backend
-// (a config field may replace the env override later); otherwise pick by
-// session env: WAYLAND_DISPLAY -> Wayland, else DISPLAY -> X11.
-std::unique_ptr<IVkPresenter> MakeVkPresenter(const StereoDisplayDriverConfiguration& /*cfg*/)
+// Session-based selection. VRTO3D_PRESENTER=x11|wayland|wibblewobble forces a
+// backend; otherwise output_mode==WibbleWobble routes to the WibbleWobbleLinux
+// handoff, and the rest pick by session env (WAYLAND_DISPLAY -> Wayland, else
+// DISPLAY -> X11).
+std::unique_ptr<IVkPresenter> MakeVkPresenter(const StereoDisplayDriverConfiguration& cfg)
 {
     const char* forced = std::getenv("VRTO3D_PRESENTER");
+    if ((forced && std::strcmp(forced, "wibblewobble") == 0) ||
+        cfg.output_mode == OutputMode::WibbleWobble) {
+        PresenterLog("MakeVkPresenter: WibbleWobble output — streaming to wwserver");
+        return std::make_unique<WibbleWobblePresenter>();
+    }
     if (forced && std::strcmp(forced, "x11") == 0) {
         PresenterLog("MakeVkPresenter: VRTO3D_PRESENTER=x11");
         return std::make_unique<X11Presenter>();
