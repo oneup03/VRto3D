@@ -47,10 +47,13 @@ VkSurfaceFormatKHR PickSurfaceFormat(VkPhysicalDevice phys, VkSurfaceKHR surface
     if (formats.empty()) {
         return { VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
     }
-    // Byte-preserving chain (matches the Windows D3D11 path): the repack
-    // shader reads gamma-encoded values from a UNORM view and must write them
-    // out unmodified, so prefer a UNORM swapchain over sRGB.
-    for (VkFormat want : {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM}) {
+    // The SteamVR Linux compositor hands us LINEAR eye pixels (direct mode).
+    // We sample them raw (UNORM imports / out_sbs), so the final present must
+    // sRGB-ENCODE once — an _SRGB swapchain does that on store, handing the
+    // compositor correctly-encoded bytes. A UNORM swapchain skips the encode,
+    // so linear values are shown as if sRGB and the whole image is too dark.
+    // Prefer _SRGB; UNORM only as a last resort.
+    for (VkFormat want : {VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB}) {
         for (const auto& f : formats) {
             if (f.format == want && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                 return f;
