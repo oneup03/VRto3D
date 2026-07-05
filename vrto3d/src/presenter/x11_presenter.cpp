@@ -412,16 +412,8 @@ bool X11Presenter::PumpEvents()
 }
 
 
-bool X11Presenter::AcquireNext(FrameTarget* out, VkSemaphore signal_sem)
-{
-    return swapchain_.AcquireNext(out, signal_sem);
-}
-
-
-bool X11Presenter::Present(uint32_t image_index, VkSemaphore wait_sem)
-{
-    return swapchain_.Present(image_index, wait_sem);
-}
+// AcquireNext / Present / RenderPass / Extent / Format inherited from
+// SwapchainPresenterBase (delegate to swapchain_).
 
 
 void X11Presenter::BringToTop()

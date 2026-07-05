@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-#include "presenter/vk_presenter.h"
+#include "presenter/swapchain_presenter_base.h"
 #include "presenter/vk_swapchain_util.h"
 
 // Raw libwayland-client types (from wayland-client-protocol.h and the
@@ -52,7 +52,7 @@ namespace vrto3d {
 // wl_event_queue and reads the socket during FIFO presents, which also
 // queues our default-queue events for the next dispatch_pending. Blocking
 // roundtrips are confined to Init().
-class WaylandPresenter final : public IVkPresenter {
+class WaylandPresenter final : public SwapchainPresenterBase {
 public:
     WaylandPresenter() = default;
     ~WaylandPresenter() override;
@@ -61,12 +61,8 @@ public:
     void Shutdown() override;
 
     bool PumpEvents() override;
-    bool AcquireNext(FrameTarget* out, VkSemaphore signal_sem) override;
-    bool Present(uint32_t image_index, VkSemaphore wait_sem) override;
-
-    VkRenderPass RenderPass() const override { return swapchain_.render_pass; }
-    VkExtent2D   Extent() const override { return swapchain_.extent; }
-    VkFormat     Format() const override { return swapchain_.format; }
+    // AcquireNext/Present/RenderPass/Extent/Format inherited from
+    // SwapchainPresenterBase (delegate to swapchain_).
     const char*  Name() const override { return "WaylandPresenter"; }
 
     // Layer-shell overlay surfaces are inherently topmost; xdg fullscreen
@@ -112,7 +108,7 @@ private:
     // surface. Shared by surface init and SetInputCapture.
     void SetSurfaceInputRegion(bool capture);
 
-    vk::DeviceCtx* ctx_ = nullptr;
+    // ctx_ + swapchain_ live in SwapchainPresenterBase.
 
     wl_display*    display_ = nullptr;
     wl_registry*   registry_ = nullptr;
@@ -127,7 +123,6 @@ private:
     xdg_toplevel*          xdg_toplevel_ = nullptr;
 
     VkSurfaceKHR    vk_surface_ = VK_NULL_HANDLE;
-    SwapchainBundle swapchain_;
 
     // Configure-driven state.
     bool     configured_ = false;

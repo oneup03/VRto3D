@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-#include "presenter/vk_presenter.h"
+#include "presenter/swapchain_presenter_base.h"
 #include "presenter/vk_swapchain_util.h"
 #include "presenter/x11_modeline.h"
 
@@ -36,7 +36,7 @@ namespace vrto3d {
 // by cfg.display_index (1-based connected-output order; 0 = the primary
 // output). DualDisplay/DualDisplayFlip span the chosen output plus its
 // contiguous right neighbor when one with identical geometry exists.
-class X11Presenter final : public IVkPresenter {
+class X11Presenter final : public SwapchainPresenterBase {
 public:
     X11Presenter() = default;
     ~X11Presenter() override;
@@ -45,12 +45,8 @@ public:
     void Shutdown() override;
 
     bool PumpEvents() override;
-    bool AcquireNext(FrameTarget* out, VkSemaphore signal_sem) override;
-    bool Present(uint32_t image_index, VkSemaphore wait_sem) override;
-
-    VkRenderPass RenderPass() const override { return swapchain_.render_pass; }
-    VkExtent2D   Extent() const override { return swapchain_.extent; }
-    VkFormat     Format() const override { return swapchain_.format; }
+    // AcquireNext/Present/RenderPass/Extent/Format inherited from
+    // SwapchainPresenterBase (delegate to swapchain_).
     const char*  Name() const override { return "X11Presenter"; }
 
     void BringToTop() override;
@@ -75,8 +71,7 @@ private:
     void SendNetWmState(long action, unsigned long property, unsigned long property2) const;
     void SendFullscreenMonitors(const OutputGeom& left, const OutputGeom& right) const;
 
-    vk::DeviceCtx* ctx_ = nullptr;
-
+    // ctx_ + swapchain_ live in SwapchainPresenterBase.
     _XDisplay*     dpy_ = nullptr;
     X11ModelineState modeline_state_;
     unsigned long  window_ = 0;           // Window (XID)
@@ -87,7 +82,6 @@ private:
     bool           closed_ = false;
 
     VkSurfaceKHR    vk_surface_ = VK_NULL_HANDLE;
-    SwapchainBundle swapchain_;
 };
 
 }  // namespace vrto3d

@@ -24,6 +24,7 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 #include "dx11_renderer.h"
+#include "focus_policy.h"
 #include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
 #include "vrto3dlib/win32_helper.hpp"
@@ -788,7 +789,7 @@ void WindowPresenter::FocusThreadLoop()
     bool was_on_top = false;
     bool nudged     = false;
     int  reassert_counter = 0;
-    uint32_t last_auto_focused_pid = 0;   // tracks which pid we already auto-raised for (auto_focus path)
+    FocusLatchState focus_latch;   // auto-focus per-PID latch (focus_policy.h)
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
@@ -811,28 +812,20 @@ void WindowPresenter::FocusThreadLoop()
 
         const bool app_running = platform::IsProcessRunning(pid);
 
-        // Reset auto-focus latch when the tracked app is gone so a future
-        // launch of a (possibly same-pid-recycled) app can re-trigger.
-        if (pid == 0 || !app_running) {
-            last_auto_focused_pid = 0;
-        }
-
-        bool want_on_top = false;
-        if (man_on_top) {
-            want_on_top = true;
-        } else if (is_on_top && app_running) {
-            want_on_top = true;
-        } else if (auto_focus && !is_on_top
-                   && app_running && pid != 0
-                   && pid != last_auto_focused_pid) {
-            // Auto-raise once per new tracked app PID. Without the pid latch
-            // the user could never disable topmost via Ctrl+F8 while an app
-            // is running — this branch would re-enable it on the next tick.
-            if (focus_.is_on_top)  focus_.is_on_top->store(true);
-            if (focus_.man_on_top) focus_.man_on_top->store(true);
-            last_auto_focused_pid = pid;
-            want_on_top = true;
-        }
+        // Shared decision (see focus_policy.h) — kept identical to the Linux
+        // VkRenderer focus block so the two can't drift.
+        FocusInputs fi;
+        fi.is_on_top   = is_on_top;
+        fi.man_on_top  = man_on_top;
+        fi.auto_focus  = auto_focus;
+        fi.app_pid     = pid;
+        fi.app_running = app_running;
+        fi.force_on_top = false;  // no OSD-forced-on-top signal on this path
+        bool set_is_on_top = false, set_man_on_top = false;
+        const bool want_on_top =
+            ComputeWantOnTop(fi, focus_latch, &set_is_on_top, &set_man_on_top);
+        if (set_is_on_top && focus_.is_on_top)  focus_.is_on_top->store(true);
+        if (set_man_on_top && focus_.man_on_top) focus_.man_on_top->store(true);
 
         if (want_on_top != was_on_top) {
             HWND vr_hwnd = static_cast<HWND>(window_->NativeHandle());
