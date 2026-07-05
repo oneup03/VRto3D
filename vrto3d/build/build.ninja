@@ -342,7 +342,7 @@ build driver_vrto3d.so: CXX_SHARED_LIBRARY_LINKER__driver_vrto3d_RelWithDebInfo 
   DEP_FILE = CMakeFiles/driver_vrto3d.dir/link.d
   LANGUAGE_COMPILE_FLAGS = -O2 -g -DNDEBUG
   LINK_FLAGS = -shared -Wl,--dependency-file=CMakeFiles/driver_vrto3d.dir/link.d
-  LINK_LIBRARIES = -Wl,-rpath,"\$$ORIGIN:/home/deck/Documents/claude/VRto3D/vrto3d/../external/openvr/lib/linux64"  -lopenvr_api  -lvulkan  -lX11  -lXrandr  -lwayland-client  -lxkbcommon  -ldl
+  LINK_LIBRARIES = -Wl,-rpath,"\$$ORIGIN:/home/deck/Documents/claude/VRto3D/vrto3d/../external/openvr/lib/linux64"  -lopenvr_api  -lvulkan  -lX11  -lXext  -lXrandr  -lwayland-client  -lxkbcommon  -ldl
   LINK_PATH = -L/home/deck/Documents/claude/VRto3D/vrto3d/../external/openvr/lib/linux64
   OBJECT_DIR = CMakeFiles/driver_vrto3d.dir
   POST_BUILD = cd /home/deck/Documents/claude/VRto3D/vrto3d/build && /usr/bin/cmake -E make_directory /home/deck/Documents/claude/VRto3D/vrto3d/build/output/drivers/vrto3d/bin/linux64 && /usr/bin/cmake -E copy_if_different /home/deck/Documents/claude/VRto3D/vrto3d/build/driver_vrto3d.so /home/deck/Documents/claude/VRto3D/vrto3d/build/output/drivers/vrto3d/bin/linux64/driver_vrto3d.so && /usr/bin/cmake -E copy_directory /home/deck/Documents/claude/VRto3D/vrto3d/vrto3d /home/deck/Documents/claude/VRto3D/vrto3d/build/output/drivers/vrto3d && cd /home/deck/Documents/claude/VRto3D/vrto3d/build && /usr/bin/cmake -E copy_if_different /home/deck/Documents/claude/VRto3D/vrto3d/../external/openvr/bin/linux64/libopenvr_api.so /home/deck/Documents/claude/VRto3D/vrto3d/build/output/drivers/vrto3d/bin/linux64/libopenvr_api.so

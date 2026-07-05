@@ -70,9 +70,12 @@ public:
     const char*  Name() const override { return "WaylandPresenter"; }
 
     // Layer-shell overlay surfaces are inherently topmost; xdg fullscreen
-    // z-order is compositor policy. Both are no-ops.
+    // z-order is compositor policy. Both are no-ops (SetAlwaysOnTop replaces
+    // them for the peek-at-game toggle).
     void BringToTop() override {}
     void ReleaseTopmost() override {}
+    void SetAlwaysOnTop(bool on_top) override;
+    void SetInputCapture(bool capture) override;
 
     // --- listener plumbing (public for the C callback trampolines) ---
     struct OutputInfo {
@@ -105,6 +108,9 @@ private:
     bool CreateXdgFullscreenSurface(wl_output* output);
     bool WaitForConfigure();
     void DestroyNative();
+    // Empty input region on surface_ = click-through; null = capture whole
+    // surface. Shared by surface init and SetInputCapture.
+    void SetSurfaceInputRegion(bool capture);
 
     vk::DeviceCtx* ctx_ = nullptr;
 

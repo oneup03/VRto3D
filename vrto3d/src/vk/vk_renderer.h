@@ -174,4 +174,9 @@ private:
     std::atomic<uint64_t> frame_counter_{0};
     std::atomic<double>   last_vsync_sec_{0.0};
     float display_frequency_ = 60.0f;
+
+    // Focus/z-order + input-capture edge tracking (present thread only).
+    bool focus_state_init_ = false;
+    bool last_on_top_ = true;
+    bool last_capture_ = false;
 };

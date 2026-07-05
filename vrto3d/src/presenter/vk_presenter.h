@@ -75,6 +75,21 @@ public:
     // layer-shell: inherently on the overlay layer — no-ops).
     virtual void BringToTop() {}
     virtual void ReleaseTopmost() {}
+
+    // Always-on-top toggle. true = overlay above everything (default);
+    // false = drop the overlay behind normal windows so the flat game shows
+    // through (X11: XLowerWindow + drop _NET_WM_STATE_ABOVE; Wayland:
+    // zwlr_layer_surface set_layer BACKGROUND). The surface stays mapped and
+    // presentable either way — no swapchain teardown.
+    virtual void SetAlwaysOnTop(bool on_top) {}
+
+    // Input capture. false (default) = the overlay is click-through so mouse
+    // and keyboard reach the game beneath (X11: empty XShape input region +
+    // input=False WM hint; Wayland: empty wl_surface input region +
+    // keyboard_interactivity NONE). true = capture pointer + keyboard so the
+    // OSD can be clicked/typed without leaking to the game. The OSD itself
+    // reads input via evdev regardless; capture only shields the game.
+    virtual void SetInputCapture(bool capture) {}
 };
 
 // Session-based selection: Wayland when WAYLAND_DISPLAY is set and connectable

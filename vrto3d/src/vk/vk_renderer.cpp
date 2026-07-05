@@ -649,6 +649,27 @@ void VkRenderer::PresentThread()
         if (!have_frame)
             continue;
 
+        // Focus/z-order + input capture, edge-tracked on the present thread
+        // (the only thread that may touch the display connection). The OSD
+        // menu being open forces the overlay on top and captures input so
+        // clicks/keys drive the GUI, not the game; closed returns to the
+        // user's always-on-top choice (man_on_top) and click-through.
+        {
+            const bool menu_open = osd_renderer_ && osd_renderer_->MenuVisible();
+            const bool want_on_top = menu_open ||
+                (focus_.man_on_top ? focus_.man_on_top->load() : true);
+            const bool want_capture = menu_open;
+            if (!focus_state_init_ || want_on_top != last_on_top_) {
+                presenter_->SetAlwaysOnTop(want_on_top);
+                last_on_top_ = want_on_top;
+            }
+            if (!focus_state_init_ || want_capture != last_capture_) {
+                presenter_->SetInputCapture(want_capture);
+                last_capture_ = want_capture;
+            }
+            focus_state_init_ = true;
+        }
+
         if (!EnsureOutputImage(left.width, left.height) || !EnsureRepackPipeline())
             continue;
 

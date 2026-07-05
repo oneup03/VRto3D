@@ -55,6 +55,8 @@ public:
 
     void BringToTop() override;
     void ReleaseTopmost() override;
+    void SetAlwaysOnTop(bool on_top) override;
+    void SetInputCapture(bool capture) override;
 
 private:
     struct OutputGeom {
@@ -79,6 +81,7 @@ private:
     X11ModelineState modeline_state_;
     unsigned long  window_ = 0;           // Window (XID)
     unsigned long  wm_delete_window_ = 0; // Atom
+    bool           have_xshape_ = false;
     uint32_t       width_ = 0;
     uint32_t       height_ = 0;
     bool           closed_ = false;
