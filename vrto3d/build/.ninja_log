@@ -40,3 +40,8 @@
 5	1184	1783227800328624682	CMakeFiles/driver_vrto3d.dir/src/presenter/vk_presenter_factory.cpp.o	654eff119fa89592
 6	1525	1783227800329624708	CMakeFiles/driver_vrto3d.dir/src/presenter/x11_presenter.cpp.o	9c8b66f7d6e2150f
 1525	2084	1783227801848664043	driver_vrto3d.so	8a605c2f480637c4
+6	2864	1783228842300789971	CMakeFiles/driver_vrto3d.dir/src/vk/direct_mode_component_vk.cpp.o	53d4c723a778bab2
+5	6114	1783228842299891875	CMakeFiles/driver_vrto3d.dir/src/device_provider.cpp.o	5bd00d8307ee69bd
+6	8895	1783228842299942850	CMakeFiles/driver_vrto3d.dir/src/vk/vk_renderer.cpp.o	ebfa8a53f88fd36a
+5	10911	1783228842298942827	CMakeFiles/driver_vrto3d.dir/src/hmd_device_driver.cpp.o	beab062de1675853
+10911	11333	1783228853205198761	driver_vrto3d.so	8a605c2f480637c4

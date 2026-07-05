@@ -603,7 +603,9 @@ void VkRenderer::PresentThread()
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         return;
     }
-    presenter_->BringToTop();
+    // Initial z-order/input state is set by the focus block on the first frame
+    // (starts lowered + click-through, then the auto-focus path raises on app
+    // connect) — no unconditional BringToTop here.
 
     VkCommandPoolCreateInfo cpci{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -650,15 +652,46 @@ void VkRenderer::PresentThread()
             continue;
 
         // Focus/z-order + input capture, edge-tracked on the present thread
-        // (the only thread that may touch the display connection). The OSD
-        // menu being open forces the overlay on top and captures input so
-        // clicks/keys drive the GUI, not the game; closed returns to the
-        // user's always-on-top choice (man_on_top) and click-through.
+        // (the only thread that may touch the display connection). This mirrors
+        // the Windows WindowPresenter::FocusThreadLoop: start lowered; raise
+        // when an app connects (auto-focus, latched once per app PID); the
+        // manual Ctrl+F8 / "Always on Top" toggle (man_on_top) overrides; and
+        // an open OSD forces on-top + input capture so clicks/keys drive the
+        // GUI rather than the game.
         {
-            const bool menu_open = osd_renderer_ && osd_renderer_->MenuVisible();
-            const bool want_on_top = menu_open ||
-                (focus_.man_on_top ? focus_.man_on_top->load() : true);
+            const bool menu_open  = osd_renderer_ && osd_renderer_->MenuVisible();
+            const bool is_on_top  = focus_.is_on_top  && focus_.is_on_top->load();
+            const bool man_on_top = focus_.man_on_top && focus_.man_on_top->load();
+            const uint32_t pid    = focus_.app_pid ? focus_.app_pid->load() : 0;
+            const bool auto_focus = focus_.auto_focus ? focus_.auto_focus->load() : true;
+            const bool app_running = pid != 0 && platform::IsProcessRunning(pid);
+
+            // Reset the auto-focus latch when the tracked app is gone so a
+            // future launch can re-trigger.
+            if (pid == 0 || !app_running)
+                last_auto_focused_pid_ = 0;
+
+            bool want_on_top = false;
+            if (menu_open) {
+                want_on_top = true;                 // must be visible to use it
+            } else if (man_on_top) {
+                want_on_top = true;
+            } else if (is_on_top && app_running) {
+                want_on_top = true;
+            } else if (auto_focus && !is_on_top && app_running &&
+                       pid != last_auto_focused_pid_) {
+                // Auto-raise once per new app PID; latch is_on_top+man_on_top
+                // so the user can still Ctrl+F8 it back down for this app.
+                if (focus_.is_on_top)  focus_.is_on_top->store(true);
+                if (focus_.man_on_top) focus_.man_on_top->store(true);
+                last_auto_focused_pid_ = pid;
+                want_on_top = true;
+            }
+
+            // Capture input only while the OSD is open (game shielded from menu
+            // clicks/typing); otherwise click-through so input reaches the game.
             const bool want_capture = menu_open;
+
             if (!focus_state_init_ || want_on_top != last_on_top_) {
                 presenter_->SetAlwaysOnTop(want_on_top);
                 last_on_top_ = want_on_top;
