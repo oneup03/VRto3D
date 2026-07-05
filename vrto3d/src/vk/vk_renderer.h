@@ -176,7 +176,9 @@ private:
     float display_frequency_ = 60.0f;
 
     // Focus/z-order + input-capture edge tracking (present thread only).
+    // Mirrors WindowPresenter::FocusThreadLoop; starts lowered.
     bool focus_state_init_ = false;
-    bool last_on_top_ = true;
+    bool last_on_top_ = false;
     bool last_capture_ = false;
+    uint32_t last_auto_focused_pid_ = 0;
 };
