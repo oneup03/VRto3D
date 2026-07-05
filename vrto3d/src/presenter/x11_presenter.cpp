@@ -286,6 +286,19 @@ bool X11Presenter::Init(vrto3d::vk::DeviceCtx* ctx, const StereoDisplayDriverCon
     class_hint.res_class = wm_class;
     XSetClassHint(dpy, win, &class_hint);
 
+    // Non-focusable display surface (ICCCM "No Input" model: InputHint +
+    // input=False, WM_TAKE_FOCUS unset). The window is a pure output overlay —
+    // all of VRto3D's own input (OSD clicks, hotkeys) arrives globally via
+    // evdev, never through X11 window focus — so the WM must never park
+    // keyboard focus here, or the flat game underneath would be starved of
+    // keys. Mirrors the Wayland layer surface's keyboard_interactivity=NONE.
+    if (XWMHints* wm_hints = XAllocWMHints()) {
+        wm_hints->flags = InputHint;
+        wm_hints->input = False;
+        XSetWMHints(dpy, win, wm_hints);
+        XFree(wm_hints);
+    }
+
     Atom wm_delete = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
     wm_delete_window_ = static_cast<unsigned long>(wm_delete);
     XSetWMProtocols(dpy, win, &wm_delete, 1);

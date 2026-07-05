@@ -56,3 +56,5 @@
 6	8526	1783211739502496992	CMakeFiles/driver_vrto3d.dir/home/deck/Documents/claude/VRto3D/external/VRto3DLib/src/app_id_mgr.cpp.o	77dc5dc82c294c1c
 5	1295	1783211789489448163	CMakeFiles/driver_vrto3d.dir/src/presenter/wibblewobble_presenter_linux.cpp.o	6256aac82f70e8f
 1295	1882	1783211790779447463	driver_vrto3d.so	4b4b350bf42671f4
+4	1451	1783221937672217648	CMakeFiles/driver_vrto3d.dir/src/presenter/x11_presenter.cpp.o	9c8b66f7d6e2150f
+1451	2011	1783221939119221543	driver_vrto3d.so	4b4b350bf42671f4
