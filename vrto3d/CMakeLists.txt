@@ -179,6 +179,7 @@ else()
         "${ROOT}/external/openvr/lib/linux64/libopenvr_api.so"
         vulkan
         X11
+        Xext
         Xrandr
         wayland-client
         xkbcommon

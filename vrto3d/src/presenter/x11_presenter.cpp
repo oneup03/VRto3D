@@ -24,6 +24,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrandr.h>
+#include <X11/extensions/shape.h>
 
 #define VK_USE_PLATFORM_XLIB_KHR
 #include <vulkan/vulkan.h>
@@ -303,6 +304,15 @@ bool X11Presenter::Init(vrto3d::vk::DeviceCtx* ctx, const StereoDisplayDriverCon
     wm_delete_window_ = static_cast<unsigned long>(wm_delete);
     XSetWMProtocols(dpy, win, &wm_delete, 1);
 
+    // Click-through by default (menu closed): empty XShape input region so
+    // pointer events fall through to the game beneath. SetInputCapture(true)
+    // restores the full region when the OSD opens.
+    int shape_event = 0, shape_err = 0;
+    have_xshape_ = XShapeQueryExtension(dpy, &shape_event, &shape_err);
+    if (have_xshape_) {
+        XShapeCombineRectangles(dpy, win, ShapeInput, 0, 0, nullptr, 0, ShapeSet, Unsorted);
+    }
+
     XMapRaised(dpy, win);
 
     // Move first, then (re-)assert fullscreen for running WMs: moving after
@@ -420,6 +430,42 @@ void X11Presenter::BringToTop()
     SendNetWmState(kNetWmStateAdd,
                    XInternAtom(dpy_, "_NET_WM_STATE_ABOVE", False), 0);
     XRaiseWindow(dpy_, static_cast<Window>(window_));
+    XFlush(dpy_);
+}
+
+void X11Presenter::SetAlwaysOnTop(bool on_top)
+{
+    if (!dpy_ || !window_) return;
+    Atom above = XInternAtom(dpy_, "_NET_WM_STATE_ABOVE", False);
+    if (on_top) {
+        SendNetWmState(kNetWmStateAdd, above, 0);
+        XRaiseWindow(dpy_, static_cast<Window>(window_));
+    } else {
+        // Drop behind normal windows so the flat game shows through. Surface
+        // stays mapped/presentable — we keep rendering behind it.
+        SendNetWmState(kNetWmStateRemove, above, 0);
+        XLowerWindow(dpy_, static_cast<Window>(window_));
+    }
+    XFlush(dpy_);
+}
+
+void X11Presenter::SetInputCapture(bool capture)
+{
+    if (!dpy_ || !window_ || !have_xshape_) return;
+    if (capture) {
+        // Full input region — the overlay captures the pointer (game shielded
+        // from OSD clicks). None mask = reset to the default full-window shape.
+        XShapeCombineMask(dpy_, static_cast<Window>(window_), ShapeInput, 0, 0, None, ShapeSet);
+        // Take keyboard so OSD text entry doesn't leak to the game (input=False
+        // hint keeps the WM from doing this automatically; force it directly).
+        XSetInputFocus(dpy_, static_cast<Window>(window_), RevertToPointerRoot, CurrentTime);
+    } else {
+        // Empty input region — click-through; pointer/keyboard reach the game.
+        XShapeCombineRectangles(dpy_, static_cast<Window>(window_), ShapeInput, 0, 0, nullptr, 0,
+                                ShapeSet, Unsorted);
+        // Hand keyboard back; PointerRoot follows the pointer (over the game).
+        XSetInputFocus(dpy_, PointerRoot, RevertToPointerRoot, CurrentTime);
+    }
     XFlush(dpy_);
 }
 

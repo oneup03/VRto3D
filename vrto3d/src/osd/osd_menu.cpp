@@ -805,6 +805,9 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
         ImGui::EndDisabled();
     }
 
+#ifdef _WIN32
+    // LeiaSR head tracking (SR SDK) is Windows-only — the presenter is compiled
+    // out on Linux, so this whole section is hidden there.
     if (cfg.output_mode == OutputMode::LeiaSR &&
         ImGui::CollapsingHeader("LeiaSR Head Tracking")) {
         if (callbacks.calibrate_leiasr_head) {
@@ -838,6 +841,7 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
             dirty = true;
         }
     }
+#endif  // _WIN32 (LeiaSR head tracking)
 
     if (dirty) {
         component->LoadSettings(cfg);
@@ -929,21 +933,51 @@ void OsdMenu::Impl::DrawSystemTab() {
         ImGui::SameLine();
         if (ImGui::SmallButton("Refresh##displays")) RefreshMonitors();
 
-        // Mirror the OutputMode enum order. Keep in sync with stereo_config.h.
-        static const char* modes[] = {
-            "SbS", "TaB", "RowInterlaced", "ColInterlaced", "Checkerboard",
-            "LeiaSR", "NvidiaDX9", "WibbleWobble", "VirtualDesktop",
-            "FramePacked720p60", "FramePacked1080p24", "FramePacked1080p60", "FramePacked1080p60CVT",
-            "DualDisplay", "DualDisplayFlip",
-            "AnaglyphRedCyan", "AnaglyphRedCyanDubois", "AnaglyphRedCyanDeghosted", "AnaglyphRedCyanCompromise",
-            "AnaglyphGreenMagenta", "AnaglyphGreenMagentaDubois", "AnaglyphGreenMagentaDeghosted",
-            "AnaglyphBlueAmber",
-            "Mono",
+        // Output modes with a per-entry "Windows-only" flag. LeiaSR (SR SDK)
+        // and NvidiaDX9 (NVAPI/D3D9 3D Vision) have no Linux presenter, so
+        // they're filtered out there — building the visible list this way
+        // keeps the label->enum mapping correct regardless of what's hidden.
+        struct ModeEntry { const char* label; OutputMode mode; bool win_only; };
+        static const ModeEntry kModeEntries[] = {
+            {"SbS", OutputMode::SbS, false},
+            {"TaB", OutputMode::TaB, false},
+            {"RowInterlaced", OutputMode::RowInterlaced, false},
+            {"ColInterlaced", OutputMode::ColInterlaced, false},
+            {"Checkerboard", OutputMode::Checkerboard, false},
+            {"LeiaSR", OutputMode::LeiaSR, true},
+            {"NvidiaDX9", OutputMode::NvidiaDX9, true},
+            {"WibbleWobble", OutputMode::WibbleWobble, false},
+            {"VirtualDesktop", OutputMode::VirtualDesktop, false},
+            {"FramePacked720p60", OutputMode::FramePacked720p60, false},
+            {"FramePacked1080p24", OutputMode::FramePacked1080p24, false},
+            {"FramePacked1080p60", OutputMode::FramePacked1080p60, false},
+            {"FramePacked1080p60CVT", OutputMode::FramePacked1080p60CVT, false},
+            {"DualDisplay", OutputMode::DualDisplay, false},
+            {"DualDisplayFlip", OutputMode::DualDisplayFlip, false},
+            {"AnaglyphRedCyan", OutputMode::AnaglyphRedCyan, false},
+            {"AnaglyphRedCyanDubois", OutputMode::AnaglyphRedCyanDubois, false},
+            {"AnaglyphRedCyanDeghosted", OutputMode::AnaglyphRedCyanDeghosted, false},
+            {"AnaglyphRedCyanCompromise", OutputMode::AnaglyphRedCyanCompromise, false},
+            {"AnaglyphGreenMagenta", OutputMode::AnaglyphGreenMagenta, false},
+            {"AnaglyphGreenMagentaDubois", OutputMode::AnaglyphGreenMagentaDubois, false},
+            {"AnaglyphGreenMagentaDeghosted", OutputMode::AnaglyphGreenMagentaDeghosted, false},
+            {"AnaglyphBlueAmber", OutputMode::AnaglyphBlueAmber, false},
+            {"Mono", OutputMode::Mono, false},
         };
-        int mode_sel = static_cast<int>(cfg.output_mode);
-        if (mode_sel < 0 || mode_sel >= IM_ARRAYSIZE(modes)) mode_sel = 0;
-        if (ImGui::Combo("Output Mode", &mode_sel, modes, IM_ARRAYSIZE(modes))) {
-            cfg.output_mode = static_cast<OutputMode>(mode_sel);
+        std::vector<const char*> mode_labels;
+        std::vector<OutputMode>  mode_vals;
+        int mode_sel = 0;
+        for (const auto& e : kModeEntries) {
+#ifndef _WIN32
+            if (e.win_only) continue;
+#endif
+            if (e.mode == cfg.output_mode) mode_sel = static_cast<int>(mode_labels.size());
+            mode_labels.push_back(e.label);
+            mode_vals.push_back(e.mode);
+        }
+        if (ImGui::Combo("Output Mode", &mode_sel, mode_labels.data(),
+                          static_cast<int>(mode_labels.size()))) {
+            cfg.output_mode = mode_vals[mode_sel];
             dirty = true;
         }
 
@@ -960,11 +994,18 @@ void OsdMenu::Impl::DrawSystemTab() {
             dirty = true;
             if (callbacks.set_async) callbacks.set_async(cfg.async_enable);
         }
+#ifdef _WIN32
+        // Auto Focus (game-window focus juggling) and cursor hide/lock have no
+        // effect on Linux: the overlay is a non-focusable click-through surface
+        // (input reaches the game directly, OSD reads evdev), and the game
+        // manages its own cursor. Hidden there to avoid dead controls.
         if (ImGui::Checkbox("Auto Focus",         &cfg.auto_focus)) {
             dirty = true;
             if (callbacks.set_auto_focus) callbacks.set_auto_focus(cfg.auto_focus);
         }
+#endif
         if (ImGui::Checkbox("Auto Exit SteamVR",  &cfg.auto_exit)) dirty = true;
+#ifdef _WIN32
         if (ImGui::Checkbox("Hide Cursor",        &cfg.hide_cursor)) {
             dirty = true;
             if (callbacks.set_hide_cursor) callbacks.set_hide_cursor(cfg.hide_cursor);
@@ -977,6 +1018,7 @@ void OsdMenu::Impl::DrawSystemTab() {
         }
         ImGui::SameLine();
         ImGui::TextDisabled("(clip cursor to game window while focused)");
+#endif
         char buf[512];
         std::snprintf(buf, sizeof(buf), "%s", cfg.launch_script.c_str());
         if (ImGui::InputText("Launch Script", buf, sizeof(buf))) {

@@ -202,8 +202,16 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     // needs activating.
     is_active_.store(true);
     device_index_ = unObjectId;
+#ifdef _WIN32
     is_on_top_ = false;
     man_on_top_ = false;
+#else
+    // Linux: the overlay is on top by default (that's the point). The OSD
+    // "always on top" checkbox reflects this; unchecking it lowers the overlay
+    // behind the flat game (VkRenderer maps man_on_top -> SetAlwaysOnTop).
+    is_on_top_ = true;
+    man_on_top_ = true;
+#endif
     app_updated_ = false;
     no_profile_ = false;
 

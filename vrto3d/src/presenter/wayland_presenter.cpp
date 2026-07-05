@@ -336,8 +336,53 @@ bool WaylandPresenter::CreateLayerSurface(wl_output* output)
     zwlr_layer_surface_v1_set_exclusive_zone(layer_surface_, -1);
     zwlr_layer_surface_v1_set_keyboard_interactivity(
         layer_surface_, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);
+    SetSurfaceInputRegion(false);  // click-through by default (menu closed)
     wl_surface_commit(surface_);
     return WaitForConfigure();
+}
+
+void WaylandPresenter::SetSurfaceInputRegion(bool capture)
+{
+    if (!surface_) return;
+    if (capture) {
+        // null region = whole surface receives pointer input (game shielded).
+        wl_surface_set_input_region(surface_, nullptr);
+    } else {
+        // empty region = input-transparent; pointer falls through to the game.
+        wl_region* region = wl_compositor_create_region(compositor_);
+        wl_surface_set_input_region(surface_, region);
+        wl_region_destroy(region);
+    }
+}
+
+void WaylandPresenter::SetAlwaysOnTop(bool on_top)
+{
+    // Layer-shell (v2+): drop to the BACKGROUND layer to reveal the flat game
+    // (a normal xdg_toplevel sits above background), OVERLAY to restore. Surface
+    // stays mapped/presentable — we keep rendering behind it.
+    if (layer_surface_) {
+        zwlr_layer_surface_v1_set_layer(
+            layer_surface_,
+            on_top ? ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY : ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND);
+        wl_surface_commit(surface_);
+    }
+    // xdg_toplevel fallback (GNOME): z-order is compositor policy; the peek
+    // toggle is a no-op there (documented).
+}
+
+void WaylandPresenter::SetInputCapture(bool capture)
+{
+    SetSurfaceInputRegion(capture);
+    if (layer_surface_) {
+        // Take keyboard while the OSD is open so text entry doesn't leak into
+        // the game; release (NONE) otherwise so the game keeps keys.
+        zwlr_layer_surface_v1_set_keyboard_interactivity(
+            layer_surface_,
+            capture ? ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE
+                    : ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);
+    }
+    if (surface_)
+        wl_surface_commit(surface_);
 }
 
 
