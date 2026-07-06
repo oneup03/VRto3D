@@ -654,6 +654,13 @@ void VkRenderer::PresentThread()
             const bool want_capture = menu_open;
 
             if (!focus_state_init_ || want_on_top != last_on_top_) {
+                LOG() << "focus: " << (want_on_top ? "RAISE" : "LOWER")
+                      << " (is_on_top=" << fi.is_on_top
+                      << " man=" << fi.man_on_top
+                      << " auto=" << fi.auto_focus
+                      << " pid=" << fi.app_pid
+                      << " running=" << fi.app_running
+                      << " menu=" << menu_open << ")";
                 presenter_->SetAlwaysOnTop(want_on_top);
                 last_on_top_ = want_on_top;
             }

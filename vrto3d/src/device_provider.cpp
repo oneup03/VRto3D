@@ -173,16 +173,31 @@ void MyDeviceProvider::RunFrame()
             // Native Linux games have no .exe suffix; Proton games keep it.
             const bool name_is_game = !lowerAppName.empty();
 #endif
-            if (Skip_Processes.find(lowerAppName) == Skip_Processes.end() && name_is_game)
+            const bool skipped = Skip_Processes.find(lowerAppName) != Skip_Processes.end();
+            if (!skipped && name_is_game)
             {
                 app_name_ = appName;
                 app_pid_ = vrEvent.data.process.pid;
                 g_current_app_pid.store(app_pid_);
-                LOG() << "AppName = " << app_name_.c_str();
+                LOG() << "AppName = " << app_name_.c_str()
+                      << " (evt=" << (int)vrEvent.eventType
+                      << " pid=" << vrEvent.data.process.pid << ")";
                 my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessConnected);
                 // Resume the renderer (cleared by the prior ProcessDisconnected).
                 if (auto* r = my_hmd_device_->GetRenderer()) r->OnAppConnect();
                 wait_count_ = 500;
+            }
+            else if (vrEvent.eventType == vr::VREvent_ProcessConnected ||
+                     vrEvent.eventType == vr::VREvent_SceneApplicationChanged)
+            {
+                // Not treated as a game connect. Logged so we can see what
+                // becomes the scene app after a real game exits (e.g. SteamVR
+                // Home / environments) — a spurious auto-raise there is the
+                // suspected "stayed on top after quitting the game" cause.
+                LOG() << "connect ignored: name='" << appName.c_str()
+                      << "' pid=" << vrEvent.data.process.pid
+                      << " evt=" << (int)vrEvent.eventType
+                      << " skip=" << skipped << " is_game=" << name_is_game;
             }
         }
         else if ((vrEvent.eventType == vr::VREvent_ProcessDisconnected ||
