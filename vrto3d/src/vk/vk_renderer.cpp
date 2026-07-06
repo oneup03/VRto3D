@@ -623,9 +623,6 @@ void VkRenderer::PresentThread()
             std::thread([] { RequestSteamVRShutdownWithApp(g_current_app_pid.load()); }).detach();
             break;
         }
-        if (!have_frame)
-            continue;
-
         // Focus/z-order + input capture, edge-tracked on the present thread
         // (the only thread that may touch the display connection). This mirrors
         // the Windows WindowPresenter::FocusThreadLoop: start lowered; raise
@@ -633,6 +630,12 @@ void VkRenderer::PresentThread()
         // manual Ctrl+F8 / "Always on Top" toggle (man_on_top) overrides; and
         // an open OSD forces on-top + input capture so clicks/keys drive the
         // GUI rather than the game.
+        //
+        // MUST run before the have_frame gate below: when an app disconnects,
+        // LoadSettings queues the LOWER (clears is_on_top/man_on_top) AND the
+        // renderer is paused (OnDirectModeFrame drops frames), so have_frame
+        // stays false. Gating this behind a frame would starve it and leave the
+        // overlay stuck on top — the queued LOWER would never be applied.
         {
             const bool menu_open = osd_renderer_ && osd_renderer_->MenuVisible();
             vrto3d::FocusInputs fi;
@@ -670,6 +673,9 @@ void VkRenderer::PresentThread()
             }
             focus_state_init_ = true;
         }
+
+        if (!have_frame)
+            continue;
 
         if (!EnsureOutputImage(left.width, left.height) || !EnsureRepackPipeline())
             continue;
