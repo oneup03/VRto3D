@@ -168,6 +168,88 @@ uint32_t DeviceCtx::FindMemoryType(uint32_t type_bits, VkMemoryPropertyFlags wan
     return UINT32_MAX;
 }
 
+void Image2D::Destroy(VkDevice device)
+{
+    if (view)   { vkDestroyImageView(device, view, nullptr); view = VK_NULL_HANDLE; }
+    if (image)  { vkDestroyImage(device, image, nullptr); image = VK_NULL_HANDLE; }
+    if (memory) { vkFreeMemory(device, memory, nullptr); memory = VK_NULL_HANDLE; }
+}
+
+bool AllocateBindImageView(DeviceCtx& ctx, VkImage image, VkFormat view_format,
+                           VkMemoryPropertyFlags mem_props, const void* alloc_pnext,
+                           uint32_t extra_type_bits, bool make_view,
+                           VkDeviceMemory* out_memory, VkImageView* out_view)
+{
+    VkMemoryRequirements reqs{};
+    vkGetImageMemoryRequirements(ctx.device, image, &reqs);
+    uint32_t type_bits = reqs.memoryTypeBits;
+    if (extra_type_bits)
+        type_bits &= extra_type_bits;
+
+    VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    alloc.pNext = alloc_pnext;
+    alloc.allocationSize = reqs.size;
+    alloc.memoryTypeIndex = ctx.FindMemoryType(type_bits, mem_props);
+    if (alloc.memoryTypeIndex == UINT32_MAX) {
+        LOG() << "vk: no compatible memory type for image allocation";
+        return false;
+    }
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    if (LogIfFailed(vkAllocateMemory(ctx.device, &alloc, nullptr, &memory),
+                    "vkAllocateMemory") != VK_SUCCESS)
+        return false;
+    if (LogIfFailed(vkBindImageMemory(ctx.device, image, memory, 0),
+                    "vkBindImageMemory") != VK_SUCCESS) {
+        vkFreeMemory(ctx.device, memory, nullptr);
+        return false;
+    }
+
+    VkImageView view = VK_NULL_HANDLE;
+    if (make_view) {
+        VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        vci.image = image;
+        vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        vci.format = view_format;
+        vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        if (LogIfFailed(vkCreateImageView(ctx.device, &vci, nullptr, &view),
+                        "vkCreateImageView") != VK_SUCCESS) {
+            vkFreeMemory(ctx.device, memory, nullptr);
+            return false;
+        }
+    }
+    *out_memory = memory;
+    if (out_view) *out_view = view;
+    return true;
+}
+
+bool CreateImage2D(DeviceCtx& ctx, uint32_t width, uint32_t height, VkFormat format,
+                   VkImageUsageFlags usage, VkImageTiling tiling,
+                   VkMemoryPropertyFlags mem_props, bool make_view, Image2D* out)
+{
+    *out = {};
+    VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    ici.imageType = VK_IMAGE_TYPE_2D;
+    ici.format = format;
+    ici.extent = {width, height, 1};
+    ici.mipLevels = 1;
+    ici.arrayLayers = 1;
+    ici.samples = VK_SAMPLE_COUNT_1_BIT;
+    ici.tiling = tiling;
+    ici.usage = usage;
+    ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (LogIfFailed(vkCreateImage(ctx.device, &ici, nullptr, &out->image),
+                    "vkCreateImage") != VK_SUCCESS)
+        return false;
+    if (!AllocateBindImageView(ctx, out->image, format, mem_props, nullptr, 0, make_view,
+                               &out->memory, &out->view)) {
+        vkDestroyImage(ctx.device, out->image, nullptr);
+        out->image = VK_NULL_HANDLE;
+        return false;
+    }
+    return true;
+}
+
 VkShaderModule CreateShaderModule(VkDevice device, const uint32_t* spirv_words, size_t byte_size)
 {
     VkShaderModuleCreateInfo ci{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};

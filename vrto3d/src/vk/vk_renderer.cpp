@@ -196,41 +196,16 @@ bool VkRenderer::EnsureOutputImage(uint32_t eye_w, uint32_t eye_h)
 
     out_sbs_format_ = VK_FORMAT_R8G8B8A8_UNORM;
 
-    VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    ici.imageType = VK_IMAGE_TYPE_2D;
-    ici.format = out_sbs_format_;
-    ici.extent = {want_w, want_h, 1};
-    ici.mipLevels = 1;
-    ici.arrayLayers = 1;
-    ici.samples = VK_SAMPLE_COUNT_1_BIT;
-    ici.tiling = VK_IMAGE_TILING_OPTIMAL;
-    ici.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    if (vrto3d::vk::LogIfFailed(vkCreateImage(ctx_.device, &ici, nullptr, &out_sbs_),
-                                "out_sbs vkCreateImage") != VK_SUCCESS)
+    vrto3d::vk::Image2D img;
+    if (!vrto3d::vk::CreateImage2D(ctx_, want_w, want_h, out_sbs_format_,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            VK_IMAGE_TILING_OPTIMAL, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            /*make_view=*/true, &img))
         return false;
-
-    VkMemoryRequirements reqs{};
-    vkGetImageMemoryRequirements(ctx_.device, out_sbs_, &reqs);
-    VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
-    alloc.allocationSize = reqs.size;
-    alloc.memoryTypeIndex = ctx_.FindMemoryType(reqs.memoryTypeBits,
-                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if (alloc.memoryTypeIndex == UINT32_MAX ||
-        vrto3d::vk::LogIfFailed(vkAllocateMemory(ctx_.device, &alloc, nullptr, &out_sbs_mem_),
-                                "out_sbs vkAllocateMemory") != VK_SUCCESS)
-        return false;
-    vkBindImageMemory(ctx_.device, out_sbs_, out_sbs_mem_, 0);
-
-    VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-    vci.image = out_sbs_;
-    vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    vci.format = out_sbs_format_;
-    vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    if (vrto3d::vk::LogIfFailed(vkCreateImageView(ctx_.device, &vci, nullptr, &out_sbs_view_),
-                                "out_sbs vkCreateImageView") != VK_SUCCESS)
-        return false;
+    out_sbs_ = img.image;
+    out_sbs_mem_ = img.memory;
+    out_sbs_view_ = img.view;
 
     sbs_width_ = want_w;
     sbs_height_ = want_h;
