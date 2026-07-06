@@ -432,6 +432,22 @@ void X11Presenter::SetAlwaysOnTop(bool on_top)
     if (on_top) {
         SendNetWmState(kNetWmStateAdd, above, 0);
         XRaiseWindow(dpy_, static_cast<Window>(window_));
+        // Belt-and-braces for KDE: a plain XRaiseWindow from a buried, non-
+        // focusable background window can be swallowed by KWin's focus-stealing
+        // prevention, leaving the overlay stuck behind the desktop. A
+        // _NET_ACTIVE_WINDOW request with source=pager (2) bypasses that and
+        // forces the stack change; input=False means it still can't grab the
+        // keyboard away from the game.
+        Window w = static_cast<Window>(window_);
+        XEvent act{};
+        act.xclient.type         = ClientMessage;
+        act.xclient.window       = w;
+        act.xclient.message_type = XInternAtom(dpy_, "_NET_ACTIVE_WINDOW", False);
+        act.xclient.format       = 32;
+        act.xclient.data.l[0]    = 2;   // source indication: pager
+        act.xclient.data.l[1]    = 0;   // timestamp (0 = CurrentTime)
+        XSendEvent(dpy_, DefaultRootWindow(dpy_), False,
+                   SubstructureRedirectMask | SubstructureNotifyMask, &act);
     } else {
         // Drop behind normal windows so the flat game shows through. Surface
         // stays mapped/presentable — we keep rendering behind it.

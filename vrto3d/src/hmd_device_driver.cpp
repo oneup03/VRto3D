@@ -537,6 +537,34 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     }
                 }
             };
+            cb.reset_defaults = [this](std::string toast) {
+                // Factory reset: start from a fresh (in-code default) config,
+                // but keep the display/output hardware fields from the live
+                // config so a reset restores the stereo/shader/tracking
+                // tunables without scrambling the user's monitor selection,
+                // render dimensions, or refresh — those are the
+                // "Requires Restart" fields and are hardware-specific.
+                auto cur = stereo_display_component_->GetConfig();
+                StereoDisplayDriverConfiguration def{};
+                def.display_index     = cur.display_index;
+                def.output_mode       = cur.output_mode;
+                def.window_x          = cur.window_x;
+                def.window_y          = cur.window_y;
+                def.window_width      = cur.window_width;
+                def.window_height     = cur.window_height;
+                def.render_width      = cur.render_width;
+                def.render_height     = cur.render_height;
+                def.aspect_ratio      = cur.aspect_ratio;
+                def.display_frequency = cur.display_frequency;
+                def.display_latency   = cur.display_latency;
+                def.sleep_count_max   = cur.sleep_count_max;
+                stereo_display_component_->LoadSettings(def);
+                SetAsync(def.async_enable);
+                auto_focus_.store(def.auto_focus);
+                hide_cursor_.store(def.hide_cursor);
+                lock_cursor_.store(def.lock_cursor);
+                if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
+            };
             cb.reset_projection = [this]() {
                 stereo_display_component_->ResetProjection();
             };
@@ -1340,8 +1368,16 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 --sleep.auto_depth;
             }
         }
-        // Ctrl+F8 Toggle Always On Top
-        if (isCtrlDown() && isDown(VK_F8) && sleep.top == 0) {
+        // Ctrl+F8 (keyboard) or Start+DPad-Up (gamepad) Toggle Always On Top.
+        // Always polled (like the menu chord) so a controller-only Steam Deck
+        // user can raise a lowered/buried overlay back on top without a
+        // keyboard — the direct counterpart to Start+DPad-Down opening the menu.
+        DWORD top_pad = 0;
+        const DWORD top_chord_mask = XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_DPAD_UP;
+        const bool top_pad_chord =
+            GetXInputButtonState(top_pad) &&
+            ((top_pad & top_chord_mask) == top_chord_mask);
+        if (((isCtrlDown() && isDown(VK_F8)) || top_pad_chord) && sleep.top == 0) {
             is_on_top_ = !is_on_top_;
             man_on_top_ = is_on_top_.load();
             sleep.top = cfg.sleep_count_max;
