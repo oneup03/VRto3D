@@ -149,34 +149,15 @@ bool WibbleWobblePresenter::CreateFrames()
 
     for (auto& f : frames_) {
         // ---- render target (OPTIMAL, COLOR_ATTACHMENT + TRANSFER_SRC) ----
-        VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-        ici.imageType = VK_IMAGE_TYPE_2D;
-        ici.format = format_;
-        ici.extent = {extent_.width, extent_.height, 1};
-        ici.mipLevels = 1;
-        ici.arrayLayers = 1;
-        ici.samples = VK_SAMPLE_COUNT_1_BIT;
-        ici.tiling = VK_IMAGE_TILING_OPTIMAL;
-        ici.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        if (vkCreateImage(ctx_->device, &ici, nullptr, &f.render_img) != VK_SUCCESS)
+        vrto3d::vk::Image2D render;
+        if (!vrto3d::vk::CreateImage2D(*ctx_, extent_.width, extent_.height, format_,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                VK_IMAGE_TILING_OPTIMAL, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                /*make_view=*/true, &render))
             return false;
-        VkMemoryRequirements reqs{};
-        vkGetImageMemoryRequirements(ctx_->device, f.render_img, &reqs);
-        VkMemoryAllocateInfo mai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
-        mai.allocationSize = reqs.size;
-        mai.memoryTypeIndex = ctx_->FindMemoryType(reqs.memoryTypeBits,
-                                                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        if (vkAllocateMemory(ctx_->device, &mai, nullptr, &f.render_mem) != VK_SUCCESS)
-            return false;
-        vkBindImageMemory(ctx_->device, f.render_img, f.render_mem, 0);
-        VkImageViewCreateInfo vci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-        vci.image = f.render_img;
-        vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        vci.format = format_;
-        vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        if (vkCreateImageView(ctx_->device, &vci, nullptr, &f.render_view) != VK_SUCCESS)
-            return false;
+        f.render_img = render.image;
+        f.render_mem = render.memory;
+        f.render_view = render.view;
         VkFramebufferCreateInfo fbi{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
         fbi.renderPass = render_pass_;
         fbi.attachmentCount = 1;

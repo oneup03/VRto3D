@@ -54,6 +54,32 @@ struct DeviceCtx {
     uint32_t FindMemoryType(uint32_t type_bits, VkMemoryPropertyFlags props) const;
 };
 
+// A created 2D image with its dedicated allocation + view.
+struct Image2D {
+    VkImage        image = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkImageView    view = VK_NULL_HANDLE;   // VK_NULL_HANDLE if make_view=false
+    void Destroy(VkDevice device);
+};
+
+// Allocate device memory for an already-created image, bind it, and optionally
+// make a color view. `image_pnext` chains onto the allocation (e.g.
+// VkImportMemoryFdInfoKHR / VkExportMemoryAllocateInfo, each with a dedicated
+// alloc); `extra_type_bits` further constrains the memory type (e.g. the
+// vkGetMemoryFdPropertiesKHR bits for a dmabuf import; 0 = no extra constraint).
+// The dmabuf import/export paths use this after building their own VkImage.
+bool AllocateBindImageView(DeviceCtx& ctx, VkImage image, VkFormat view_format,
+                           VkMemoryPropertyFlags mem_props, const void* alloc_pnext,
+                           uint32_t extra_type_bits, bool make_view,
+                           VkDeviceMemory* out_memory, VkImageView* out_view);
+
+// Full create+alloc+bind(+view) for the common device-local image case
+// (out_sbs, presenter render targets, scratch images). Returns false on any
+// failure (partial state cleaned up).
+bool CreateImage2D(DeviceCtx& ctx, uint32_t width, uint32_t height, VkFormat format,
+                   VkImageUsageFlags usage, VkImageTiling tiling,
+                   VkMemoryPropertyFlags mem_props, bool make_view, Image2D* out);
+
 // Small helpers shared by the renderer / presenters / OSD backend.
 VkShaderModule CreateShaderModule(VkDevice device, const uint32_t* spirv_words, size_t byte_size);
 
