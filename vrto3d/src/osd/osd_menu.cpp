@@ -1025,9 +1025,19 @@ void OsdMenu::Impl::DrawSystemTab() {
             cfg.launch_script = buf;
             dirty = true;
         }
-        if (ImGui::Checkbox("Disable Hotkeys (Ctrl+Home / Start+DPad-Down still toggle menu)",
+        if (ImGui::Checkbox("Disable Hotkeys (menu: Ctrl+Home / Start+DPad-Down; "
+                            "on-top: Ctrl+F8 / Start+DPad-Up still work)",
                             &cfg.disable_hotkeys)) {
             dirty = true;
+        }
+        if (callbacks.reset_defaults) {
+            if (ImGui::Button("Reset Defaults")) {
+                callbacks.reset_defaults("Reset to factory defaults");
+            }
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 0.85f, 0.2f, 1),
+                               "Restores factory stereo/shader/tracking settings "
+                               "(display/output kept). Reload or Save to persist.");
         }
         if (callbacks.download_latest_profiles) {
             if (ImGui::Button("Download Latest Profiles")) {

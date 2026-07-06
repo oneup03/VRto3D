@@ -40,6 +40,11 @@ struct MenuCallbacks {
     std::function<void(std::string toast)> reload_game_profile;
     // Reload "default_config.json" into the live config.
     std::function<void(std::string toast)> reload_default_profile;
+    // Reset the live config to VRto3D's built-in factory defaults (stereo /
+    // shader / tracking tunables), preserving the display/output hardware
+    // fields. Distinct from reload_default_profile, which re-reads the user's
+    // (possibly customized) default_config.json.
+    std::function<void(std::string toast)> reset_defaults;
     // Reset projection (mirrors Ctrl+F3).
     std::function<void()> reset_projection;
     // Snap the current LeiaSR head pose as the neutral zero. No-op when the
