@@ -1,9 +1,0 @@
-{
-    "alwaysActivate": true,
-    "name": "vrto3d_probe",
-    "directory": "",
-    "resourceOnly": false,
-    "hmd_presence": [
-        "*.*"
-    ]
-}
