@@ -3,16 +3,19 @@ name: Build Linux
 on:
   push:
     branches:
-      - main
       - linux_port
   pull_request:
     branches:
       - main
   workflow_dispatch:
+  # Called by Build.yml on main so the release ships the Linux tarball.
+  workflow_call:
 
 jobs:
   Linux64:
-    runs-on: ubuntu-24.04
+    # Oldest supported LTS: binaries link the runner's glibc, so building on
+    # 22.04 (glibc 2.35) keeps the tarball running on older distros and SteamOS.
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repo and submodules
         uses: actions/checkout@v4
@@ -33,10 +36,14 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Package driver folder
+      - name: Package driver + installer
         run: |
-          cd build/output
-          tar czf ../../vrto3d-linux64.tar.gz drivers
+          mkdir -p package/vrto3d-linux64
+          cp -a build/output/drivers package/vrto3d-linux64/
+          cp installer/install.sh package/vrto3d-linux64/
+          cp LICENSE README.md package/vrto3d-linux64/
+          chmod +x package/vrto3d-linux64/install.sh
+          tar czf vrto3d-linux64.tar.gz -C package vrto3d-linux64
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

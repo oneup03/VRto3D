@@ -17,9 +17,9 @@
 #pragma once
 
 // Linux twin of Dx11Renderer. The Linux compositor pre-composites all apps and
-// overlays and submits a single layer pair per frame (M0 finding — see
-// vrto3d/probe/RESULTS.md), so unlike the Windows path there is no multi-layer
-// composite: import the compositor's shared images once, per frame blit L/R
+// overlays and submits a single layer pair per frame, so unlike the Windows
+// path there is no multi-layer composite: import the compositor's shared
+// images once, per frame blit L/R
 // into out_sbs_, run the OSD, then repack into the presenter's swapchain.
 
 #include <atomic>

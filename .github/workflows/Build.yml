@@ -14,8 +14,14 @@ env:
   STEAM_PATH: temp
 
 jobs:
+  Linux64:
+    uses: ./.github/workflows/BuildLinux.yml
+    secrets: inherit
+
   Win64:
     runs-on: windows-2022
+    # The release step below attaches the Linux tarball, so wait for it.
+    needs: Linux64
     steps:
 
     - name: Checkout repo and submodules
@@ -107,6 +113,11 @@ jobs:
         name: "VRto3D-Installer-${{env.CommitHashShort}}"
         path: installer/Output/VRto3D-Installer.exe
 
+    - name: Download Linux tarball
+      uses: actions/download-artifact@v4
+      with:
+        name: vrto3d-linux64
+
     - name: GitHub pre-release
       uses: "marvinpinto/action-automatic-releases@latest"
       with:
@@ -116,6 +127,7 @@ jobs:
         title: "[${{env.CurrentDate}}] ${{github.event.repository.name}} r${{env.CommitCount}}@${{env.CommitHashShort}}"
         files: |
           output/${{github.event.repository.name}}.zip
+          vrto3d-linux64.tar.gz
           vrto3d_profiles.zip
           installer/Output/VRto3D-Installer.exe
           README_combined.jpg
