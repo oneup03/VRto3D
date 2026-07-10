@@ -26,7 +26,7 @@ namespace {
 
 // The IPC resource manager initializes asynchronously inside vrserver — it is
 // typically NULL during IServerTrackedDeviceProvider::Init and ready by the
-// first CreateSwapTextureSet (M0 finding). Always fetch it fresh.
+// first CreateSwapTextureSet. Always fetch it fresh.
 vr::IVRIPCResourceManagerClient* ResourceManager()
 {
     return vr::VRIPCResourceManager();
@@ -128,8 +128,8 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
     }
 
     // Same-driver dmabuf import: the image was allocated by vrserver's Vulkan
-    // device on the same GPU, so OPTIMAL tiling round-trips correctly on RADV
-    // (validated in M0 bring-up). If a driver ever mismatches layouts here the
+    // device on the same GPU, so OPTIMAL tiling round-trips correctly on RADV.
+    // If a driver ever mismatches layouts here the
     // symptom is garbled sampling — the fallback would be
     // VK_EXT_image_drm_format_modifier with explicit modifiers.
     VkExternalMemoryImageCreateInfo ext_img{VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO};

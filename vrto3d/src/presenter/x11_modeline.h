@@ -19,8 +19,8 @@
 // Runtime frame-packed modelines via XRandR — the Linux equivalent of the
 // NVAPI/CRU custom-timing path in display_timing_helper.cpp. Only works in a
 // real X11 session (XWayland exposes virtual outputs with no hardware
-// modesetting); the EDID-firmware override documented in README-linux.md is
-// the fallback for Wayland or stubborn sinks.
+// modesetting); the EDID-firmware override documented in the README's Linux
+// section is the fallback for Wayland or stubborn sinks.
 //
 // Note: this sets the raw 1280x1470/1920x2205 timing. Like CRU-without-3D-flag
 // on Windows, no HDMI 3D InfoFrame is emitted (not controllable from

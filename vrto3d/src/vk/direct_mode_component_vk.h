@@ -20,9 +20,9 @@
 // by vrserver via IVRIPCResourceManagerClient::NewSharedVulkanImage; the
 // compositor renders into them and we import each one once as a dmabuf
 // VkImage for sampling. On Linux the compositor pre-composites all layers
-// and submits exactly one layer pair per frame from its own pid (see
-// vrto3d/probe/RESULTS.md), so SubmitLayer/Present are much simpler than the
-// Windows path — no multi-layer accumulation or pid sorting.
+// and submits exactly one layer pair per frame from its own pid, so
+// SubmitLayer/Present are much simpler than the Windows path — no
+// multi-layer accumulation or pid sorting.
 
 #include <cstdint>
 #include <map>

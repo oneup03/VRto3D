@@ -294,7 +294,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         vrp->SetUint64Property(container, vr::Prop_GraphicsAdapterLuid_Uint64, luid_u64);
 #endif
         // No LUID handshake on Linux — the compositor and driver agree on the
-        // GPU implicitly (validated by the M0 probe without the property).
+        // GPU implicitly.
         vrp->SetBoolProperty  (container, vr::Prop_DriverDirectModeSendsVsyncEvents_Bool, true);
     }
     if (stereo_display_component_->GetConfig().dash_enable)
