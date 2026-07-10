@@ -221,7 +221,7 @@ cd vrto3d
 cmake -B build -G Ninja
 cmake --build build
 ```
-Dependencies: gcc/clang C++17, cmake, Vulkan headers, libX11 + libXrandr, wayland-client, libxkbcommon. (Shaders ship pre-compiled as SPIR-V headers; regenerate with `shaders/compile_shaders.sh` if you edit them — needs glslc.)
+Dependencies: gcc/clang C++17, cmake, Vulkan headers, libX11 + libXrandr, wayland-client, libxkbcommon, libdrm headers. (Shaders ship pre-compiled as SPIR-V headers; regenerate with `shaders/compile_shaders.sh` if you edit them — needs glslc.)
 
 For quick iteration, register the build output in place instead of copying it:
 ```
