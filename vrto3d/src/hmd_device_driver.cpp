@@ -664,7 +664,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 std::string steam = GetSteamInstallPath();
                 if (steam.empty()) return;
                 std::string cmd = "xdg-open '" + steam + "/config/vrto3d' >/dev/null 2>&1 &";
-                std::system(cmd.c_str());
+                [[maybe_unused]] int rc = std::system(cmd.c_str());
             };
             cb.open_screenshot_folder = [this]() {
                 std::string steam = GetSteamInstallPath();
@@ -673,7 +673,7 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 std::error_code ec;
                 std::filesystem::create_directories(path, ec);
                 std::string cmd = "xdg-open '" + path + "' >/dev/null 2>&1 &";
-                std::system(cmd.c_str());
+                [[maybe_unused]] int rc = std::system(cmd.c_str());
             };
 #endif
             cb.set_async = [this](bool on) {
