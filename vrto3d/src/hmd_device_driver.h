@@ -67,7 +67,7 @@ public:
     void GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight ) override;
     StereoDisplayDriverConfiguration GetConfig();
     void AdjustDepth(float new_depth, bool is_delta);
-    void AdjustConvergence(float new_conv, bool is_delta);
+    void AdjustConvergence(float new_conv, bool is_delta, bool resync = true);
     void AdjustFoV(float new_fov);
     float GetDepth();
     float GetConvergence();

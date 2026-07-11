@@ -257,11 +257,11 @@ public:
     // Ctrl+X calibrate behavior. Position offsets are not adjusted.
     void Calibrate(float orient_x_rad, float orient_y_rad, float orient_z_rad) {
         const float to_deg = 180.0f / static_cast<float>(M_PI);
-        // Apply the same axis sign conventions process() uses (yaw + roll
-        // are pre-inverted to match the OpenTrack receiver).
+        // Apply the same axis sign conventions process() uses (only yaw is
+        // pre-inverted to match the OpenTrack receiver).
         const float pitch = orient_x_rad * to_deg;
         const float yaw   = -(orient_y_rad * to_deg);
-        const float roll  = -(orient_z_rad * to_deg);
+        const float roll  = orient_z_rad * to_deg;
         yaw_offset_   = -yaw;
         pitch_offset_ = -pitch;
         roll_offset_  = -roll;
@@ -286,10 +286,11 @@ public:
         float roll_f  = f_roll_.filter(roll_raw,   timestamp_sec);
 
         // OpenTrack convention to match the consumer (MockControllerDeviceDriver
-        // ::OpenTrackThread negates X and Yaw on receive): pre-invert here so
-        // the round-trip matches an external bridge running in OpenTrack mode.
+        // ::OpenTrackThread negates X and Yaw on receive): pre-invert yaw here
+        // so the round-trip matches an external bridge running in OpenTrack
+        // mode. Roll is NOT negated — the receiver passes it straight into the
+        // quaternion, so negating here would mirror the roll direction.
         yaw_f  = -yaw_f;
-        roll_f = -roll_f;
 
         r.yaw_deg   = std::clamp((yaw_f   + yaw_offset_)   * sens_yaw_,   -max_yaw_,   max_yaw_);
         r.pitch_deg = std::clamp((pitch_f + pitch_offset_) * sens_pitch_, -max_pitch_, max_pitch_);

@@ -1256,6 +1256,16 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
 
     setOverlay("VRto3D: " + stereo_version_number_);
 
+    // Deferred projection re-sync for the depth/convergence hotkeys.
+    // ResetProjection() posts SetDisplayProjectionRaw + a LensDistortionChanged
+    // event that most VR mods answer by rebuilding their projection; firing it
+    // at poll rate while a key autorepeats makes adjustment feel laggy. The
+    // flush at the bottom of the loop resyncs immediately on the first press,
+    // at most every 150ms while held, and once more on release so the final
+    // value always lands.
+    bool resync_pending = false;
+    auto last_resync = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+
     while (is_active_) {
         auto cfg = stereo_display_component_->GetConfig();
 
@@ -1291,23 +1301,25 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             // Ctrl+F3 Decrease Depth (re-sync projection; hold Shift to skip the sync)
             if (isCtrlDown() && isDown(VK_F3)) {
                 stereo_display_component_->AdjustDepth(-0.001f, true);
-                if (!isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
+                if (!isDown(VK_SHIFT)) resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F4 Increase Depth (re-sync projection; hold Shift to skip the sync)
             else if (isCtrlDown() && isDown(VK_F4)) {
                 stereo_display_component_->AdjustDepth(0.001f, true);
-                if (!isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
+                if (!isDown(VK_SHIFT)) resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F5 Decrease Convergence
             else if (isCtrlDown() && isDown(VK_F5)) {
-                stereo_display_component_->AdjustConvergence(0.005f, true);
+                stereo_display_component_->AdjustConvergence(0.005f, true, false);
+                resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F6 Increase Convergence
             else if (isCtrlDown() && isDown(VK_F6)) {
-                stereo_display_component_->AdjustConvergence(-0.005f, true);
+                stereo_display_component_->AdjustConvergence(-0.005f, true, false);
+                resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F7 Store settings into game profile
@@ -1417,6 +1429,19 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         {
             setOverlay("No profile found for " + app_name_);
             no_profile_ = false;
+        }
+
+        // Flush a deferred depth/convergence projection re-sync (see the
+        // resync_pending comment above the loop for the batching rules).
+        if (resync_pending) {
+            const bool adjust_held = isCtrlDown() &&
+                (isDown(VK_F3) || isDown(VK_F4) || isDown(VK_F5) || isDown(VK_F6));
+            const auto now = std::chrono::steady_clock::now();
+            if (!adjust_held || now - last_resync >= std::chrono::milliseconds(150)) {
+                stereo_display_component_->ResetProjection();
+                resync_pending = false;
+                last_resync = now;
+            }
         }
 
         // Sleep for ~ 1 frame
@@ -2121,7 +2146,7 @@ void StereoDisplayComponent::FeedAutoDepthSample(uint32_t max_disp_px, uint32_t 
 //-----------------------------------------------------------------------------
 // Purpose: To update the Convergence value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta)
+void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, bool resync)
 {
     float cur_conv = GetConvergence();
     if (is_delta) {
@@ -2131,7 +2156,9 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta)
     if (NearlyEqual(cur_conv, new_conv))
         return;
     while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
-    ResetProjection();
+    // resync=false lets the hotkey poll loop batch the projection re-sync
+    // instead of firing it on every autorepeat tick.
+    if (resync) ResetProjection();
 }
 
 
