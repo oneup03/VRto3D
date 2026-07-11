@@ -814,12 +814,14 @@ void LeiaSrPresenter::HeadTrackingThreadLoop()
         // SR head-pose stream regardless to keep its queue from backing
         // up — but skip the UDP send and reset the One Euro filters on
         // the disabled→enabled edge so resumption doesn't see a giant
-        // dx/dt spike from the idle gap.
+        // dx/dt spike from the idle gap. sr_tracking_enabled mutes this
+        // built-in sender while leaving the OpenTrack receiver running, so
+        // an external source (OpenTrack app, VertoXR) can feed the port.
         bool use_ot = true;
         StereoDisplayDriverConfiguration live_cfg{};
         if (renderer_ && renderer_->Component()) {
             live_cfg = renderer_->Component()->GetConfig();
-            use_ot   = live_cfg.use_open_track;
+            use_ot   = live_cfg.use_open_track && live_cfg.sr_tracking_enabled;
         }
 
         if (use_ot && !prev_use_ot && track_pipeline_) {
