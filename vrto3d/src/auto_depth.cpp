@@ -30,7 +30,9 @@
 #include "hmd_device_driver.h"  // StereoDisplayComponent::FeedAutoDepthSample
 
 
-// Disparity histogram — 128 buckets covering up to 512px (stride=4).
+// Disparity histogram — 128 buckets, each spanning `stride` source pixels.
+// Stride is 4 up to ~2K-wide eyes and grows on wider targets so the buckets
+// always cover the full search radius (see Run()).
 // Layout: [0..127] = bucket counts, [128] = total committed matches.
 #define NUM_BUCKETS 128
 
@@ -95,8 +97,11 @@ void CSMain(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex)
             [unroll] for (int i = -BLOCK_HALF; i <= BLOCK_HALF; ++i)
                 Lb[i + BLOCK_HALF] = LoadL(x + i, y);
 
-            // Search positive disparity: right-eye match is to the LEFT of
-            // the left-eye column. d=0 == infinity, growing d == closer.
+            // Search crossed (pop-out) disparity only: right-eye match is to
+            // the LEFT of the left-eye column. Under the converged off-axis
+            // projection d=0 == the screen plane (z = convergence), growing d
+            // == closer. Uncrossed (behind-screen) disparity is not searched
+            // — background divergence is not this loop's problem.
             uint max_d = min(search_radius, x - BLOCK_HALF);
             float bestCost   = 1e9;
             float secondBest = 1e9;
@@ -111,8 +116,21 @@ void CSMain(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex)
                     float3 dC = abs(Lb[j + BLOCK_HALF] - R);
                     cost += dC.r + dC.g + dC.b;
                 }
-                if (cost < bestCost)       { secondBest = bestCost; bestCost = cost; bestD = d; }
-                else if (cost < secondBest){ secondBest = cost; }
+                // Runner-up tracking excludes candidates adjacent to the
+                // current best: on smooth textures the cost curve's own
+                // shoulder is nearly as cheap as the minimum, and counting it
+                // as "second best" made the uniqueness test below reject
+                // valid matches on gently-textured near surfaces.
+                if (cost < bestCost)
+                {
+                    if (d - bestD > stride) { secondBest = bestCost; }
+                    bestCost = cost;
+                    bestD    = d;
+                }
+                else if (cost < secondBest && d - bestD > stride)
+                {
+                    secondBest = cost;
+                }
             }
 
             // Lowe-style uniqueness test: only trust the match if it's
@@ -280,9 +298,15 @@ void AutoDepthAnalyzer::Run(ID3D11DeviceContext*    ctx,
     if (sbs_w == 0 || sbs_h == 0) return;
     if (!EnsureResources(sbs)) return;
 
-    constexpr uint32_t kStride = 4;                   // quarter-res
     const uint32_t eye_w = sbs_w / 2;
     const uint32_t search_radius = (std::max)(eye_w / 4u, 16u);
+    // Disparity step / decimation stride: 4px (quarter-res) up to ~2K-wide
+    // eyes, growing with the search radius beyond that so the 128-bucket
+    // histogram always spans the full radius — previously anything past
+    // 508px of disparity silently piled into the top bucket and the loop
+    // under-corrected exactly when objects were closest.
+    const uint32_t kStride = (std::max)(
+        4u, (search_radius + NUM_BUCKETS - 1u) / NUM_BUCKETS);
 
     // Update params CB.
     {
@@ -349,21 +373,26 @@ void AutoDepthAnalyzer::Run(ID3D11DeviceContext*    ctx,
             for (int b = NUM_BUCKETS - 12; b < NUM_BUCKETS; ++b) tail_sum += hist[b];
             const uint32_t tail_floor = tail_sum / 12u;
 
-            // 3-bucket window must clear several thresholds simultaneously:
-            //   (a) absolute floor (150 hits)
-            //   (b) ~3.3% of total
+            // 5-bucket window must clear several thresholds simultaneously
+            // (per-bucket densities identical to the original 3-bucket tune,
+            // rescaled by 5/3 — the wider window lets a genuine near-object
+            // cluster spread over 5-6 buckets qualify where 3 adjacent
+            // buckets alone couldn't):
+            //   (a) absolute floor (250 hits)
+            //   (b) ~5.6% of total
             //   (c) 5x mean per bucket
             //   (d) 4x the tail-floor window (rejects flat boundary residue
             //       while still allowing genuine high-disparity clusters
             //       that produce a clear peak above the residue baseline)
             const uint32_t mean_per_bucket = match_count / NUM_BUCKETS;
             const uint32_t min_window = (std::max<uint32_t>)({
-                150u,
-                match_count / 30u,
-                3u * 5u * mean_per_bucket,
-                4u * 3u * tail_floor});
-            for (int b = NUM_BUCKETS - 2; b >= 1; --b) {
-                const uint32_t window = hist[b - 1] + hist[b] + hist[b + 1];
+                250u,
+                match_count / 18u,
+                5u * 5u * mean_per_bucket,
+                4u * 5u * tail_floor});
+            for (int b = NUM_BUCKETS - 3; b >= 2; --b) {
+                const uint32_t window = hist[b - 2] + hist[b - 1] + hist[b]
+                                      + hist[b + 1] + hist[b + 2];
                 if (window >= min_window) {
                     top_bucket = static_cast<uint32_t>(b);
                     max_disp   = top_bucket * kStride;
@@ -371,16 +400,23 @@ void AutoDepthAnalyzer::Run(ID3D11DeviceContext*    ctx,
                 }
             }
 
-            component->FeedAutoDepthSample(max_disp, eye_w);
+            // Peak at the top of the histogram means matches at/beyond the
+            // search radius piled into the last bucket — the true disparity
+            // may be larger than reported.
+            const bool saturated = top_bucket >= NUM_BUCKETS - 3;
+
+            component->FeedAutoDepthSample(max_disp, eye_w, kStride);
 
             if (component->IsAutoDepthLoggingEnabled() &&
                 (frame_counter <= 5 || (frame_counter % 120 == 0))) {
                 LOG() << "AutoDepth: max_disp=" << max_disp
                       << " px (eye_w=" << eye_w
                       << ", search=" << search_radius
+                      << ", stride=" << kStride
                       << ", bucket=" << top_bucket
                       << ", frac=" << (eye_w ? float(max_disp) / float(eye_w) : 0.0f)
                       << ", matches=" << match_count
+                      << (saturated ? ", SATURATED" : "")
                       << ")";
                 std::ostringstream ss;
                 ss << "AutoDepth hist:";

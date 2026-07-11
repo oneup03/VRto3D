@@ -89,7 +89,10 @@ public:
     // disparity logs. Off by default — only useful when tuning thresholds.
     bool  IsAutoDepthLoggingEnabled() const;
     void  SetAutoDepthLoggingEnabled(bool enabled);
-    void  FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px);
+    // disp_step_px = the analyzer's disparity quantization (histogram bucket
+    // width in source pixels); the input deadband is derived from it.
+    void  FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px,
+                              uint32_t disp_step_px);
 
     // UE3D Monitor Mode
     void SetMonitorMode(bool enabled);
@@ -138,6 +141,15 @@ private:
     // -1 = uninitialized. Reset whenever auto-depth is toggled off.
     std::atomic< float > auto_depth_disp_ema_{ -1.0f };
     std::atomic< bool >  auto_depth_log_enabled_{ false };
+    // Short temporal median over raw disparity fractions ahead of the EMA —
+    // a single-frame spike (particle, muzzle flash, camera clip) must not
+    // yank the control loop. Touched only by FeedAutoDepthSample (renderer
+    // thread); other threads request a clear via auto_depth_filter_reset_.
+    static constexpr int kAutoDepthHist = 5;
+    float auto_depth_frac_hist_[kAutoDepthHist] = {};
+    int   auto_depth_hist_n_ = 0;
+    int   auto_depth_hist_i_ = 0;
+    std::atomic< bool > auto_depth_filter_reset_{ false };
 };
 
 
