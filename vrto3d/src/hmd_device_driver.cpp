@@ -2035,9 +2035,11 @@ bool StereoDisplayComponent::IsAutoDepthEnabled() const
 void StereoDisplayComponent::SetAutoDepthEnabled(bool enabled)
 {
     auto_depth_enabled_.store(enabled, std::memory_order_relaxed);
-    // Reset the input-side disparity EMA so the next enable starts fresh
-    // rather than carrying stale samples from a previous session.
+    // Reset the input-side disparity filters so the next enable starts fresh
+    // rather than carrying stale samples from a previous session. The median
+    // ring is renderer-thread-owned, so it's cleared there via the flag.
     auto_depth_disp_ema_.store(-1.0f, std::memory_order_relaxed);
+    auto_depth_filter_reset_.store(true, std::memory_order_relaxed);
     if (!enabled) {
         // Snap the live depth back to the user's manual ceiling.
         ApplyDepth(manual_depth_.load(std::memory_order_relaxed));
@@ -2091,15 +2093,32 @@ void StereoDisplayComponent::SetAutoDepthLoggingEnabled(bool enabled)
 }
 
 
-void StereoDisplayComponent::FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px)
+void StereoDisplayComponent::FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px,
+                                                 uint32_t disp_step_px)
 {
     if (!auto_depth_enabled_.load(std::memory_order_relaxed) || eye_w_px == 0) {
         return;
+    }
+    if (auto_depth_filter_reset_.exchange(false, std::memory_order_relaxed)) {
+        auto_depth_hist_n_ = 0;
+        auto_depth_hist_i_ = 0;
     }
     const float ceiling     = manual_depth_.load(std::memory_order_relaxed);
     const float target_frac = auto_depth_target_disparity_.load(std::memory_order_relaxed);
     const float smoothing   = auto_depth_smoothing_.load(std::memory_order_relaxed);
     const float raw_frac    = static_cast<float>(max_disp_px) / static_cast<float>(eye_w_px);
+
+    // Temporal median prefilter: a single-frame disparity spike (particle,
+    // muzzle flash, camera clip) must not reach the EMA at all — the
+    // asymmetric alpha reacts fast on the rising edge by design, so it
+    // can't defend against outliers on its own.
+    auto_depth_frac_hist_[auto_depth_hist_i_] = raw_frac;
+    auto_depth_hist_i_ = (auto_depth_hist_i_ + 1) % kAutoDepthHist;
+    if (auto_depth_hist_n_ < kAutoDepthHist) ++auto_depth_hist_n_;
+    float sorted[kAutoDepthHist];
+    std::copy(auto_depth_frac_hist_, auto_depth_frac_hist_ + auto_depth_hist_n_, sorted);
+    std::nth_element(sorted, sorted + auto_depth_hist_n_ / 2, sorted + auto_depth_hist_n_);
+    const float med_frac = sorted[auto_depth_hist_n_ / 2];
 
     // Input-side jitter filter: low-pass the disparity-fraction samples
     // before they drive the depth target. Uses an asymmetric EMA — fast
@@ -2108,18 +2127,20 @@ void StereoDisplayComponent::FeedAutoDepthSample(uint32_t max_disp_px, uint32_t 
     // misses a close object doesn't briefly snap depth back up).
     constexpr float kAlphaUp   = 0.20f;  // disparity rising  -> moderate
     constexpr float kAlphaDown = 0.05f;  // disparity falling -> slow ease
-    // Deadband: ignore changes under 0.5% of eye width (~10 source pixels at
-    // 1920 wide). Frame-to-frame bucket jitter at the integer-disparity
-    // resolution (4px = 0.2% of eye width) sits well inside this band.
-    constexpr float kDeadband  = 0.005f;
+    // Deadband: sized to the analyzer's disparity quantization (~1.5 buckets
+    // covers frame-to-frame bucket jitter), capped at half the target so the
+    // band can never mask a real error — the old fixed 0.005 equaled the
+    // default target and swallowed multiples of it at low target settings.
+    const float step_frac = static_cast<float>(disp_step_px) / static_cast<float>(eye_w_px);
+    const float deadband  = (std::min)(1.5f * step_frac, 0.5f * target_frac);
 
     float prev_ema = auto_depth_disp_ema_.load(std::memory_order_relaxed);
     float new_ema;
     if (prev_ema < 0.0f) {
-        new_ema = raw_frac;  // first sample primes the filter
+        new_ema = med_frac;  // first sample primes the filter
     } else {
-        const float diff = raw_frac - prev_ema;
-        if (std::fabs(diff) < kDeadband) {
+        const float diff = med_frac - prev_ema;
+        if (std::fabs(diff) < deadband) {
             new_ema = prev_ema;  // inside deadband — hold steady
         } else {
             const float alpha = (diff > 0.0f) ? kAlphaUp : kAlphaDown;
@@ -2128,18 +2149,28 @@ void StereoDisplayComponent::FeedAutoDepthSample(uint32_t max_disp_px, uint32_t 
     }
     auto_depth_disp_ema_.store(new_ema, std::memory_order_relaxed);
 
+    // Auto pull-in floor: never attenuate below this fraction of the user's
+    // ceiling — a pathological frame (huge close object) should dim the
+    // stereo, not flatten it. Analog of UEVR-3D's min_convergence_m.
+    constexpr float kMinDepthFrac = 0.15f;
+
     const float disp_frac = new_ema;
     float target_depth;
     if (disp_frac <= target_frac || disp_frac <= 0.0f) {
         target_depth = ceiling;
     } else {
         target_depth = ceiling * (target_frac / disp_frac);
-        if (target_depth > ceiling) target_depth = ceiling;
-        if (target_depth < 0.0f)    target_depth = 0.0f;
+        if (target_depth > ceiling)                target_depth = ceiling;
+        if (target_depth < kMinDepthFrac * ceiling) target_depth = kMinDepthFrac * ceiling;
     }
     const float cur      = GetDepth();
     const float smoothed = cur + (target_depth - cur) * smoothing;
-    ApplyDepth(smoothed);
+    // The lerp never exactly converges, and every ApplyDepth pushes a
+    // SteamVR property write — skip sub-epsilon deltas so a settled loop
+    // stops churning vrserver.
+    if (std::fabs(smoothed - cur) > 1e-6f) {
+        ApplyDepth(smoothed);
+    }
 }
 
 
