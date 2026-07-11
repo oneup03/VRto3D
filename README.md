@@ -306,6 +306,7 @@ For quick iteration, register the build output in place instead of copying it:
 | `trk_flt_pos_dz`              | `float` | Position deadzone used by track filter                                                            | `0.02`         |
 | `trk_flt_zoom_smooth`         | `float` | Additional rotation smoothing when moving toward the display                                      | `0.0`          |
 | `trk_flt_max_zoom`            | `float` | Max Z distance used for scaling zoom smoothing                                                    | `10.0`         |
+| `sr_tracking_enabled`         | `bool`  | Enable the LeiaSR built-in head-tracking sender. Disable to feed OpenTrack from another source (e.g. the OpenTrack app) while in LeiaSR mode | `true` |
 | `sr_filter_pos_mincutoff`     | `float` | LeiaSR built-in head tracking: One-Euro position min cutoff                                       | `0.08`         |
 | `sr_filter_pos_beta`          | `float` | LeiaSR built-in head tracking: One-Euro position beta                                             | `0.08`         |
 | `sr_filter_rot_mincutoff`     | `float` | LeiaSR built-in head tracking: One-Euro rotation min cutoff                                       | `0.12`         |

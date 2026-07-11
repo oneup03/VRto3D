@@ -810,6 +810,11 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
     // out on Linux, so this whole section is hidden there.
     if (cfg.output_mode == OutputMode::LeiaSR &&
         ImGui::CollapsingHeader("LeiaSR Head Tracking")) {
+        if (ImGui::Checkbox("Enable LeiaSR Tracking", &cfg.sr_tracking_enabled)) dirty = true;
+        ImGui::TextWrapped("Disable to drive OpenTrack from another source "
+                           "(e.g. the OpenTrack app) instead of the built-in "
+                           "SR head tracker.");
+        ImGui::BeginDisabled(!cfg.sr_tracking_enabled);
         if (callbacks.calibrate_leiasr_head) {
             if (ImGui::Button("Calibrate (snap current head pose to neutral)")) {
                 callbacks.calibrate_leiasr_head();
@@ -840,6 +845,7 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
             cfg.sr_track_mode = track_modes[sel];
             dirty = true;
         }
+        ImGui::EndDisabled();
     }
 #endif  // _WIN32 (LeiaSR head tracking)
 
