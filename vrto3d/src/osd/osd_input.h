@@ -47,8 +47,8 @@ struct OsdSurface {
 };
 
 // One-shot capture result returned by OsdInput::PollCapture().
-// `key_name` is a raw VK_*/XINPUT_GAMEPAD_* string (or '+'-joined combo) that
-// VRto3DLib's VirtualKeyMappings / XInputMappings can resolve back to a code.
+// `key_name` is a portable key-name string (or '+'-joined combo) from the
+// vrto3dlib/key_names vocabulary, which resolves it back to a code.
 struct CapturedKey {
     bool        valid = false;
     std::string key_name;

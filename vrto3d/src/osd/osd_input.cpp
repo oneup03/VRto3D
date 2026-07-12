@@ -17,7 +17,6 @@
 #include "osd/osd_input.h"
 
 #include <atomic>
-#include <unordered_map>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -26,7 +25,7 @@
 #include <Xinput.h>
 
 #include "imgui.h"
-#include "vrto3dlib/key_mappings.h"
+#include "vrto3dlib/key_names.h"
 
 namespace vrto3d::osd {
 
@@ -135,30 +134,15 @@ ImGuiKey VkToImGuiKey(int vk) {
     return ImGuiKey_None;
 }
 
-// Reverse lookup: VK_*/XINPUT_GAMEPAD_* numeric code → its name string in
-// VRto3DLib's VirtualKeyMappings / XInputMappings tables. Used by the
-// click-to-capture key picker to round-trip a captured key into the same
-// string format that JsonManager parses.
-const std::unordered_map<int, std::string>& KeyCodeToName() {
-    static const auto map = []{
-        std::unordered_map<int, std::string> m;
-        for (auto& kv : VirtualKeyMappings) m.emplace(kv.second, kv.first);
-        for (auto& kv : XInputMappings)     m.emplace(kv.second, kv.first);
-        return m;
-    }();
-    return map;
-}
-
+// Reverse lookup: numeric code → canonical portable name, delegated to the
+// shared key_names vocabulary so captured binds round-trip through JsonManager
+// (identical to the Linux OSD path in osd_input_linux.cpp).
 std::string NameForVk(int vk) {
-    auto& map = KeyCodeToName();
-    auto it = map.find(vk);
-    return it != map.end() ? it->second : std::string{};
+    return vrto3d::keys::NameFromKeyCode(vk);
 }
 
 std::string NameForPadMask(uint32_t mask) {
-    auto& map = KeyCodeToName();
-    auto it = map.find(static_cast<int>(mask));
-    return it != map.end() ? it->second : std::string{};
+    return vrto3d::keys::NameFromPadBits(static_cast<int>(mask));
 }
 
 } // namespace

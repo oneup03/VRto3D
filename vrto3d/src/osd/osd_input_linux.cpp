@@ -34,132 +34,17 @@
 
 #include <cstring>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "imgui.h"
 
 #include "vrto3dlib/input_state.h"
 
-// VK_* / XINPUT_GAMEPAD_* numeric codes. The shared header is being added by
-// the input_state port; fall back to the canonical Win32 values (guarded so
-// the shared definitions win once the header exists).
-#if __has_include("vrto3dlib/key_codes.h")
+// VK_* / XINPUT_GAMEPAD_* numeric codes (plus deadzone constants) and the
+// portable key-name vocabulary — the same headers the driver and JsonManager
+// use, so captured names round-trip through profiles unchanged.
 #include "vrto3dlib/key_codes.h"
-#endif
-
-#ifndef VK_ESCAPE
-#define VK_LBUTTON    0x01
-#define VK_RBUTTON    0x02
-#define VK_MBUTTON    0x04
-#define VK_XBUTTON1   0x05
-#define VK_XBUTTON2   0x06
-#define VK_BACK       0x08
-#define VK_TAB        0x09
-#define VK_RETURN     0x0D
-#define VK_SHIFT      0x10
-#define VK_CONTROL    0x11
-#define VK_MENU       0x12
-#define VK_PAUSE      0x13
-#define VK_CAPITAL    0x14
-#define VK_ESCAPE     0x1B
-#define VK_SPACE      0x20
-#define VK_PRIOR      0x21
-#define VK_NEXT       0x22
-#define VK_END        0x23
-#define VK_HOME       0x24
-#define VK_LEFT       0x25
-#define VK_UP         0x26
-#define VK_RIGHT      0x27
-#define VK_DOWN       0x28
-#define VK_SNAPSHOT   0x2C
-#define VK_INSERT     0x2D
-#define VK_DELETE     0x2E
-#define VK_LWIN       0x5B
-#define VK_RWIN       0x5C
-#define VK_NUMPAD0    0x60
-#define VK_NUMPAD1    0x61
-#define VK_NUMPAD2    0x62
-#define VK_NUMPAD3    0x63
-#define VK_NUMPAD4    0x64
-#define VK_NUMPAD5    0x65
-#define VK_NUMPAD6    0x66
-#define VK_NUMPAD7    0x67
-#define VK_NUMPAD8    0x68
-#define VK_NUMPAD9    0x69
-#define VK_MULTIPLY   0x6A
-#define VK_ADD        0x6B
-#define VK_SUBTRACT   0x6D
-#define VK_DECIMAL    0x6E
-#define VK_DIVIDE     0x6F
-#define VK_F1         0x70
-#define VK_F2         0x71
-#define VK_F3         0x72
-#define VK_F4         0x73
-#define VK_F5         0x74
-#define VK_F6         0x75
-#define VK_F7         0x76
-#define VK_F8         0x77
-#define VK_F9         0x78
-#define VK_F10        0x79
-#define VK_F11        0x7A
-#define VK_F12        0x7B
-#define VK_F13        0x7C
-#define VK_F14        0x7D
-#define VK_F15        0x7E
-#define VK_F16        0x7F
-#define VK_F17        0x80
-#define VK_F18        0x81
-#define VK_F19        0x82
-#define VK_F20        0x83
-#define VK_F21        0x84
-#define VK_F22        0x85
-#define VK_F23        0x86
-#define VK_F24        0x87
-#define VK_LSHIFT     0xA0
-#define VK_RSHIFT     0xA1
-#define VK_LCONTROL   0xA2
-#define VK_RCONTROL   0xA3
-#define VK_LMENU      0xA4
-#define VK_RMENU      0xA5
-#define VK_OEM_1      0xBA
-#define VK_OEM_PLUS   0xBB
-#define VK_OEM_COMMA  0xBC
-#define VK_OEM_MINUS  0xBD
-#define VK_OEM_PERIOD 0xBE
-#define VK_OEM_2      0xBF
-#define VK_OEM_3      0xC0
-#define VK_OEM_4      0xDB
-#define VK_OEM_5      0xDC
-#define VK_OEM_6      0xDD
-#define VK_OEM_7      0xDE
-#endif  // VK_ESCAPE
-
-#ifndef XINPUT_GAMEPAD_A
-#define XINPUT_GAMEPAD_DPAD_UP        0x0001
-#define XINPUT_GAMEPAD_DPAD_DOWN      0x0002
-#define XINPUT_GAMEPAD_DPAD_LEFT      0x0004
-#define XINPUT_GAMEPAD_DPAD_RIGHT     0x0008
-#define XINPUT_GAMEPAD_START          0x0010
-#define XINPUT_GAMEPAD_BACK           0x0020
-#define XINPUT_GAMEPAD_LEFT_THUMB     0x0040
-#define XINPUT_GAMEPAD_RIGHT_THUMB    0x0080
-#define XINPUT_GAMEPAD_LEFT_SHOULDER  0x0100
-#define XINPUT_GAMEPAD_RIGHT_SHOULDER 0x0200
-#define XINPUT_GAMEPAD_A              0x1000
-#define XINPUT_GAMEPAD_B              0x2000
-#define XINPUT_GAMEPAD_X              0x4000
-#define XINPUT_GAMEPAD_Y              0x8000
-#endif  // XINPUT_GAMEPAD_A
-#ifndef XINPUT_GAMEPAD_GUIDE
-#define XINPUT_GAMEPAD_GUIDE          0x400
-#endif
-#ifndef XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE
-#define XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE  7849
-#endif
-#ifndef XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE
-#define XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE 8689
-#endif
+#include "vrto3dlib/key_names.h"
 
 namespace vrto3d::osd {
 
@@ -223,89 +108,17 @@ ImGuiKey VkToImGuiKey(int vk) {
     return ImGuiKey_None;
 }
 
-// Reverse lookup: VK_*/XINPUT_GAMEPAD_* numeric code → its name string. Kept
-// local (rather than including vrto3dlib/key_mappings.h, which is still
-// Win32-only) but the strings match VirtualKeyMappings / XInputMappings
-// exactly so captured names round-trip through JsonManager unchanged. Split
-// into two tables so a D-pad bit (0x0001) can't alias VK_LBUTTON (0x01) the
-// way a single combined map would.
-struct NamedCode {
-    const char* name;
-    int         code;
-};
-
-const NamedCode kVkNames[] = {
-    {"VK_LMOUSE", VK_LBUTTON}, {"VK_RMOUSE", VK_RBUTTON}, {"VK_MMOUSE", VK_MBUTTON},
-    {"VK_MOUSE4", VK_XBUTTON1}, {"VK_MOUSE5", VK_XBUTTON2},
-    {"VK_BACKSPACE", VK_BACK}, {"VK_TAB", VK_TAB}, {"VK_RETURN", VK_RETURN},
-    {"VK_SHIFT", VK_SHIFT}, {"VK_CONTROL", VK_CONTROL}, {"VK_MENU", VK_MENU},
-    {"VK_PAUSE", VK_PAUSE}, {"VK_CAPS", VK_CAPITAL}, {"VK_ESCAPE", VK_ESCAPE},
-    {"VK_SPACE", VK_SPACE}, {"VK_PGUP", VK_PRIOR}, {"VK_PGDWN", VK_NEXT},
-    {"VK_END", VK_END}, {"VK_HOME", VK_HOME},
-    {"VK_LEFT", VK_LEFT}, {"VK_UP", VK_UP}, {"VK_RIGHT", VK_RIGHT}, {"VK_DOWN", VK_DOWN},
-    {"VK_SNAPSHOT", VK_SNAPSHOT}, {"VK_INSERT", VK_INSERT}, {"VK_DELETE", VK_DELETE},
-    {"VK_NUMPAD0", VK_NUMPAD0}, {"VK_NUMPAD1", VK_NUMPAD1}, {"VK_NUMPAD2", VK_NUMPAD2},
-    {"VK_NUMPAD3", VK_NUMPAD3}, {"VK_NUMPAD4", VK_NUMPAD4}, {"VK_NUMPAD5", VK_NUMPAD5},
-    {"VK_NUMPAD6", VK_NUMPAD6}, {"VK_NUMPAD7", VK_NUMPAD7}, {"VK_NUMPAD8", VK_NUMPAD8},
-    {"VK_NUMPAD9", VK_NUMPAD9},
-    {"VK_MULTIPLY", VK_MULTIPLY}, {"VK_ADD", VK_ADD}, {"VK_SUBTRACT", VK_SUBTRACT},
-    {"VK_DECIMAL", VK_DECIMAL}, {"VK_DIVIDE", VK_DIVIDE},
-    {"VK_F1", VK_F1}, {"VK_F2", VK_F2}, {"VK_F3", VK_F3}, {"VK_F4", VK_F4},
-    {"VK_F5", VK_F5}, {"VK_F6", VK_F6}, {"VK_F7", VK_F7}, {"VK_F8", VK_F8},
-    {"VK_F9", VK_F9}, {"VK_F10", VK_F10}, {"VK_F11", VK_F11}, {"VK_F12", VK_F12},
-    {"VK_F13", VK_F13}, {"VK_F14", VK_F14}, {"VK_F15", VK_F15}, {"VK_F16", VK_F16},
-    {"VK_F17", VK_F17}, {"VK_F18", VK_F18}, {"VK_F19", VK_F19}, {"VK_F20", VK_F20},
-    {"VK_F21", VK_F21}, {"VK_F22", VK_F22}, {"VK_F23", VK_F23}, {"VK_F24", VK_F24},
-    {"VK_OEM_MINUS", VK_OEM_MINUS}, {"VK_OEM_PLUS", VK_OEM_PLUS},
-    {"VK_LBRACKET", VK_OEM_4}, {"VK_RBRACKET", VK_OEM_6},
-    {"VK_A", 'A'}, {"VK_B", 'B'}, {"VK_C", 'C'}, {"VK_D", 'D'},
-    {"VK_E", 'E'}, {"VK_F", 'F'}, {"VK_G", 'G'}, {"VK_H", 'H'},
-    {"VK_I", 'I'}, {"VK_J", 'J'}, {"VK_K", 'K'}, {"VK_L", 'L'},
-    {"VK_M", 'M'}, {"VK_N", 'N'}, {"VK_O", 'O'}, {"VK_P", 'P'},
-    {"VK_Q", 'Q'}, {"VK_R", 'R'}, {"VK_S", 'S'}, {"VK_T", 'T'},
-    {"VK_U", 'U'}, {"VK_V", 'V'}, {"VK_W", 'W'}, {"VK_X", 'X'},
-    {"VK_Y", 'Y'}, {"VK_Z", 'Z'},
-    {"VK_0", '0'}, {"VK_1", '1'}, {"VK_2", '2'}, {"VK_3", '3'},
-    {"VK_4", '4'}, {"VK_5", '5'}, {"VK_6", '6'}, {"VK_7", '7'},
-    {"VK_8", '8'}, {"VK_9", '9'},
-};
-
-const NamedCode kPadNames[] = {
-    {"XINPUT_GAMEPAD_A", XINPUT_GAMEPAD_A},
-    {"XINPUT_GAMEPAD_B", XINPUT_GAMEPAD_B},
-    {"XINPUT_GAMEPAD_X", XINPUT_GAMEPAD_X},
-    {"XINPUT_GAMEPAD_Y", XINPUT_GAMEPAD_Y},
-    {"XINPUT_GAMEPAD_RIGHT_SHOULDER", XINPUT_GAMEPAD_RIGHT_SHOULDER},
-    {"XINPUT_GAMEPAD_LEFT_SHOULDER", XINPUT_GAMEPAD_LEFT_SHOULDER},
-    {"XINPUT_GAMEPAD_DPAD_UP", XINPUT_GAMEPAD_DPAD_UP},
-    {"XINPUT_GAMEPAD_DPAD_DOWN", XINPUT_GAMEPAD_DPAD_DOWN},
-    {"XINPUT_GAMEPAD_DPAD_LEFT", XINPUT_GAMEPAD_DPAD_LEFT},
-    {"XINPUT_GAMEPAD_DPAD_RIGHT", XINPUT_GAMEPAD_DPAD_RIGHT},
-    {"XINPUT_GAMEPAD_START", XINPUT_GAMEPAD_START},
-    {"XINPUT_GAMEPAD_BACK", XINPUT_GAMEPAD_BACK},
-    {"XINPUT_GAMEPAD_GUIDE", XINPUT_GAMEPAD_GUIDE},
-    {"XINPUT_GAMEPAD_LEFT_THUMB", XINPUT_GAMEPAD_LEFT_THUMB},
-    {"XINPUT_GAMEPAD_RIGHT_THUMB", XINPUT_GAMEPAD_RIGHT_THUMB},
-};
-
+// Reverse lookup: numeric code → canonical portable name, delegated to the
+// shared key_names vocabulary so captured binds match what JsonManager writes.
+// Keyboard/mouse codes and gamepad bitmasks go through separate lookups so a
+// D-pad bit (0x0001) can't alias VK_LBUTTON (0x01) the way a single combined
+// map would.
 std::string NameForVk(int vk) {
-    static const auto map = []{
-        std::unordered_map<int, std::string> m;
-        for (const auto& e : kVkNames) m.emplace(e.code, e.name);
-        return m;
-    }();
-    auto it = map.find(vk);
-    return it != map.end() ? it->second : std::string{};
+    return vrto3d::keys::NameFromKeyCode(vk);
 }
 
 std::string NameForPadMask(uint32_t mask) {
-    static const auto map = []{
-        std::unordered_map<int, std::string> m;
-        for (const auto& e : kPadNames) m.emplace(e.code, e.name);
-        return m;
-    }();
-    auto it = map.find(static_cast<int>(mask));
-    return it != map.end() ? it->second : std::string{};
+    return vrto3d::keys::NameFromPadBits(static_cast<int>(mask));
 }
 
 }  // namespace

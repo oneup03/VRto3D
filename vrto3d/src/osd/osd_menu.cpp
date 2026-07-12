@@ -27,19 +27,7 @@
 #include "hmd_device_driver.h"
 #include "platform.h"
 #include "vrto3dlib/stereo_config.h"
-#ifdef _WIN32
-#include "vrto3dlib/key_mappings.h"
-#else
-#include "vrto3dlib/key_codes.h"
 #include "vrto3dlib/key_names.h"
-#include <unordered_map>
-// Keybind-type name map (mirrors key_mappings.h, which is Windows-only).
-static std::unordered_map<std::string, int> KeyBindTypes = {
-    {"switch", SWITCH}, {"toggle", TOGGLE}, {"hold", HOLD}
-};
-#endif
-
-#include <sstream>
 
 namespace vrto3d::osd {
 
@@ -65,6 +53,11 @@ struct OsdMenu::Impl {
     void DrawSystemTab();
     void DrawFooter();
     void DrawTitleChrome();
+
+    // Re-derive every runtime bind field from the symbolic *_str strings, then
+    // push the config to the driver. Every tab's dirty handler funnels through
+    // this so an OSD capture/edit takes effect immediately.
+    void ApplyConfig(StereoDisplayDriverConfiguration& cfg);
 
     // State for the click-to-capture key picker. -1 row = none.
     int  capture_row_  = -1;
@@ -372,7 +365,7 @@ void OsdMenu::Impl::DrawStereoTab() {
     bool eye_swap = cfg.eye_swap;
     if (ImGui::Checkbox("Swap Eyes", &eye_swap)) {
         cfg.eye_swap = eye_swap;
-        component->LoadSettings(cfg);
+        ApplyConfig(cfg);
     }
 
 }
@@ -395,43 +388,17 @@ std::string FloatsToCsv(const std::vector<float>& v, int prec = 3) {
 // its symbolic string. Mirrors the parser in JsonManager::LoadProfileFromJson
 // so edits made through the OSD take effect without needing a save+reload.
 void ReparseHotkey(const std::string& s, int32_t& code, bool* xinput) {
-    code = 0;
-    if (xinput) *xinput = false;
-    if (s.empty()) return;
-#ifdef _WIN32
-    if (VirtualKeyMappings.find(s) != VirtualKeyMappings.end()) {
-        code = VirtualKeyMappings[s];
-        if (xinput) *xinput = false;
-        return;
-    }
-    if (XInputMappings.find(s) != XInputMappings.end() || s.find('+') != std::string::npos) {
-        std::stringstream ss(s);
-        std::string tok;
-        while (std::getline(ss, tok, '+')) {
-            auto it = XInputMappings.find(tok);
-            if (it != XInputMappings.end()) code |= it->second;
-        }
-        if (xinput) *xinput = true;
-    }
-#else
-    // key_names accepts both the portable vocabulary and legacy VK_*/XINPUT_*
-    // spellings, so OSD-entered names parse identically to JsonManager.
-    const int key = vrto3d::keys::KeyCodeFromName(s);
-    if (key >= 0) {
-        code = key;
-        if (xinput) *xinput = false;
-        return;
-    }
-    if (vrto3d::keys::IsGamepadName(s) || s.find('+') != std::string::npos) {
-        std::stringstream ss(s);
-        std::string tok;
-        while (std::getline(ss, tok, '+')) {
-            const int bits = vrto3d::keys::PadBitsFromName(tok);
-            if (bits >= 0) code |= bits;
-        }
-        if (xinput) *xinput = true;
-    }
-#endif
+    // Shared cross-platform parser (key_names accepts both the portable
+    // vocabulary and legacy VK_*/XINPUT_* spellings, so OSD-entered names parse
+    // identically to JsonManager). migrate=false: this only re-derives the
+    // runtime code for a live edit; the string is rewritten to canonical
+    // spelling on the next profile save.
+    std::string name = s;
+    int32_t parsed = 0;
+    bool xi = false;
+    vrto3d::keys::ParseBind(name, parsed, xi, /*migrate=*/false);
+    code = parsed;
+    if (xinput) *xinput = xi;
 }
 
 std::vector<float> CsvToFloats(const char* s) {
@@ -450,6 +417,27 @@ std::vector<float> CsvToFloats(const char* s) {
 }
 
 } // namespace
+
+// Re-derive the runtime bind fields (load keys, xinput flags, bind types) from
+// the symbolic *_str strings for every user-preset row and the pose_reset /
+// ctrl_toggle keys, then push the config to the driver. All tab dirty handlers
+// funnel through here: previously only the System tab re-derived, so a gamepad
+// bind captured in the User Hotkeys or Tracking tab kept load_xinput=false and
+// user_load_key=0 and never fired until a profile save+reload.
+void OsdMenu::Impl::ApplyConfig(StereoDisplayDriverConfiguration& cfg) {
+    for (size_t i = 0; i < cfg.num_user_settings; ++i) {
+        bool xi = false;
+        ReparseHotkey(cfg.user_load_str[i], cfg.user_load_key[i], &xi);
+        cfg.load_xinput[i] = xi;
+        const int kt = vrto3d::keys::KeyBindTypeFromName(cfg.user_type_str[i]);
+        if (kt >= 0) cfg.user_key_type[i] = kt;
+    }
+    ReparseHotkey(cfg.pose_reset_str,  cfg.pose_reset_key,  &cfg.reset_xinput);
+    ReparseHotkey(cfg.ctrl_toggle_str, cfg.ctrl_toggle_key, &cfg.ctrl_xinput);
+    const int kt = vrto3d::keys::KeyBindTypeFromName(cfg.ctrl_type_str);
+    if (kt >= 0) cfg.ctrl_type = kt;
+    component->LoadSettings(cfg);
+}
 
 // ---------------------------------------------------------------------------
 // User Hotkeys tab — editable rows + click-to-capture picker.
@@ -666,7 +654,7 @@ void OsdMenu::Impl::DrawUserHotkeysTab(OsdInput& input) {
     ImGui::TextDisabled("Save profile from the footer to persist changes.");
 
     if (dirty) {
-        component->LoadSettings(cfg);
+        ApplyConfig(cfg);
     }
 }
 
@@ -850,7 +838,7 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
 #endif  // _WIN32 (LeiaSR head tracking)
 
     if (dirty) {
-        component->LoadSettings(cfg);
+        ApplyConfig(cfg);
     }
 }
 
@@ -908,7 +896,7 @@ void OsdMenu::Impl::DrawShaderTab() {
     }
 
     if (dirty) {
-        component->LoadSettings(cfg);
+        ApplyConfig(cfg);
     }
 }
 
@@ -1074,20 +1062,7 @@ void OsdMenu::Impl::DrawSystemTab() {
     }
 
     if (dirty) {
-        // Re-derive load/store keys from the (possibly edited) symbolic
-        // strings so changes take effect immediately, not just on reload.
-        for (size_t i = 0; i < cfg.num_user_settings; ++i) {
-            bool xi = false;
-            ReparseHotkey(cfg.user_load_str[i],  cfg.user_load_key[i],  &xi);
-            cfg.load_xinput[i] = xi;
-            auto kt = KeyBindTypes.find(cfg.user_type_str[i]);
-            if (kt != KeyBindTypes.end()) cfg.user_key_type[i] = kt->second;
-        }
-        ReparseHotkey(cfg.pose_reset_str,   cfg.pose_reset_key,   &cfg.reset_xinput);
-        ReparseHotkey(cfg.ctrl_toggle_str,  cfg.ctrl_toggle_key,  &cfg.ctrl_xinput);
-        auto kt = KeyBindTypes.find(cfg.ctrl_type_str);
-        if (kt != KeyBindTypes.end()) cfg.ctrl_type = kt->second;
-        component->LoadSettings(cfg);
+        ApplyConfig(cfg);
     }
 }
 

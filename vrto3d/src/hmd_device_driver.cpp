@@ -20,7 +20,7 @@
 #ifdef _WIN32
 #include "direct_mode_component.h"
 #include "dx11_renderer.h"
-#include "vrto3dlib/key_mappings.h"
+#include "vrto3dlib/key_codes.h"
 #else
 #include "vk/direct_mode_component_vk.h"
 #include "vk/vk_renderer.h"
