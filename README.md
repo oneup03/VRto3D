@@ -38,6 +38,10 @@ Find your display type and use the listed Output Mode(s):
         - vertical: 2205 active; 4 front, 5 sync, 36 back (2250 total)
     - It may be necessary to remove other resolutions with CRU to avoid games changing the resolution. Hopefully running them in windowed mode (required for VRto3D) will prevent issues though
     - More instructions and discussion are in <a href="https://www.mtbs3d.com/phpbb/viewtopic.php?t=26494" target="_blank" rel="noopener noreferrer">this forum thread</a>
+- **Linux:** `SbS`, `TaB`, and the `FramePacked*` modes all work. Frame-packed timing is applied differently than on Windows:
+    - **X11 session**: VRto3D applies the 1280x1470/1920x2205 custom modeline at runtime via XRandR — no EDID hacking (AMD/Intel; NVIDIA proprietary needs `ModeValidation` overrides in xorg.conf)
+    - **Wayland session**: runtime custom modelines aren't possible. Generate an EDID override with `tools/make_fp_edid.py` and load it via `drm.edid_firmware=<connector>:edid/<file>.bin` on the kernel cmdline
+    - Either way the HDMI 3D InfoFrame is not emitted (kernel limitation) — most 3D TVs sync to the raw timing or let you force 3D mode manually, exactly like CRU-based setups on Windows
 
 </details>
 
@@ -48,6 +52,7 @@ Find your display type and use the listed Output Mode(s):
 - `RowInterlaced` covers the vast majority of passive 3D TVs and monitors
 - `ColInterlaced` is for column-interlaced passive panels
 - `Checkerboard` is for DLP-link 3D projectors and the older Mitsubishi / Samsung DLP 3D TVs (`(x+y)%2` eye selection)
+- **Linux:** supported
 
 </details>
 
@@ -66,6 +71,7 @@ Find your display type and use the listed Output Mode(s):
     - On the OSD `System` tab, set `Launch Script` to `start vertoxr://steamvr` so VertoXR auto-starts with OpenTrack active every time you start SteamVR
     - Click `Save Default Cfg` in the OSD footer to persist the changes
     - Use the `Recenter` button in VertoXR as needed
+- **Linux:** `SbS` output is supported; the optional VertoXR head-tracking app is Windows-only, so use another OpenTrack source for head tracking on Linux
 
 </details>
 
@@ -75,6 +81,7 @@ Find your display type and use the listed Output Mode(s):
 - **Output Mode:** `SbS`
 - Lume Pad Requires <a href="https://support.leiainc.com/lume-pad-2/apps/moonlight3d" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a> to stream the SbS output to the device
 - 3DS Requires <a href="https://github.com/zoeyjodon/moonlight-N3DS/releases" target="_blank" rel="noopener noreferrer">Sunshine/Gamestream + Moonlight</a> with a custom resolution
+- **Linux:** supported
 
 </details>
 
@@ -86,6 +93,7 @@ Find your display type and use the listed Output Mode(s):
 - Check the `Fix LeiaSR library loading (requires restart)` option in the VRto3D installer
   - Or Manually: Open Windows Run with `Win + R`, Paste this command: `cmd /k setx PATH "C:\Program Files\LeiaSR\Platform\bin;%PATH%"` Exit the terminal and reboot
 - 6DoF head tracking is built in - just enable Open Track in the OSD `Tracking` tab. Tune the LeiaSR head-tracking and track filter sliders on the same tab
+- **Linux:** not available (compiled out) - there is no Linux SR SDK in-tree
 
 </details>
 
@@ -97,6 +105,7 @@ Find your display type and use the listed Output Mode(s):
 - `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset. Should be more stable on single-display setups.
 - For both of these modes, it is recommended to start SteamVR before starting the game, as they change monitor modes, which might break games
 - Either one may require `Swap Eyes` to be set depending on how your display initializes
+- **Linux:** not available (compiled out) - `NvidiaDX9` has no Linux driver stack, and `WibbleWobble` is a Windows-only client (a port may come later)
 
 </details>
 
@@ -105,6 +114,7 @@ Find your display type and use the listed Output Mode(s):
 
 - **Output Mode:** `VirtualDesktop`
 - Half-height Full-SbS in a 2W x 2H window with black bars. See the [Virtual Desktop setup wiki](https://oneup03.github.io/VRto3D/wiki/VirtualDesktop) for required additional configuration
+- **Linux:** the `VirtualDesktop` output mode works
 
 </details>
 
@@ -115,6 +125,7 @@ Find your display type and use the listed Output Mode(s):
 - This assumes you have two displays with the same resolution that are aligned vertically. You can also use Nvidia Surround
 - `DualDisplay` puts the left eye on the `display_index` and the right eye on the display to the right of it
 - `DualDisplayFlip` is the same as `DualDisplay` but the left eye is flipped vertically - useful for mirror-based dual-monitor 3D rigs
+- **Linux:** supported
 
 </details>
 
@@ -125,6 +136,7 @@ Find your display type and use the listed Output Mode(s):
 - Red / Cyan glasses: `AnaglyphRedCyan` (simple R \| GB split), `AnaglyphRedCyanDubois` (Dubois - best general-purpose), `AnaglyphRedCyanDeghosted`, `AnaglyphRedCyanCompromise`
 - Green / Magenta glasses: `AnaglyphGreenMagenta` (simple G \| RB split), `AnaglyphGreenMagentaDubois`, `AnaglyphGreenMagentaDeghosted`
 - Blue / Amber (ColorCode 3D) glasses: `AnaglyphBlueAmber`
+- **Linux:** supported
 
 </details>
 
@@ -133,6 +145,7 @@ Find your display type and use the listed Output Mode(s):
 
 - **Output Mode:** `Mono`
 - Single-eye view on any normal 2D display. Toggle `eye_swap` to render the right eye instead of the left
+- **Linux:** supported
 
 </details>
 
@@ -214,45 +227,15 @@ Native Linux SteamVR driver — same direct-mode architecture as Windows, no vir
 
 Config lives in `<steam>/config/vrto3d/default_config.json`, same schema as Windows. Keybind names use the portable vocabulary (`Key_A`, `Numpad7`, `Pad_A`, `Pad_Start+Pad_DPadDown`); legacy `VK_*`/`XINPUT_*` names still load and are rewritten on the next profile save.
 
-#### Building from source
-
-```
-cd vrto3d
-cmake -B build -G Ninja
-cmake --build build
-```
-Dependencies: gcc/clang C++17, cmake, Vulkan headers, libX11 + libXrandr, wayland-client, libxkbcommon, libdrm headers. (Shaders ship pre-compiled as SPIR-V headers; regenerate with `shaders/compile_shaders.sh` if you edit them — needs glslc.)
-
-For quick iteration, register the build output in place instead of copying it:
-```
-~/.local/share/Steam/steamapps/common/SteamVR/bin/vrpathreg.sh adddriver \
-    <checkout>/vrto3d/build/output/drivers/vrto3d
-```
-
 #### Display selection & presenters
 
 `display_index` picks the output (0 = primary, 1..N = connected order). The presenter is chosen by session: Wayland (layer-shell overlay surface — always on top on KDE/Hyprland/Sway, plain fullscreen on GNOME) or X11 (borderless `_NET_WM_STATE_ABOVE` window). Override with env `VRTO3D_PRESENTER=x11|wayland` (e.g. force X11/XWayland when you need runtime frame-packed modelines).
 
-#### Frame-packed (HDMI 1.4 3D TVs)
+Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWobble modes that are compiled out, and the runtime vs. EDID handling for frame-packed HDMI) is noted inline in the [Output Modes](#compatible-3d-displays--output-modes) table.
 
-- **X11 session**: VRto3D applies the 1280x1470/1920x2205 custom modeline at runtime via XRandR — no EDID hacking (AMD/Intel; NVIDIA proprietary needs `ModeValidation` overrides in xorg.conf).
-- **Wayland session**: runtime custom modelines aren't possible. Generate an EDID override with `tools/make_fp_edid.py` and load it via `drm.edid_firmware=<connector>:edid/<file>.bin` on the kernel cmdline.
-- Either way the HDMI 3D InfoFrame is not emitted (kernel limitation) — most 3D TVs sync to the raw timing or let you force 3D mode manually, exactly like CRU-based setups on Windows.
+#### Limitations
 
-#### Not available on Linux (compiled out)
-
-- NVIDIA 3D Vision (`NvidiaDX9`) — driver stack doesn't exist on Linux
-- LeiaSR / Simulated Reality displays — no Linux SR SDK in-tree
-- WibbleWobble lightfield output — Windows client only (may get its own port)
-- UEVR monitor-mode bridge (shared memory) — deferred; planned via a Proton-visible `/dev/shm` mapping
 - Cursor lock/hide (`hide_cursor`/`lock_cursor`) and focus stealing — no cross-client mechanism on Wayland; X11 cursor grab may come later
-
-#### Linux Troubleshooting
-
-- `vrto3d.txt` log: `<steam>/logs/vrto3d.txt` (plus stderr in vrserver.txt)
-- No hotkeys → check `groups` includes `input`; the OSD shows a warning toast
-- No output window → check `WAYLAND_DISPLAY`/`DISPLAY` reach vrserver (launch SteamVR from a desktop session, not a raw console)
-- Screenshots land in `<steam>/steamapps/common/SteamVR/screenshots`
 
 
 ## Configuration
@@ -432,12 +415,32 @@ For quick iteration, register the build output in place instead of copying it:
     - <a href="https://steamcommunity.com/app/250820/discussions/2/1640917625015598552/" target="_blank" rel="noopener noreferrer">Clean SteamVR Install</a>
     - <a href="https://www.vive.com/us/support/vs/category_howto/trouble-with-openxr-titles.html" target="_blank" rel="noopener noreferrer">Set SteamVR as OpenXR Runtime</a>
 
+#### Linux
+- `vrto3d.txt` log: `<steam>/logs/vrto3d.txt` (plus stderr in vrserver.txt)
+- No hotkeys → check `groups` includes `input`; the OSD shows a warning toast
+- No output window → check `WAYLAND_DISPLAY`/`DISPLAY` reach vrserver (launch SteamVR from a desktop session, not a raw console)
+- Screenshots land in `<steam>/steamapps/common/SteamVR/screenshots`
+
 
 ## Building
 
-- On Linux, see [Building from source](#building-from-source) under the Linux section
+#### Windows
 - Clone the code and initialize submodules
 - Define `STEAM_PATH` environment variable with the path to your main Steam folder
 - Open Solution in Visual Studio 2022 or VSCode
 - Use the solution to build this driver
 - Build output is automatically copied to your `SteamVR\drivers` folder
+
+#### Linux
+```
+cd vrto3d
+cmake -B build -G Ninja
+cmake --build build
+```
+Dependencies: gcc/clang C++17, cmake, Vulkan headers, libX11 + libXrandr, wayland-client, libxkbcommon, libdrm headers. (Shaders ship pre-compiled as SPIR-V headers; regenerate with `shaders/compile_shaders.sh` if you edit them — needs glslc.)
+
+For quick iteration, register the build output in place instead of copying it:
+```
+~/.local/share/Steam/steamapps/common/SteamVR/bin/vrpathreg.sh adddriver \
+    <checkout>/vrto3d/build/output/drivers/vrto3d
+```
