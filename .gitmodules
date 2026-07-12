@@ -26,3 +26,7 @@
 [submodule "external/SR-lib"]
 	path = external/SR-lib
 	url = https://github.com/bo3b/SR-lib.git
+[submodule "external/NV3D-Lib"]
+	path = external/NV3D-Lib
+	url = https://github.com/oneup03/NV3D-Lib.git
+	branch = nv3d-glass
