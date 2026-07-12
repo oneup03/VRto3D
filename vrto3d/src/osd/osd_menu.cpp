@@ -27,6 +27,7 @@
 #include "hmd_device_driver.h"
 #include "platform.h"
 #include "vrto3dlib/stereo_config.h"
+#include "vrto3dlib/key_codes.h"
 #include "vrto3dlib/key_names.h"
 
 namespace vrto3d::osd {
