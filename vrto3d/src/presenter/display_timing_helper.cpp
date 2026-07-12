@@ -37,7 +37,8 @@
 
 // NVAPI include must be at file scope (before any C++ namespace) so its
 // typedefs (NvU32, NvAPI_Status, …) land in the global namespace, not in
-// vrto3d. This mirrors how nvstereo_dx9_presenter.cpp includes the header.
+// vrto3d. This is the only NVAPI consumer left in the driver itself — the
+// NvidiaDX9 presenter's NVAPI usage now lives inside NV3D-Lib.
 #include "nvapi.h"
 
 // AMD ADL — pure C headers, no extra namespace concerns.
@@ -246,8 +247,9 @@ void DisplayTimingHelper::Revert()
 
 namespace {
 
-// SEH-guarded probe for delay-loaded nvapi64.dll — identical pattern to
-// NvStereoDx9Presenter::TryNvAPIInitializeSEH.
+// SEH-guarded probe for delay-loaded nvapi64.dll — same pattern NV3D-Lib
+// uses inside CreateInterfaceDX11 (a missing DLL raises a delay-load
+// exception instead of returning an error).
 bool NvApiAvailable()
 {
     __try {

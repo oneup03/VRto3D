@@ -98,17 +98,24 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64;..\external\NV3D-Lib\NV3DLib\lib\x$(PlatformArchitecture)\$(Configuration)-MD</AdditionalLibraryDirectories>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;NV3DLib-mdd.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
+    <PreBuildEvent>
+      <!-- Build only the NV3DLib static lib target inside the submodule
+           (skips its DX11/DX12/OGL/Vulkan sample exes). $(Configuration)-MD
+           maps Debug/Release onto NV3D-Lib's Debug-MD/Release-MD configs,
+           matching this project's default /MDd //MD runtime. -->
+      <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)..\external\NV3D-Lib\tools\build.ps1" -Configuration $(Configuration)-MD -Platform $(PlatformShortName) -Target NV3DLib</Command>
+    </PreBuildEvent>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
@@ -125,7 +132,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -134,10 +141,17 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64;..\external\NV3D-Lib\NV3DLib\lib\x$(PlatformArchitecture)\$(Configuration)-MD</AdditionalLibraryDirectories>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;NV3DLib-md.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
+    <PreBuildEvent>
+      <!-- Build only the NV3DLib static lib target inside the submodule
+           (skips its DX11/DX12/OGL/Vulkan sample exes). $(Configuration)-MD
+           maps Debug/Release onto NV3D-Lib's Debug-MD/Release-MD configs,
+           matching this project's default /MDd //MD runtime. -->
+      <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)..\external\NV3D-Lib\tools\build.ps1" -Configuration $(Configuration)-MD -Platform $(PlatformShortName) -Target NV3DLib</Command>
+    </PreBuildEvent>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
@@ -152,17 +166,24 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;NV3DLib-mdd.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64;..\external\NV3D-Lib\NV3DLib\lib\x$(PlatformArchitecture)\$(Configuration)-MD</AdditionalLibraryDirectories>
     </Link>
+    <PreBuildEvent>
+      <!-- Build only the NV3DLib static lib target inside the submodule
+           (skips its DX11/DX12/OGL/Vulkan sample exes). $(Configuration)-MD
+           maps Debug/Release onto NV3D-Lib's Debug-MD/Release-MD configs,
+           matching this project's default /MDd //MD runtime. -->
+      <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)..\external\NV3D-Lib\tools\build.ps1" -Configuration $(Configuration)-MD -Platform $(PlatformShortName) -Target NV3DLib</Command>
+    </PreBuildEvent>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
@@ -179,7 +200,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\minhook\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -188,10 +209,17 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openvr_api.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3dcompiler.lib;d3d9.lib;ws2_32.lib;simulatedreality.lib;SimulatedRealityCore.lib;SimulatedRealityDirectX.lib;SimulatedRealityDisplays.lib;SimulatedRealityFaceTrackers.lib;DimencoWeaving.lib;opencv_core343.lib;NV3DLib-md.lib;nvapi64.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>simulatedreality.dll;SimulatedRealityCore.dll;SimulatedRealityDirectX.dll;SimulatedRealityDisplays.dll;SimulatedRealityFaceTrackers.dll;DimencoWeaving.dll;opencv_core343.dll;nvapi64.dll;openvr_api.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
-      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\external\openvr\lib\win$(PlatformArchitecture);..\external\SR-lib\SR-SDK-1.34.10\x64\lib;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\lib\x64;..\external\nvapi\amd64;..\external\NV3D-Lib\NV3DLib\lib\x$(PlatformArchitecture)\$(Configuration)-MD</AdditionalLibraryDirectories>
     </Link>
+    <PreBuildEvent>
+      <!-- Build only the NV3DLib static lib target inside the submodule
+           (skips its DX11/DX12/OGL/Vulkan sample exes). $(Configuration)-MD
+           maps Debug/Release onto NV3D-Lib's Debug-MD/Release-MD configs,
+           matching this project's default /MDd //MD runtime. -->
+      <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)..\external\NV3D-Lib\tools\build.ps1" -Configuration $(Configuration)-MD -Platform $(PlatformShortName) -Target NV3DLib</Command>
+    </PreBuildEvent>
     <PostBuildEvent>
       <Command>
 		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
@@ -214,7 +242,6 @@
     <ClCompile Include="src\presenter\window_presenter.cpp" />
     <ClCompile Include="src\presenter\leiasr_presenter.cpp" />
     <ClCompile Include="src\presenter\nvstereo_dx9_presenter.cpp" />
-    <ClCompile Include="src\presenter\nv_3dvision_suppressor.cpp" />
     <ClCompile Include="src\presenter\wibblewobble_presenter.cpp" />
     <ClCompile Include="src\presenter\display_timing_helper.cpp" />
     <ClCompile Include="src\osd\osd_renderer.cpp" />
@@ -225,15 +252,6 @@
     <ClCompile Include="..\external\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\external\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\external\imgui\backends\imgui_impl_dx11.cpp" />
-    <ClCompile Include="..\external\minhook\src\buffer.c" />
-    <ClCompile Include="..\external\minhook\src\hook.c" />
-    <ClCompile Include="..\external\minhook\src\trampoline.c" />
-    <ClCompile Include="..\external\minhook\src\hde\hde64.c">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="..\external\minhook\src\hde\hde32.c">
-      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\hmd_device_driver.h" />
@@ -249,7 +267,6 @@
     <ClInclude Include="src\presenter\window_presenter.h" />
     <ClInclude Include="src\presenter\leiasr_presenter.h" />
     <ClInclude Include="src\presenter\nvstereo_dx9_presenter.h" />
-    <ClInclude Include="src\presenter\nv_3dvision_suppressor.h" />
     <ClInclude Include="src\presenter\wibblewobble_presenter.h" />
     <ClInclude Include="src\presenter\display_timing_helper.h" />
     <ClInclude Include="src\presenter\display_utils.h" />

@@ -407,10 +407,12 @@ void Dx11Renderer::OnAppDisconnect()
     //
     // EXCEPT in NvidiaDX9 mode where out_sbs_ is pinned to fixed panel dims
     // (and is its own composite target — game source dims don't change its
-    // size). Recreating out_sbs_ here would invalidate the cross-device
-    // shared handle that NvStereoDx9Presenter has imported, and NV3D's
-    // per-eye routing wouldn't recover for subsequent games. Keep out_sbs_
-    // alive so the shared handle stays valid across disconnect/connect.
+    // size). NvStereoDx9Presenter sizes its shared staging ring from
+    // out_sbs_'s desc and NV3D-Lib identity-caches the D3D9 imports of the
+    // ring slots; recreating out_sbs_ here would churn the ring + imports at
+    // every transition (historically NV3D's per-eye routing got stuck when
+    // the imported resource was recreated). Keep out_sbs_ alive so the whole
+    // chain stays stable across disconnect/connect.
     if (output_mode_ != OutputMode::NvidiaDX9 ||
         !nv_panel_w_ || !nv_panel_h_) {
         out_sbs_.Reset();
@@ -704,10 +706,10 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     // of the original "thousands of CreateTexture2D failures per second" log
     // pattern that contributed to the GPU driver freeze.
     if (device_dead_.load(std::memory_order_acquire)) return;
-    // If the presenter has died (e.g. NvStereoDx9Presenter detected a wedged
-    // GPU via the sync_query fence), stop composing too. Continuing to push
-    // shader work to a wedged GPU prevents NVIDIA's TDR from recovering and
-    // has been observed to cause full-PC freezes.
+    // If the presenter has died (e.g. NvStereoDx9Presenter latched dead on a
+    // device-removed check or a present-failure streak), stop composing too.
+    // Continuing to push shader work to a wedged GPU prevents NVIDIA's TDR
+    // from recovering and has been observed to cause full-PC freezes.
     if (presenter_ && !presenter_->IsAlive()) return;
     // Pause-on-disconnect: skip frames between VR apps so we don't try to
     // import stale shared-texture handles from a process that just exited.
@@ -1045,9 +1047,10 @@ bool Dx11Renderer::WaitAndDrawPending(int timeout_ms)
 {
     if (!initialized_ || !device_) return false;
     if (device_dead_.load(std::memory_order_acquire)) return false;
-    // Presenter terminal state (e.g. NvStereoDx9Presenter sync_query timeout):
-    // skip OSD render + RecordComposite + Present so we stop adding GPU work.
-    // Sleep instead of busy-looping so the dead state doesn't burn CPU.
+    // Presenter terminal state (e.g. NvStereoDx9Presenter latched dead after
+    // a device-removed check or 40-frame present-failure streak): skip OSD
+    // render + RecordComposite + Present so we stop adding GPU work. Sleep
+    // instead of busy-looping so the dead state doesn't burn CPU.
     if (presenter_ && !presenter_->IsAlive()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms));
         return false;

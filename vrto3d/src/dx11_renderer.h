@@ -275,19 +275,20 @@ private:
     Microsoft::WRL::ComPtr<ID3D11DepthStencilState> composite_depth_;
 
     // NvidiaDX9 mode forces out_sbs_ to DXGI_FORMAT_B8G8R8A8_UNORM regardless
-    // of the per-eye source format, because the D3D9 import path
-    // (NvStereoDx9Presenter) maps the shared handle as D3DFMT_A8R8G8B8 which
-    // requires BGRA byte order. Other output modes keep out_sbs_ at the
+    // of the per-eye source format: NV3D-Lib rejects non-BGRA input textures
+    // (its D3D9 side opens the shared handle as D3DFMT_A8R8G8B8, which
+    // requires BGRA byte order), and NvStereoDx9Presenter's staging ring
+    // copies out_sbs_'s exact desc. Other output modes keep out_sbs_ at the
     // source format.
     OutputMode              output_mode_ = OutputMode::SbS;
 
     // NvidiaDX9 mode also forces out_sbs_ to FIXED panel-derived dimensions
-    // (panel_w*2 × panel_h) regardless of source per-eye size. This keeps
-    // the cross-device shared handle stable across landscape↔game
-    // transitions — empirically NV3D's per-eye routing gets stuck on the
-    // left eye when shared_input_sfc_ is recreated at a transition. With
-    // a fixed-size out_sbs_, the shared handle is imported once and never
-    // re-imported, and NV3D sees a stable resource for the session.
+    // (panel_w*2 × panel_h) regardless of source per-eye size. The presenter
+    // sizes its shared staging ring from out_sbs_'s desc and NV3D-Lib
+    // identity-caches the D3D9 imports of the ring slots — a fixed-size
+    // out_sbs_ means the ring is created once and the imports stay stable
+    // across landscape↔game transitions (empirically NV3D's per-eye routing
+    // got stuck on the left eye when the imported resource was recreated).
     // Layer composite scales per-eye source to fill the panel-sized halves.
     uint32_t                nv_panel_w_ = 0;
     uint32_t                nv_panel_h_ = 0;

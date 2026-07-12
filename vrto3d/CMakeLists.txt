@@ -27,7 +27,6 @@ if(WIN32)
         src/presenter/window_presenter.cpp
         src/presenter/leiasr_presenter.cpp
         src/presenter/nvstereo_dx9_presenter.cpp
-        src/presenter/nv_3dvision_suppressor.cpp
         src/presenter/wibblewobble_presenter.cpp
         src/presenter/display_timing_helper.cpp
         src/osd/osd_renderer.cpp
@@ -67,26 +66,6 @@ else()
 endif()
 list(APPEND DRIVER_SOURCES ${IMGUI_SOURCES})
 
-# MinHook (vendored as submodule at external/minhook). Pure-C library compiled
-# directly into the driver — same pattern as imgui. Used to detour the OSD
-# warning dispatcher inside nvd3dumx.dll so the 3D Vision "non-stereo display
-# mode" red overlay can be suppressed on panels that aren't NV-certified.
-# HDE disassembler source is arch-specific. Windows-only.
-if(WIN32)
-    set(MINHOOK_DIR "${ROOT}/external/minhook")
-    set(MINHOOK_SOURCES
-        ${MINHOOK_DIR}/src/buffer.c
-        ${MINHOOK_DIR}/src/hook.c
-        ${MINHOOK_DIR}/src/trampoline.c
-    )
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        list(APPEND MINHOOK_SOURCES ${MINHOOK_DIR}/src/hde/hde64.c)
-    else()
-        list(APPEND MINHOOK_SOURCES ${MINHOOK_DIR}/src/hde/hde32.c)
-    endif()
-    list(APPEND DRIVER_SOURCES ${MINHOOK_SOURCES})
-endif()
-
 add_library(driver_vrto3d SHARED ${DRIVER_SOURCES})
 
 target_include_directories(driver_vrto3d PRIVATE
@@ -112,7 +91,6 @@ if(WIN32)
         ${ROOT}/external/SR-lib/SR-SDK-1.34.10/x64/third_party/OpenCV/include
         ${ROOT}/external/nvapi
         ${ROOT}/external/adl_sdk/include
-        ${MINHOOK_DIR}/include
     )
 
     # Pre-built openvr_api import lib ships with the submodule.
@@ -143,8 +121,9 @@ if(WIN32)
     )
     # Delay-load LeiaSR + OpenCV + NVAPI DLLs so the driver still loads when
     # those runtimes aren't installed. The DLLs are only resolved when their
-    # first symbol is actually called (i.e., when LeiaSrPresenter::Init or
-    # NvStereoDx9Presenter::Init runs).
+    # first symbol is actually called (i.e., when LeiaSrPresenter::Init runs,
+    # or when NV3D-Lib calls NvAPI_Initialize inside CreateInterfaceDX11 —
+    # the lib SEH-guards that call so a missing nvapi64.dll fails cleanly).
     target_link_options(driver_vrto3d PRIVATE
         "/DELAYLOAD:simulatedreality.dll"
         "/DELAYLOAD:SimulatedRealityCore.dll"
@@ -160,6 +139,76 @@ if(WIN32)
         UNICODE
         _UNICODE
     )
+
+    # --- NV3D-Lib (external/NV3D-Lib, MSBuild-only upstream) -----------------
+    # Compiled here as a separate static target so its own vendored nvapi /
+    # json / minhook headers can't shadow VRto3D's copies (the driver uses
+    # external/nvapi and external/json/include directly). Only the DX11
+    # backend TU is built: the DX12/OGL/Vulkan backends are separate TUs whose
+    # CreateInterface* factories nothing references, and skipping them avoids
+    # a Vulkan-Headers dependency (only vulkan_backend.cpp includes it).
+    # MinHook is compiled INTO this target (from NV3D-Lib's own nested
+    # submodule) — it powers the lib's 3D Vision suppressor; VRto3D no longer
+    # carries a minhook copy of its own.
+    set(NV3DLIB_DIR "${ROOT}/external/NV3D-Lib/NV3DLib")
+    set(NV3DLIB_EXT "${ROOT}/external/NV3D-Lib/external")
+
+    # nvtimings_embedded.h is gitignored upstream and regenerated at build
+    # time. Generate into the submodule's src/ (the same location NV3D-Lib's
+    # own MSBuild pre-build writes): lightboost.cpp includes it with quotes,
+    # so the sibling-directory lookup always wins over include paths — a
+    # binary-dir copy could be shadowed by a stale sibling.
+    set(NV3D_EMBED_HDR "${NV3DLIB_DIR}/src/nvtimings_embedded.h")
+    add_custom_command(
+        OUTPUT "${NV3D_EMBED_HDR}"
+        COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass
+                -File "${ROOT}/external/NV3D-Lib/tools/embed_nvtimings.ps1"
+                -InputJson "${ROOT}/external/NV3D-Lib/nvtimings.json"
+                -OutputHeader "${NV3D_EMBED_HDR}"
+        DEPENDS "${ROOT}/external/NV3D-Lib/nvtimings.json"
+                "${ROOT}/external/NV3D-Lib/tools/embed_nvtimings.ps1"
+        COMMENT "Generating NV3D-Lib nvtimings_embedded.h"
+    )
+
+    set(NV3DLIB_SOURCES
+        ${NV3DLIB_DIR}/src/NV3D.cpp
+        ${NV3DLIB_DIR}/src/d3d9_presenter.cpp
+        ${NV3DLIB_DIR}/src/lightboost.cpp
+        ${NV3DLIB_DIR}/src/log.cpp
+        ${NV3DLIB_DIR}/src/nv_3dvision_suppressor.cpp
+        ${NV3DLIB_DIR}/src/present_window.cpp
+        ${NV3DLIB_DIR}/src/backends/dx11_backend.cpp
+        ${NV3D_EMBED_HDR}
+        ${NV3DLIB_EXT}/minhook/src/buffer.c
+        ${NV3DLIB_EXT}/minhook/src/hook.c
+        ${NV3DLIB_EXT}/minhook/src/trampoline.c
+    )
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        list(APPEND NV3DLIB_SOURCES ${NV3DLIB_EXT}/minhook/src/hde/hde64.c)
+    else()
+        list(APPEND NV3DLIB_SOURCES ${NV3DLIB_EXT}/minhook/src/hde/hde32.c)
+    endif()
+
+    add_library(nv3dlib STATIC ${NV3DLIB_SOURCES})
+    target_include_directories(nv3dlib
+        PUBLIC  ${NV3DLIB_DIR}/include
+        PRIVATE ${NV3DLIB_DIR}/src
+                ${NV3DLIB_EXT}/nvapi
+                ${NV3DLIB_EXT}/minhook/include
+                ${NV3DLIB_EXT}/json/single_include
+    )
+    # Parity with NV3DLib.vcxproj (note: no UNICODE here — the lib uses
+    # explicit W-suffixed Win32 APIs).
+    target_compile_definitions(nv3dlib PRIVATE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+        _CRT_SECURE_NO_WARNINGS
+    )
+    set_property(TARGET nv3dlib PROPERTY CXX_STANDARD 17)
+    set_property(TARGET nv3dlib PROPERTY CXX_STANDARD_REQUIRED ON)
+    # nvapi64.lib / d3d9 / d3d11 / dxgi already on the driver's link line
+    # satisfy the archive's externals.
+    target_link_libraries(driver_vrto3d PRIVATE nv3dlib)
 else()
     # Linux: the driver links no openvr import lib (the driver context comes
     # in through HmdDriverFactory); everything else is system libraries.

@@ -20,9 +20,6 @@
 [submodule "external/adl_sdk"]
 	path = external/adl_sdk
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/display-library
-[submodule "external/minhook"]
-	path = external/minhook
-	url = https://github.com/TsudaKageyu/minhook.git
 [submodule "external/SR-lib"]
 	path = external/SR-lib
 	url = https://github.com/bo3b/SR-lib.git

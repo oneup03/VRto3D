@@ -27,6 +27,7 @@
 #include "device_provider.h"
 #include "dx11_renderer.h"
 #include "direct_mode_component.h"
+#include "presenter/nvstereo_dx9_presenter.h"
 #else
 #include <fcntl.h>
 #include <sys/file.h>
@@ -289,5 +290,22 @@ void MyDeviceProvider::Cleanup()
     // recenters. vrserver flags an unclean exit if a VR_Init'd client never
     // VR_Shutdown's. This is the last hook called before our DLL unloads.
     vrto3d::ShutdownOpenVRClient();
+
+#ifdef _WIN32
+    // NV3D-Glass exit pattern: when the NVIDIA 3D Vision presenter ran this
+    // session, hard-kill the process now that our own teardown is complete.
+    // A hard display freeze (reboot required) has been observed AFTER a clean
+    // explicit teardown — inside process exit, where nvd3dumx.dll /
+    // nvapi64.dll / d3d9.dll run their DLL_PROCESS_DETACH against the driver
+    // stereo state the FSE teardown just strained. TerminateProcess skips CRT
+    // static destructors and all DLL_PROCESS_DETACH (ExitProcess would not)
+    // and never returns on success. Every other output mode keeps the normal
+    // exit path.
+    if (vrto3d::NvStereoWasActiveThisSession()) {
+        LOG() << "MyDeviceProvider::Cleanup: NV3D session — TerminateProcess "
+                 "to skip NVIDIA DLL_PROCESS_DETACH";
+        TerminateProcess(GetCurrentProcess(), 0);
+    }
+#endif
 }
 

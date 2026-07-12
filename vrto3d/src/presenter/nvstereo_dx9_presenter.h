@@ -19,69 +19,66 @@
 
 #include <atomic>
 #include <memory>
-#include <optional>
 #include <string>
 #include <thread>
-#include <unordered_map>
-#include <vector>
 
 #include <wrl/client.h>
 #include <d3d11.h>
-#include <d3d9.h>
 
-#include <nvapi.h>
-
-#include "platform.h"
-#include "presenter/nv_3dvision_suppressor.h"
 #include "presenter/output_presenter.h"
 #include "vrto3dlib/stereo_config.h"
 
+namespace NV3D { class InterfaceDX11; }
+
 namespace vrto3d {
 
-// One entry in the nvtimings.json database, keyed by "VENDOR_PRODUCT_REFRESH".
-struct NvTimingsEntry {
-    std::string    monitor_EDID;
-    NV_TIMING      timing{};       // NVAPI monitor timing
-    float          refresh_hz{};   // convenience (from JSON)
-    NvU16          refresh_int{};
-};
+// True once an NV3D-Lib interface was successfully created this session.
+// Read by MyDeviceProvider::Cleanup to decide whether to TerminateProcess at
+// driver unload instead of letting nvd3dumx/nvapi64/d3d9 run their
+// DLL_PROCESS_DETACH (see device_provider.cpp for the NV3D-Glass rationale).
+bool NvStereoWasActiveThisSession();
 
-// Loads and queries the nvtimings.json file.
-class NvTimingsDb {
-public:
-    static NvTimingsDb Load(const std::string& jsonPath);
-
-    std::optional<NvTimingsEntry> findExact(const std::string& key) const;
-    std::optional<NvTimingsEntry> findByBaseAndRefresh(const std::string& baseKey, int refreshNearestInt) const;
-    std::optional<NvTimingsEntry> findHighestRefreshForBase(const std::string& baseKey) const;
-
-    static std::string to_utf8(const std::wstring& ws);
-
-private:
-    std::unordered_map<std::string, NvTimingsEntry> data_;
-};
-
-// NVIDIA 3D Vision via NVAPI + D3D9Ex (DIRECT driver mode).
+// NVIDIA 3D Vision output via NV3D-Lib (external/NV3D-Lib, nv3d-glass branch).
 //
-// D3D9Ex device is created on the user's chosen 3D-Vision-capable display.
-// Dx11Renderer pins out_sbs_ to panel-derived dims (panel_w*2 × panel_h,
-// BGRA) when output_mode is NvidiaDX9, so its shared handle is stable
-// across landscape↔game transitions. We import that handle once into
-// D3D9Ex via IDXGIResource::GetSharedHandle and reuse it for the entire
-// session.
+// The library owns everything that historically lived in this file: the FSE
+// click-through popup and its message-pumping window thread, the D3D9Ex
+// device, NvAPI stereo bring-up + activation retries, LightBoost custom
+// timings (nvtimings DB), the in-process 3D Vision suppressor (nvd3dumx OSD /
+// rating-overlay / Ctrl+F-hotkey detours — MinHook is compiled into
+// NV3DLib.lib), the DX11→D3D9 shared-surface import, and an async present
+// worker that runs StretchRect + PresentEx off our threads.
 //
-// Per frame:
-//   1. Fence: ID3D11Query EVENT to wait for DX11 writes to complete.
-//   2. NvAPI_Stereo_SetActiveEye(LEFT) + StretchRect(shared, left half →
-//      back_buffer, POINT). Driver routes write to LEFT eye plane.
-//   3. SetActiveEye(RIGHT) + StretchRect(shared, right half → back_buffer).
-//   4. PresentEx — driver alternates eye planes via the IR emitter.
+// This wrapper owns:
+//   - the render-loop thread that drives Dx11Renderer::WaitAndDrawPending,
+//   - the focus-policy thread: ComputeWantOnTop (focus_policy.h) over the
+//     FocusContext atoms → iface_->SetVisible on transitions. The library is
+//     inited with tracked_game_pid = our own PID (NV3D-Glass's trick), which
+//     makes popup visibility purely SetVisible-driven — the library never
+//     minimizes on its own and never steals game focus, so VRto3D's focus
+//     policy stays authoritative,
+//   - a JOINABLE game-focus watcher (the old detached watcher could wedge the
+//     OS input chain if vrserver exited mid-ForceFocus — "display frozen,
+//     reboot required"),
+//   - a 3-deep MISC_SHARED staging ring. The library reads our texture through
+//     a legacy KMT shared handle, which has ZERO implicit cross-API sync; its
+//     async worker may still be StretchRect-reading slot N while the
+//     compositor overwrites out_sbs_, so each frame is copied into a rotating
+//     slot instead of handing out_sbs_ over directly (the library identity-
+//     caches 4 import slots, documented >= ring + 1 transient).
 //
-// DIRECT mode (not AUTOMATIC) is required because NV3D's AUTOMATIC-mode
-// signature scanning got the LEFT eye plane stuck on the prior frame's
-// content when the source resource changed, even with a stable signed RT
-// in the chain (proven with a ColorFill diagnostic). DIRECT mode bypasses
-// the auto-detection: SetActiveEye is authoritative.
+// Interface contract notes:
+//   - RecordComposite runs under Dx11Renderer::context_mutex_ and does ALL
+//     the library work: the lib's Present() signals its fence / issues its
+//     EVENT query on the host immediate context (caller's thread), so it must
+//     be serialized against the compositor — and it returns in microseconds
+//     because the actual D3D9 present happens on the lib's worker.
+//   - Present() is therefore a no-op: pacing comes from WaitAndDrawPending's
+//     composite_cv_ wait, and the lib worker owns PresentEx/vsync.
+//   - The lib's Present() HRESULT reflects the PREVIOUS frame (async worker),
+//     so failure is judged by a 40-frame streak, not a single result.
+//   - On host-observed device removal we call NotifyDeviceLost() BEFORE
+//     Delete() so the lib takes its non-blocking teardown path (no
+//     Stereo_DestroyHandle / COM Release into a wedged kernel driver).
 class NvStereoDx9Presenter : public IOutputPresenter {
 public:
     NvStereoDx9Presenter() = default;
@@ -91,154 +88,61 @@ public:
               const StereoDisplayDriverConfiguration& cfg,
               const FocusContext& focus) override;
     void RecordComposite(ID3D11Texture2D* sbs_input) override;
-    void Present() override;
+    // Everything context-bound already ran in RecordComposite; the library's
+    // async worker owns PresentEx pacing.
+    void Present() override {}
     void Shutdown() override;
     bool IsAlive() const override {
-        return !d3d9_dead_.load(std::memory_order_acquire);
+        return !dead_.load(std::memory_order_acquire);
     }
 
 private:
-    void WindowThreadLoop(Dx11Renderer* renderer,
-                          platform::MonitorInfo primary);
-    bool BuildD3D9Stack(HWND hwnd,
-                        uint32_t monitor_w,
-                        uint32_t monitor_h,
-                        float    refresh_hz);
-
-    // Open the DX11 SbS composite texture as a D3D9 IDirect3DTexture9 via the
-    // legacy DXGI shared-handle path. Cached by source pointer + dims + fmt;
-    // because Dx11Renderer pins out_sbs_ to fixed dims for NvidiaDX9 mode,
-    // this is a cache-hit after the first frame.
-    bool EnsureSharedSurface(ID3D11Texture2D* sbs);
-
-    void StereoActivationRetry();
+    void RenderLoop();
     void FocusThreadLoop();
-    void InstallFseSubclass(HWND hwnd);
-    void RemoveFseSubclass();
+    // Joinable replacement for the old detached game-focus watcher.
+    void StartForceFocusWatcher(uint32_t pid);
+    void StopForceFocusWatcher();
+    bool EnsureRing(ID3D11Texture2D* sbs);
+    // Latch dead_ + NotifyDeviceLost so Shutdown's Delete() takes the
+    // non-blocking teardown path. Idempotent.
+    void MarkDead(const char* why);
 
-    // LightBoost: check current resolution/timings against the nvtimings.json
-    // database and apply a LightBoost custom resolution if the monitor's
-    // current timing doesn't match a known entry.
-    // All three are non-fatal — failures are logged but never abort init.
-    void CheckAndApplyLightBoost(const std::string& target_gdi_device);
-    void EnableLightBoost();
-    void DisableLightBoost();
+    Dx11Renderer*        renderer_ = nullptr;
+    NV3D::InterfaceDX11* iface_    = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> ctx_;
+    FocusContext         focus_{};
+    bool                 auto_focus_cache_ = true;
+    bool                 last_eye_swap_    = false;
+    // InitParams copies the raw nvtimings_json_path pointer — this string
+    // must outlive iface_.
+    std::wstring         nvtimings_path_w_;
 
-    // Resolve a Windows GDI device name (e.g. "\\.\\DISPLAY3") to the
-    // matching NVAPI displayId. Returns 0 on failure.
-    static NvU32 ResolveNvDisplayId(const std::string& gdi_device_name);
+    // Staging ring (see class comment). Lazily (re)created from the incoming
+    // texture desc so it always matches out_sbs_'s pinned dims/format exactly
+    // (CopyResource requires an exact match, including _SRGB-ness).
+    static constexpr UINT kRing = 3;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> ring_[kRing];
+    UINT                 ring_idx_ = 0;
+    UINT                 ring_w_   = 0;
+    UINT                 ring_h_   = 0;
+    DXGI_FORMAT          ring_fmt_ = DXGI_FORMAT_UNKNOWN;
+    ID3D11Texture2D*     last_tex_ = nullptr;  // identity cache for SetInputTexture
 
-    // Poll NvAPI_DISP_GetTiming on `displayId` until the live timing matches
-    // `expected.HTotal/VTotal/pclk` (within 1-unit tolerance) or `timeout_ms`
-    // elapses. Pumps Win32 messages during the poll so WM_DISPLAYCHANGE drains.
-    // Returns true if the timing was observed to match before timeout.
-    static bool WaitForTimingMatch(NvU32 displayId, const NV_TIMING& expected,
-                                    DWORD timeout_ms);
-    static bool WaitForTimingChange(NvU32 displayId, const NV_TIMING& previous,
-                                     DWORD timeout_ms);
+    int frames_since_dev_check_ = 0;
+    int present_fail_streak_    = 0;
 
-    // Detect that the D3D9Ex device has hit an unrecoverable state.
-    // On the first observed bad HRESULT we log GetDeviceRemovedReason-style
-    // info and set d3d9_dead_; subsequent calls are no-ops.
-    bool CheckAndMarkD3D9Dead(HRESULT hr, const char* origin);
+    std::atomic<bool> dead_{false};
+    // Mirrors the last SetVisible state. Stored BEFORE calling SetVisible so
+    // RecordComposite stops submitting before/while the lib drains its worker
+    // (PresentEx against a minimized FSE window wedges some drivers).
+    std::atomic<bool> want_visible_{true};
 
-    Dx11Renderer* renderer_ = nullptr;
-    bool          eye_swap_ = false;
-    bool          auto_focus_ = true;
-    bool          is_fse_ = false;  // true when device is fullscreen-exclusive
-
-    FocusContext  focus_{};
-
-    std::unique_ptr<platform::PresentWindow>      window_;
-
-    // WndProc subclass to suppress minimize-on-deactivate in FSE mode.
-    // suppress_minimize_ is toggled by FocusThreadLoop; when false the
-    // subclass passes deactivation messages through so the FSE window
-    // can minimize normally (e.g. when the user turns off "on-top").
-    static LRESULT CALLBACK FseSubclassProc(HWND hw, UINT msg, WPARAM wp, LPARAM lp);
-    HWND               subclassed_hwnd_   = nullptr;
-    WNDPROC            orig_wndproc_      = nullptr;
-    std::atomic<bool>  suppress_minimize_{true};
-
-    // D3D9Ex objects — owned and used only by the window thread.
-    Microsoft::WRL::ComPtr<IDirect3D9Ex>           d3d9_;
-    Microsoft::WRL::ComPtr<IDirect3DDevice9Ex>     device9_;
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      back_buffer_;
-
-    // D3D9Ex view of the DX11 out_sbs_ MISC_SHARED texture, opened via
-    // IDXGIResource::GetSharedHandle → device9_->CreateTexture(pSharedHandle).
-    // Because Dx11Renderer pins out_sbs_ to fixed panel-derived dims in
-    // NvidiaDX9 mode, this is imported once per session and the identity
-    // cache hits every subsequent frame.
-    Microsoft::WRL::ComPtr<IDirect3DTexture9>      shared_input_tex_;
-    Microsoft::WRL::ComPtr<IDirect3DSurface9>      shared_input_sfc_;
-    void*                                          shared_src_ptr_    = nullptr;
-    HANDLE                                         shared_src_handle_ = nullptr;
-    uint32_t                                       shared_src_w_      = 0;
-    uint32_t                                       shared_src_h_      = 0;
-    DXGI_FORMAT                                    shared_src_fmt_    = DXGI_FORMAT_UNKNOWN;
-
-    // Cross-device fence. D3D11_QUERY_EVENT signalled at the end of the
-    // window thread's D3D11 work (compositor writes + OSD draws), polled
-    // before the D3D9 StretchRect that reads the shared resource. The
-    // analogue of the OLD CPU-readback path's Map(MAP_READ) implicit
-    // sync — guarantees DX11 shader writes are visible to the D3D9 device.
-    Microsoft::WRL::ComPtr<ID3D11Query>            sync_query_;
-
-    uint32_t                                      monitor_w_ = 0;
-    uint32_t                                      monitor_h_ = 0;
-
-    // NVAPI stereo handle (opaque pointer to NVAPI's internal state).
-    StereoHandle  stereo_handle_ = nullptr;
-    bool          stereo_activated_ = false;
-    int           activation_retries_left_ = 0;   // counts down inside PresentFrame
-    bool          activation_summary_logged_ = false;
-
-    std::thread       window_thread_;
-    std::atomic<bool> window_stop_{false};
-    std::atomic<bool> window_ready_{false};
-    std::atomic<bool> window_failed_{false};
-
+    std::thread       render_thread_;
+    std::atomic<bool> render_stop_{false};
     std::thread       focus_thread_;
     std::atomic<bool> focus_stop_{false};
-
-    // LightBoost state
-    bool                   lightboost_enabled_ = false;
-    NvTimingsEntry         monitor_timings_{};
-    std::vector<NvU32>     primary_display_ids_;
-    NV_TIMING              original_target_timing_{};   // captured pre-LightBoost timing of the target
-    bool                   has_original_target_timing_ = false;
-
-    // GDI device name ("\\.\\DISPLAYn") of the LightBoost target. Captured at
-    // CheckAndApplyLightBoost time so DisableLightBoost can use Win32
-    // ChangeDisplaySettingsExW as a fallback when NVAPI_DISP_RevertCustomDisplayTrial
-    // fails (the trial state gets invalidated by FSE D3D9Ex modesets during
-    // the session, leaving the panel stuck at the LightBoost timing).
-    std::wstring           target_gdi_device_;
-    // OS-stored DEVMODE captured before the LightBoost trial was applied.
-    // ChangeDisplaySettingsExW with this mode forces a Windows-level modeset
-    // that pushes the original timing to the panel.
-    DEVMODEW               original_devmode_{};
-    bool                   has_original_devmode_ = false;
-
-    // D3D9Ex device-state circuit-breaker. Once set (by PresentFrame error,
-    // CheckDeviceState, or WM_DISPLAYCHANGE), the present pipeline becomes a
-    // no-op and stops driving a wedged driver. Cleared only by reinitialization.
-    std::atomic<bool>      d3d9_dead_{false};
-    // Frame counter purely for periodic CheckDeviceState — not exposed.
-    int                    frames_since_state_check_ = 0;
-    // Throttles per-frame Stereo_Activate retries so the 60-retry budget
-    // can't burn through in <1s during driver contention.
-    DWORD                  last_stereo_activate_tick_ = 0;
-
-    // Suppresses selected NVIDIA 3D Vision behaviours in-process:
-    // depth-amount slider OSD, "non-stereo display mode" warning, "not rated
-    // by NVIDIA Corp." rating overlay, and Ctrl+F3..F11 hotkey hijacks.
-    // Installed after the D3D9Ex device is built (so nvd3dumx.dll is loaded),
-    // removed at the start of Shutdown teardown.
-    platform::Nv3DVisionSuppressor nv_suppressor_;
-
+    std::thread       focus_watcher_thread_;
+    std::shared_ptr<std::atomic<bool>> focus_watcher_stop_;
 };
 
 }  // namespace vrto3d
-
