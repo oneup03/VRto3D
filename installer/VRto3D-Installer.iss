@@ -6,7 +6,7 @@
 #define AppURL        "https://github.com/oneup03/VRto3D"
 #define VRto3DReleaseUrl    "https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip"
 #define VRto3DPreReleaseUrl "https://github.com/oneup03/VRto3D/releases/download/latest/VRto3D.zip"
-#define WWZipUrl      "https://github.com/user-attachments/files/29488165/WibbleWobbleBeta10.zip"
+#define WWZipUrl      "https://github.com/user-attachments/files/29946580/WibbleWobbleBeta11.zip"
 #define SteamVRAppId  "250820"
 
 [Setup]
@@ -442,15 +442,18 @@ begin
     Result := Candidate;
 end;
 
-{ In-place text patch on a small ASCII file. }
+{ In-place text patch on a small ASCII file. No-op (file left untouched) when the
+  pattern isn't present, so these are safe to keep even after WibbleWobble drops
+  the interactive prompts on its side. }
 procedure PatchTextFile(const Path, Find, Replace: String);
 var
   Raw: AnsiString;
   S: String;
+  Count: Integer;
 begin
   if not FileExists(Path) then
   begin
-    LogLine('PatchTextFile: missing file ' + Path);
+    LogLine('PatchTextFile: file not present, skipping: ' + Path);
     Exit;
   end;
   if not LoadStringFromFile(Path, Raw) then
@@ -459,9 +462,14 @@ begin
     Exit;
   end;
   S := String(Raw);
-  StringChangeEx(S, Find, Replace, True);
+  Count := StringChangeEx(S, Find, Replace, True);
+  if Count = 0 then
+  begin
+    LogLine('PatchTextFile: pattern not found, left as-is: ' + Path);
+    Exit;
+  end;
   if SaveStringToFile(Path, AnsiString(S), False) then
-    LogLine('Patched ' + Path)
+    LogLine('PatchTextFile: applied ' + IntToStr(Count) + ' change(s) in ' + Path)
   else
     LogLine('PatchTextFile: save failed for ' + Path);
 end;
@@ -784,7 +792,9 @@ begin
     Exit;
   end;
 
-  { Strip the interactive prompts so Register.bat and its child PowerShell run unattended. }
+  { Strip the interactive prompts so Register.bat and its child PowerShell run
+    unattended. Each call is a no-op if WibbleWobble already ships without the
+    prompt, so keeping them in cannot break a fixed bat/ps1. }
   PatchTextFile(RegBat, #13#10 + 'pause', '');
   PatchTextFile(RegBat, '"%install_path%\"' + #13#10, '"%install_path%\" /f' + #13#10);
   PatchTextFile(PathCombine(DestDir, 'WibbleWobbleClient\SetRealtimePrivilege.ps1'),
