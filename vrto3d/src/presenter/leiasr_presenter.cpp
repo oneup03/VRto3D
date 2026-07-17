@@ -32,6 +32,7 @@
 #include <delayimp.h>
 
 #include "dx11_renderer.h"
+#include "focus_policy.h"
 #include "hmd_device_driver.h"
 #include "vrto3dlib/debug_log.hpp"
 #include "vrto3dlib/win32_helper.hpp"
@@ -713,36 +714,31 @@ void LeiaSrPresenter::FocusThreadLoop()
     using namespace std::chrono_literals;
     bool was_on_top = false;
     int  reassert_counter = 0;
-    uint32_t last_auto_focused_pid = 0;
+    FocusLatchState focus_latch;   // auto-focus per-PID latch (focus_policy.h)
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
 
-        const bool is_on_top   = focus_.is_on_top   && focus_.is_on_top->load();
-        const bool man_on_top  = focus_.man_on_top  && focus_.man_on_top->load();
-        const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
-        const bool auto_focus  = focus_.auto_focus  ? focus_.auto_focus->load() : auto_focus_;
-
         // LeiaSR runs on a single SR display — no multi-display nudge.
 
-        const bool app_running = platform::IsProcessRunning(pid);
-        if (pid == 0 || !app_running) {
-            last_auto_focused_pid = 0;
-        }
-
-        bool want_on_top = false;
-        if (man_on_top) {
-            want_on_top = true;
-        } else if (is_on_top && app_running) {
-            want_on_top = true;
-        } else if (auto_focus && !is_on_top
-                   && app_running && pid != 0
-                   && pid != last_auto_focused_pid) {
-            if (focus_.is_on_top)  focus_.is_on_top->store(true);
-            if (focus_.man_on_top) focus_.man_on_top->store(true);
-            last_auto_focused_pid = pid;
-            want_on_top = true;
-        }
+        // Shared decision (see focus_policy.h) — kept identical to
+        // WindowPresenter / the Linux VkRenderer focus block so they can't
+        // drift.
+        FocusInputs fi;
+        fi.is_on_top    = focus_.is_on_top   && focus_.is_on_top->load();
+        fi.man_on_top   = focus_.man_on_top  && focus_.man_on_top->load();
+        fi.app_pid      = focus_.app_pid ? focus_.app_pid->load() : 0;
+        fi.auto_focus   = focus_.auto_focus  ? focus_.auto_focus->load() : auto_focus_;
+        fi.app_running  = platform::IsProcessRunning(fi.app_pid);
+        fi.force_on_top = false;  // topmost-model window: an open OSD is made
+                                  // visible/clickable via ApplyMenuVisibility,
+                                  // not by forcing topmost.
+        bool set_is = false, set_man = false;
+        const bool want_on_top =
+            ComputeWantOnTop(fi, focus_latch, &set_is, &set_man);
+        if (set_is  && focus_.is_on_top)  focus_.is_on_top->store(true);
+        if (set_man && focus_.man_on_top) focus_.man_on_top->store(true);
+        const uint32_t pid = fi.app_pid;
 
         if (want_on_top != was_on_top) {
             HWND vr_hwnd = static_cast<HWND>(window_->NativeHandle());

@@ -20,10 +20,12 @@
 
 namespace vrto3d {
 
-// Shared "should the overlay be on top?" decision, used by both the Windows
-// WindowPresenter::FocusThreadLoop and the Linux VkRenderer present-thread
-// focus block so the two can't drift. Pure logic over the FocusContext atoms
-// (read into these fields by the caller) plus a per-caller latch.
+// Shared "should the overlay be on top?" decision, used by every presenter
+// focus loop — Windows WindowPresenter / LeiaSrPresenter /
+// WibbleWobblePresenter / NvStereoDx9Presenter (where "on top" maps to the
+// NV3D-Lib popup's SetVisible) and the Linux VkRenderer present-thread focus
+// block — so they can't drift. Pure logic over the FocusContext atoms (read
+// into these fields by the caller) plus a per-caller latch.
 //
 // Rule: start lowered; man_on_top (Ctrl+F8 / "Always on Top") forces on top;
 // a still-running already-focused app stays on top; and a newly-connected app
