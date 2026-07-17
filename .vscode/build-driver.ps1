@@ -14,7 +14,13 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-$steamPath = if ($env:STEAM_PATH) { $env:STEAM_PATH } else { 'C:\Program Files (x86)\Steam' }
+$steamPath = if ($env:STEAM_PATH) {
+    $env:STEAM_PATH
+} else {
+    # Fall back to the registry (Steam isn't always in Program Files).
+    $reg = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if ($reg) { $reg -replace '/', '\' } else { 'C:\Program Files (x86)\Steam' }
+}
 
 $msbuildCmd = Get-Command msbuild -ErrorAction SilentlyContinue | Select-Object -First 1
 $msbuildExe = if ($msbuildCmd) { $msbuildCmd.Source } else { $null }
@@ -38,12 +44,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($Target -in @('Build', 'Rebuild')) {
-    cmd /c "xcopy \"vrto3d\\vrto3d\" \"output\\drivers\\vrto3d\" /S /Y /I"
+    # Call xcopy directly (no cmd /c) — nested cmd quoting mangles paths
+    # ("Invalid path"), and trailing backslashes must be avoided.
+    & xcopy 'vrto3d\vrto3d' 'output\drivers\vrto3d' /S /Y /I
     if ($LASTEXITCODE -gt 1) {
         exit $LASTEXITCODE
     }
 
-    cmd /c "xcopy \"output\\drivers\\\" \"$steamPath\\steamapps\\common\\SteamVR\\drivers\\\" /S /Y /I"
+    & xcopy 'output\drivers' (Join-Path $steamPath 'steamapps\common\SteamVR\drivers') /S /Y /I
     if ($LASTEXITCODE -gt 1) {
         exit $LASTEXITCODE
     }

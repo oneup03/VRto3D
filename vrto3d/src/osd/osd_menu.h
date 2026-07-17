@@ -63,6 +63,10 @@ struct MenuCallbacks {
     std::function<void()> open_config_folder;
     // Open the SteamVR screenshots folder in the OS file manager.
     std::function<void()> open_screenshot_folder;
+    // Capture a stereo screenshot pair now (mirrors the Ctrl+F12 hotkey). The
+    // driver resolves the current app name and hands off to the renderer, which
+    // drains the request on the next composited frame.
+    std::function<void()> take_screenshot;
     // Re-assert input focus on the connected game window. Called when the
     // OSD menu closes — while the menu was open the VR window held focus,
     // and the user expects keystrokes to land back in the game.
@@ -82,6 +86,12 @@ struct MenuCallbacks {
     // so toggles take effect on the next tick without a restart.
     std::function<void(bool)> set_hide_cursor;
     std::function<void(bool)> set_lock_cursor;
+    // Stereo cursor: per-eye software cursor drawn into the composited frame
+    // while the game is focused (hardware cursor suppressed). Mirrored to
+    // driver atomics like the hide/lock toggles above.
+    std::function<void(bool)>  set_stereo_cursor;
+    std::function<void(float)> set_cursor_depth;
+    std::function<void(int)>   set_cursor_size;
 
     // Auto-depth feature: toggle + comfort-target slider (fraction of one
     // eye's width). The Stereo tab binds these to read/write the live

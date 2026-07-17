@@ -17,6 +17,7 @@
 #include "osd/osd_renderer.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <thread>
 #include <cmath>
@@ -101,6 +102,85 @@ float4 main(VsOut i) : SV_Target {
 }
 )hlsl";
 
+// Stereo-cursor PS — procedural navigation arrow (tip/hotspot at hotspot_uv,
+// body extending down-right), drawn once per eye half with a per-eye
+// horizontal shift baked into hotspot_uv by the caller. Ported from
+// UEVR-3D's Flat3D stereo cursor: solid silhouette + dark outline identical
+// in both eyes (stable fusion at the chosen depth), two-facet shading with a
+// crease highlight so it reads as a folded 3D arrow. Output is
+// premultiplied alpha — pair with the ONE/INV_SRC_ALPHA blend state.
+const char* kCursorPs = R"hlsl(
+cbuffer CursorCb : register(b0) {
+    float2 hotspot_uv;   // arrow tip in this eye's UV (depth shift included)
+    float2 eye_px;       // per-eye dimensions in pixels
+    float  size_px;      // arrow height in pixels
+    float3 _pad;
+};
+
+struct VsOut {
+    float4 pos : SV_Position;
+    float2 uv  : TEXCOORD0;
+};
+
+float cross2(float2 a, float2 b) { return a.x * b.y - a.y * b.x; }
+bool in_tri(float2 p, float2 a, float2 b, float2 c) {
+    float c1 = cross2(b - a, p - a);
+    float c2 = cross2(c - b, p - b);
+    float c3 = cross2(a - c, p - c);
+    return (c1 <= 0.0 && c2 <= 0.0 && c3 <= 0.0) || (c1 >= 0.0 && c2 >= 0.0 && c3 >= 0.0);
+}
+
+// Arrow points UP-LEFT like a normal cursor, split by a diagonal centre
+// crease (the arrow axis). kAxis = tip->back, kPerp = across the crease.
+static const float2 kAxis     = float2(0.70711, 0.70711);
+static const float2 kPerp     = float2(-0.70711, 0.70711);
+static const float2 kNavTip   = float2(0.0, 0.0);
+static const float2 kNavNotch = float2(0.495, 0.495);
+static const float2 kNavWingL = float2(0.375, 0.969);
+static const float2 kNavWingR = float2(0.969, 0.375);
+bool nav_any(float2 p) {
+    return in_tri(p, kNavTip, kNavWingL, kNavNotch) || in_tri(p, kNavTip, kNavNotch, kNavWingR);
+}
+
+float4 main(VsOut input) : SV_Target {
+    float2 d = input.uv - hotspot_uv;
+    float inv_size = 1.0 / max(size_px, 1.0);
+    float pxu = inv_size; // one output pixel in arrow units
+    float2 p = float2(d.x * eye_px.x, d.y * max(eye_px.y, 1.0)) * inv_size;
+
+    // Solid silhouette + outline, 4x rotated-grid supersample for smooth edges.
+    const float2 J[4] = { float2(0.125, 0.375), float2(0.375, -0.125),
+                          float2(-0.125, -0.375), float2(-0.375, 0.125) };
+    float fill = 0.0, edge = 0.0;
+    [unroll]
+    for (int i = 0; i < 4; ++i) {
+        float2 s = p + J[i] * (pxu * 2.0);
+        if (nav_any(s)) fill += 0.25;
+        if (nav_any(s * (1.0 / 1.32))) edge += 0.25; // enlarged silhouette = fill+outline
+    }
+    float outline = saturate(edge - fill);
+
+    // Two-facet shading + a crease highlight — a folded LOOK, drawn
+    // identically in both eyes (the 3D placement comes from hotspot_uv).
+    float side  = dot(p, kPerp);   // signed distance across the crease
+    float axial = dot(p, kAxis);   // 0 at tip -> ~0.95 at wings
+    float crease = saturate(1.0 - abs(side) / 0.42)
+                 * smoothstep(0.0, 0.18, axial) * (1.0 - smoothstep(0.62, 0.95, axial));
+
+    float t  = saturate(abs(side) * 2.4);  // 0 at crease -> 1 at wing
+    float vv = saturate(axial / 0.95);     // 0 at tip -> 1 at base
+    float shade = ((side > 0.0) ? 0.98 : 0.80) - 0.10 * t - 0.12 * vv;
+    shade = saturate(shade + smoothstep(0.06, 0.0, abs(side)) * crease * 0.12);
+
+    // Premultiplied over: outline (behind) then the facet fill.
+    float3 col = float3(0.03, 0.03, 0.03) * outline;
+    float a = outline;
+    col = float3(shade, shade, shade) * fill + col * (1.0 - fill);
+    a = fill + a * (1.0 - fill);
+    return float4(col, a);
+}
+)hlsl";
+
 bool CompileShader(const char* src, const char* entry, const char* profile,
                    ComPtr<ID3DBlob>& out_blob) {
     ComPtr<ID3DBlob> err;
@@ -135,6 +215,18 @@ struct OsdRenderer::Impl {
     ComPtr<ID3D11BlendState>          blend;
     ComPtr<ID3D11RasterizerState>     raster;
     ComPtr<ID3D11SamplerState>        sampler;
+
+    // Stereo-cursor pipeline (procedural arrow, premultiplied-alpha blend).
+    ComPtr<ID3D11PixelShader>         cursor_ps;
+    ComPtr<ID3D11Buffer>              cursor_cb;
+    ComPtr<ID3D11BlendState>          blend_premul;
+
+    // Stereo-cursor state pushed by the driver's CursorControlThread (any
+    // thread) and consumed by RenderFrame (window thread).
+    std::atomic<bool>                 cursor_active{false};
+    std::atomic<float>                cursor_depth_px{0.0f};
+    std::atomic<float>                cursor_size_px{32.0f};
+    std::atomic<void*>                cursor_game_hwnd{nullptr};
 
     // ImGui state.
     ImGuiContext*                     imgui_ctx = nullptr;
@@ -302,7 +394,170 @@ struct OsdRenderer::Impl {
         sd.AddressW      = D3D11_TEXTURE_ADDRESS_CLAMP;
         sd.MaxLOD        = D3D11_FLOAT32_MAX;
         if (FAILED(device->CreateSamplerState(&sd, &sampler))) return false;
+
+        // Stereo-cursor pipeline. Failure is non-fatal — the OSD works
+        // without it; the cursor pass just stays disabled.
+        ComPtr<ID3DBlob> cursor_blob;
+        if (CompileShader(kCursorPs, "main", "ps_5_0", cursor_blob)) {
+            device->CreatePixelShader(cursor_blob->GetBufferPointer(),
+                                      cursor_blob->GetBufferSize(),
+                                      nullptr, &cursor_ps);
+        }
+        D3D11_BUFFER_DESC cbd{};
+        cbd.ByteWidth      = 32;   // float2 + float2 + float + float3 pad
+        cbd.Usage          = D3D11_USAGE_DEFAULT;
+        cbd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+        device->CreateBuffer(&cbd, nullptr, &cursor_cb);
+
+        D3D11_BLEND_DESC pbd{};
+        pbd.RenderTarget[0].BlendEnable    = TRUE;
+        pbd.RenderTarget[0].SrcBlend       = D3D11_BLEND_ONE;   // premultiplied
+        pbd.RenderTarget[0].DestBlend      = D3D11_BLEND_INV_SRC_ALPHA;
+        pbd.RenderTarget[0].BlendOp        = D3D11_BLEND_OP_ADD;
+        pbd.RenderTarget[0].SrcBlendAlpha  = D3D11_BLEND_ONE;
+        pbd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+        pbd.RenderTarget[0].BlendOpAlpha   = D3D11_BLEND_OP_ADD;
+        pbd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        device->CreateBlendState(&pbd, &blend_premul);
         return true;
+    }
+
+    // Layout of the presenter's window surface — governs how the physical
+    // cursor position folds into per-eye coordinates. Must match the switch
+    // in RenderFrame's input block (both are pinned to active_output_mode).
+    StereoLayout SurfaceLayout() const {
+        switch (active_output_mode) {
+            case OutputMode::SbS:
+            case OutputMode::VirtualDesktop:
+            case OutputMode::DualDisplay:
+            case OutputMode::DualDisplayFlip:
+                return StereoLayout::HorizontalSbs;
+            case OutputMode::TaB:
+            case OutputMode::FramePacked720p60:
+            case OutputMode::FramePacked1080p24:
+            case OutputMode::FramePacked1080p60:
+            case OutputMode::FramePacked1080p60CVT:
+                return StereoLayout::VerticalTab;
+            default:
+                return StereoLayout::Mono;
+        }
+    }
+
+    // Map the OS cursor position into per-eye UV. Preferred path: normalize
+    // against the GAME window's client rect — games place their software
+    // cursor / UI hit-testing from their own client coords, and their frame
+    // fills the whole per-eye image, so this tracks the in-game cursor 1:1
+    // regardless of where/how large the game window is. Fallback (no game
+    // window): the presenter window with the same eye-fold as
+    // OsdInput::FeedImGui. Returns false when the cursor is outside (no
+    // arrow drawn).
+    bool MapCursorToEyeUV(float& out_u, float& out_v) {
+        POINT p;
+        if (!GetCursorPos(&p)) return false;
+
+        HWND game = static_cast<HWND>(cursor_game_hwnd.load(std::memory_order_relaxed));
+        if (game && IsWindow(game)) {
+            RECT rc{};
+            POINT cp = p;
+            if (GetClientRect(game, &rc) && rc.right > 0 && rc.bottom > 0
+                && ScreenToClient(game, &cp)) {
+                const float u = static_cast<float>(cp.x) / static_cast<float>(rc.right);
+                const float v = static_cast<float>(cp.y) / static_cast<float>(rc.bottom);
+                if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return false;
+                out_u = u;
+                out_v = v;
+                return true;
+            }
+        }
+
+        HWND hwnd = DiscoverHwnd();
+        if (!hwnd) return false;
+        RECT client{};
+        if (!GetClientRect(hwnd, &client)) return false;
+        ScreenToClient(hwnd, &p);
+        const int cw = client.right  - client.left;
+        const int ch = client.bottom - client.top;
+        if (cw <= 0 || ch <= 0) return false;
+        float u = static_cast<float>(p.x) / static_cast<float>(cw);
+        float v = static_cast<float>(p.y) / static_cast<float>(ch);
+        if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return false;
+        switch (SurfaceLayout()) {
+            case StereoLayout::HorizontalSbs:
+                u = (u >= 0.5f) ? (u - 0.5f) * 2.0f : u * 2.0f;
+                break;
+            case StereoLayout::VerticalTab:
+                v = (v >= 0.5f) ? (v - 0.5f) * 2.0f : v * 2.0f;
+                break;
+            default:
+                break;
+        }
+        out_u = u;
+        out_v = v;
+        return true;
+    }
+
+    // Draw the per-eye arrow into both halves of out_sbs at (u, v), with the
+    // depth shift applied symmetrically (+depth = into the screen). Sign was
+    // set empirically against VRto3D's eye layout — left half shifts right,
+    // right half shifts left for uncrossed (behind-screen) disparity.
+    void DrawCursorPass(ID3D11Texture2D* out_sbs, float u, float v) {
+        if (!cursor_ps || !cursor_cb || !blend_premul) return;
+
+        ComPtr<ID3D11RenderTargetView> sbs_rtv;
+        if (FAILED(device->CreateRenderTargetView(out_sbs, nullptr, &sbs_rtv))) return;
+
+        D3D11_TEXTURE2D_DESC sbs_desc{};
+        out_sbs->GetDesc(&sbs_desc);
+        const UINT half_w = sbs_desc.Width / 2;
+        const UINT full_h = sbs_desc.Height;
+        if (half_w == 0 || full_h == 0) return;
+
+        ID3D11RenderTargetView* rtv = sbs_rtv.Get();
+        context->OMSetRenderTargets(1, &rtv, nullptr);
+
+        const float blend_factor[4] = { 1, 1, 1, 1 };
+        context->OMSetBlendState(blend_premul.Get(), blend_factor, 0xFFFFFFFF);
+        context->RSSetState(raster.Get());
+        context->IASetInputLayout(nullptr);
+        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+        context->VSSetShader(vs.Get(), nullptr, 0);
+        context->PSSetShader(cursor_ps.Get(), nullptr, 0);
+        ID3D11Buffer* cbs[] = { cursor_cb.Get() };
+        context->PSSetConstantBuffers(0, 1, cbs);
+
+        const float depth_px = cursor_depth_px.load(std::memory_order_relaxed);
+        const float size_px  = cursor_size_px.load(std::memory_order_relaxed);
+
+        D3D11_VIEWPORT vp{};
+        vp.Width    = static_cast<float>(half_w);
+        vp.Height   = static_cast<float>(full_h);
+        vp.MinDepth = 0.0f;
+        vp.MaxDepth = 1.0f;
+
+        struct CursorCb {
+            float hotspot_uv[2];
+            float eye_px[2];
+            float size_px;
+            float pad[3];
+        } cb{};
+        cb.eye_px[0] = static_cast<float>(half_w);
+        cb.eye_px[1] = static_cast<float>(full_h);
+        cb.size_px   = (size_px > 1.0f) ? size_px : 1.0f;
+
+        for (int eye = 0; eye < 2; ++eye) {
+            const float dir = (eye == 0) ? 1.0f : -1.0f;
+            cb.hotspot_uv[0] = u + dir * depth_px / static_cast<float>(half_w);
+            cb.hotspot_uv[1] = v;
+            context->UpdateSubresource(cursor_cb.Get(), 0, nullptr, &cb, 0, 0);
+
+            vp.TopLeftX = static_cast<float>(eye) * static_cast<float>(half_w);
+            vp.TopLeftY = 0.0f;
+            context->RSSetViewports(1, &vp);
+            context->Draw(3, 0);
+        }
+
+        ID3D11RenderTargetView* null_rtv = nullptr;
+        context->OMSetRenderTargets(1, &null_rtv, nullptr);
     }
 };
 
@@ -424,6 +679,10 @@ void OsdRenderer::Shutdown() {
     s.blend.Reset();
     s.raster.Reset();
     s.sampler.Reset();
+    s.cursor_ps.Reset();
+    s.cursor_cb.Reset();
+    s.blend_premul.Reset();
+    s.cursor_active.store(false);
     s.device = nullptr;
     s.context = nullptr;
 }
@@ -480,10 +739,21 @@ void OsdRenderer::RenderFrame(ID3D11Texture2D* out_sbs) {
         s.input->SetMouseHookActive(MenuVisible() || s.input->IsCapturing());
     }
 
+    // Stereo cursor: the driver pushes `cursor_active` while the feature is
+    // on and the game (or our menu) owns the foreground — the hardware
+    // cursor is hidden then, so we're the only visible cursor. With the menu
+    // open the ImGui software cursor takes over (correctly folded per-eye);
+    // otherwise draw the arrow pass directly into the SbS frame.
+    const bool stereo_cursor = s.cursor_active.load(std::memory_order_relaxed);
+    float cursor_u = 0.0f, cursor_v = 0.0f;
+    const bool cursor_draw = stereo_cursor && !MenuVisible()
+                              && s.MapCursorToEyeUV(cursor_u, cursor_v);
+
     // Cheap early-out if there's nothing to draw and no toast pending.
     if (!has_content && (!s.input || !s.input->IsCapturing())) {
         // Still pump input edges so a future Ctrl+Home press is detected.
         if (s.input) s.input->Poll();
+        if (cursor_draw) s.DrawCursorPass(out_sbs, cursor_u, cursor_v);
         return;
     }
 
@@ -506,26 +776,14 @@ void OsdRenderer::RenderFrame(ID3D11Texture2D* out_sbs) {
         // Use the snapshot taken at Init — NOT the live config — so a
         // System-tab output_mode change doesn't break cursor mapping until
         // the driver restarts and the new presenter takes over.
-        switch (s.active_output_mode) {
-            case OutputMode::SbS:
-            case OutputMode::VirtualDesktop:
-            case OutputMode::DualDisplay:
-            case OutputMode::DualDisplayFlip:
-                surface.layout = StereoLayout::HorizontalSbs;
-                break;
-            case OutputMode::TaB:
-            case OutputMode::FramePacked720p60:
-            case OutputMode::FramePacked1080p24:
-            case OutputMode::FramePacked1080p60:
-            case OutputMode::FramePacked1080p60CVT:
-                surface.layout = StereoLayout::VerticalTab;
-                break;
-            default:
-                surface.layout = StereoLayout::Mono;
-                break;
-        }
+        surface.layout = s.SurfaceLayout();
         s.input->FeedImGui(io, surface);
     }
+
+    // With the stereo cursor active and the menu open, the hardware cursor
+    // is hidden — let ImGui draw its software cursor at the folded per-eye
+    // position so the pointer lines up with the widgets in both eyes.
+    io.MouseDrawCursor = stereo_cursor && MenuVisible();
 
     ImGui_ImplDX11_NewFrame();
     ImGui::NewFrame();
@@ -658,6 +916,19 @@ void OsdRenderer::RenderFrame(ID3D11Texture2D* out_sbs) {
         ID3D11RenderTargetView* null_rtv = nullptr;
         s.context->OMSetRenderTargets(1, &null_rtv, nullptr);
     }
+
+    // ----- Pass 3: stereo cursor arrow (topmost, over the OSD/toast) -----
+    if (cursor_draw) {
+        s.DrawCursorPass(out_sbs, cursor_u, cursor_v);
+    }
+}
+
+void OsdRenderer::SetStereoCursor(bool active, float depth_px, float size_px, void* game_hwnd) {
+    auto& s = *impl_;
+    s.cursor_active.store(active, std::memory_order_relaxed);
+    s.cursor_depth_px.store(depth_px, std::memory_order_relaxed);
+    s.cursor_size_px.store(size_px, std::memory_order_relaxed);
+    s.cursor_game_hwnd.store(game_hwnd, std::memory_order_relaxed);
 }
 
 } // namespace vrto3d::osd

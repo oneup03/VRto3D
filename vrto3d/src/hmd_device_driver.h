@@ -181,9 +181,12 @@ public:
     void PoseUpdateThread();
     void PollHotkeysThread();
     void MonitorModeThread();
-    // Polls the connected game window and asserts cursor visibility / clip
-    // state per the live hide_cursor_ / lock_cursor_ atomics. Mirrors the
-    // cross-process equivalent of 3DVision4All's hide_cursor / confine_cursor.
+    // Polls the connected game's foreground state and asserts cursor
+    // visibility / clip state per the live hide_cursor_ / lock_cursor_ /
+    // stereo_cursor_ atomics: blanks the system cursor set while the game is
+    // focused (hide / stereo cursor), clips the cursor to the focused game
+    // window's client rect (lock), and pushes the stereo-cursor draw state
+    // into the OSD renderer each tick.
     void CursorControlThread();
 
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
@@ -240,6 +243,9 @@ private:
     // so OSD toggles take effect without a restart.
     std::atomic< bool > hide_cursor_{ false };
     std::atomic< bool > lock_cursor_{ false };
+    std::atomic< bool > stereo_cursor_{ false };
+    std::atomic< float > cursor_depth_{ 0.0f };
+    std::atomic< int > cursor_size_{ 32 };
     std::atomic< bool > launch_script_executed_;
 
     std::mutex pose_mutex_;

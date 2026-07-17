@@ -438,6 +438,12 @@ void OsdRenderer::SetVersion(const std::string& version) {
     if (s.menu) s.menu->SetVersion(version);
 }
 
+void OsdRenderer::SetStereoCursor(bool, float, float, void*) {
+    // Cursor control isn't implementable from an external process on
+    // Wayland (see CursorControlThread) — the stereo cursor rides the same
+    // feature gate, so this is a Windows-only path.
+}
+
 void OsdRenderer::RenderFrame(VkCommandBuffer cmd, VkImage out_sbs, VkImageView out_sbs_view,
                               uint32_t sbs_w, uint32_t sbs_h) {
     auto& s = *impl_;

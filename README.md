@@ -102,7 +102,7 @@ Find your display type and use the listed Output Mode(s):
 
 - **Output Modes:** `WibbleWobble` (preferred) or `NvidiaDX9` (legacy / unstable)
 - `WibbleWobble` requires the WibbleWobbleClient - select `Install WibbleWobble for Frame Sequential 3D` in the VRto3D Installer. Follow the [WibbleWobble SteamVR Setup Instructions](https://oneup03.github.io/VRto3D/wiki/WibbleWobbleVR3.0#steamvr-setup) (skip the `VR Config` step, but do the rest). When framerate is low, you will have eye flickering
-- `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset. Should be more stable on single-display setups.
+- `NvidiaDX9` requires the [3DVision driver installed](https://oneup03.github.io/3DVision4All/docs/Native) and 3D Enabled. May freeze or crash, requiring a hard reset. Should be more stable on single-display setups. If it crashes, just try again
 - For both of these modes, it is recommended to start SteamVR before starting the game, as they change monitor modes, which might break games
 - Either one may require `Swap Eyes` to be set depending on how your display initializes
 - **Linux:** not available (compiled out) - `NvidiaDX9` has no Linux driver stack, and `WibbleWobble` is a Windows-only client (a port may come later)
@@ -188,7 +188,8 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
     - The Headset window should appear on the configured `display_index` display
 - Try launching a VR game
 - Keyboard and Mouse are usable, but you may run into issues with accidentally clicking the wrong window or the cursor escaping the game window if the game's mouse control is coded poorly
-    - Can try using <a href="https://github.com/James-LG/AutoCursorLock" target="_blank" rel="noopener noreferrer">AutoCursorLock</a> if the mouse keeps escaping
+    - Enable `Lock Cursor to Game` (`lock_cursor`) in the OSD's `System` tab to confine the mouse to the game window, and `Hide Cursor` (`hide_cursor`) to fully hide the OS cursor while the game is focused
+    - Enable `Stereo Cursor` (`stereo_cursor`) to replace the flat OS cursor with a per-eye 3D cursor drawn at an adjustable depth — recommended for SbS/TaB displays where the OS cursor only lines up with one eye
 - Make the game run in windowed mode either in-game settings or with `Alt + Enter` This will alleviate controller input and fullscreen issues. (Borderless fullscreen/windowed sometimes also work)
 - If needed, press `Ctrl + F8` to lock the 3D window to the foreground and focus the game window
     - This is automated by default with the `auto_focus` setting
@@ -235,7 +236,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 
 #### Limitations
 
-- Cursor lock/hide (`hide_cursor`/`lock_cursor`) and focus stealing — no cross-client mechanism on Wayland; X11 cursor grab may come later
+- Cursor lock/hide/stereo (`hide_cursor`/`lock_cursor`/`stereo_cursor`) and focus stealing — no cross-client mechanism on Wayland; X11 cursor grab may come later
 
 
 ## Configuration
@@ -278,6 +279,11 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 | `disable_hotkeys`             | `bool`  | Disable the global hotkeys (Depth/Convergence/profile/save) to avoid conflict with other 3D mods. `Ctrl + Home` and `Start + D-Pad Down` (OSD toggles) are unaffected | `false` |
 | `dash_enable`                 | `bool`  | Enable or disable SteamVR Dashboard and Home                                                      | `false`        |
 | `auto_focus`                  | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground                                | `true`         |
+| `hide_cursor` +               | `bool`  | Fully hide the OS cursor while the game is focused (blanks the system cursor set; restored on focus loss) | `false` |
+| `lock_cursor` +               | `bool`  | Confine the OS cursor to the focused game window's client area (re-asserted continuously)         | `false`        |
+| `stereo_cursor` +             | `bool`  | Hide the OS cursor and draw a per-eye 3D cursor in both eye views instead (also used for the OSD menu) | `false`   |
+| `cursor_depth` +              | `float` | Stereo cursor per-eye shift in pixels: `0` = screen plane, positive = into the screen, negative = pop-out | `0.0`  |
+| `cursor_size` +               | `int`   | Stereo cursor arrow height in per-eye pixels                                                      | `32`           |
 | `pitch_enable` +              | `bool`  | Enables or disables Controller right stick y-axis mapped to HMD Pitch                             | `false`        |
 | `yaw_enable` +                | `bool`  | Enables or disables Controller right stick x-axis mapped to HMD Yaw                               | `false`        |
 | `use_open_track`              | `bool`  | Enables or disables OpenTrack 6DoF HMD Control                                                    | `false`        |

@@ -125,6 +125,20 @@ public:
     void SetAppName(const std::string& app_name);
     void SetVersion(const std::string& version);
 
+    // Stereo cursor state, pushed by the driver's CursorControlThread each
+    // tick (thread-safe — atomics). While `active`, RenderFrame draws a
+    // per-eye arrow at the OS cursor position into both halves of the SbS
+    // frame (menu closed), or switches to ImGui's software cursor (menu
+    // open). The hardware cursor is hidden by the driver while active, so
+    // this is the only cursor the user sees. `depth_px` is the per-eye
+    // horizontal shift (positive = into the screen); `size_px` the arrow
+    // height in per-eye pixels. `game_hwnd` is the game's foreground window
+    // (or null): games place their software cursor from THEIR window's
+    // client coords, so the arrow is normalized against that rect to track
+    // 1:1 — the presenter-window fold is only a fallback. No-op on the
+    // Vulkan/Linux path.
+    void SetStereoCursor(bool active, float depth_px, float size_px, void* game_hwnd);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

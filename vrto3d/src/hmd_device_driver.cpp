@@ -52,6 +52,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <vector>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -268,6 +269,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         auto_focus_.store(cfg.auto_focus);
         hide_cursor_.store(cfg.hide_cursor);
         lock_cursor_.store(cfg.lock_cursor);
+        stereo_cursor_.store(cfg.stereo_cursor);
+        cursor_depth_.store(cfg.cursor_depth);
+        cursor_size_.store(cfg.cursor_size);
         LOG() << "Display: target=" << primary.device_name
               << " freq=" << cfg.display_frequency << "Hz"
               << " latency=" << cfg.display_latency << "s";
@@ -509,6 +513,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     auto_focus_.store(cfg.auto_focus);
                     hide_cursor_.store(cfg.hide_cursor);
                     lock_cursor_.store(cfg.lock_cursor);
+                    stereo_cursor_.store(cfg.stereo_cursor);
+                    cursor_depth_.store(cfg.cursor_depth);
+                    cursor_size_.store(cfg.cursor_size);
                     app_name_ = prev_name_;
                     if (renderer_ && renderer_->Osd()) {
                         renderer_->Osd()->SetAppName(app_name_);
@@ -530,6 +537,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                     auto_focus_.store(cfg.auto_focus);
                     hide_cursor_.store(cfg.hide_cursor);
                     lock_cursor_.store(cfg.lock_cursor);
+                    stereo_cursor_.store(cfg.stereo_cursor);
+                    cursor_depth_.store(cfg.cursor_depth);
+                    cursor_size_.store(cfg.cursor_size);
                     app_name_ = "";
                     if (renderer_ && renderer_->Osd()) {
                         renderer_->Osd()->SetAppName(app_name_);
@@ -563,6 +573,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 auto_focus_.store(def.auto_focus);
                 hide_cursor_.store(def.hide_cursor);
                 lock_cursor_.store(def.lock_cursor);
+                stereo_cursor_.store(def.stereo_cursor);
+                cursor_depth_.store(def.cursor_depth);
+                cursor_size_.store(def.cursor_size);
                 if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
             };
             cb.reset_projection = [this]() {
@@ -676,6 +689,13 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 [[maybe_unused]] int rc = std::system(cmd.c_str());
             };
 #endif
+            cb.take_screenshot = [this]() {
+                if (!renderer_) return;
+                std::string name = !app_name_.empty() ? app_name_
+                                  : !prev_name_.empty() ? prev_name_
+                                  : std::string("vrto3d");
+                renderer_->RequestScreenshot(name);
+            };
             cb.set_async = [this](bool on) {
                 SetAsync(on);
             };
@@ -691,6 +711,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             };
             cb.set_hide_cursor = [this](bool on) { hide_cursor_.store(on); };
             cb.set_lock_cursor = [this](bool on) { lock_cursor_.store(on); };
+            cb.set_stereo_cursor = [this](bool on)  { stereo_cursor_.store(on); };
+            cb.set_cursor_depth  = [this](float px) { cursor_depth_.store(px); };
+            cb.set_cursor_size   = [this](int px)   { cursor_size_.store(px); };
             cb.download_latest_profiles = [this]() {
                 // Re-entrancy guard — ignore clicks while a previous download
                 // is still in flight.
@@ -1355,6 +1378,9 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                     auto_focus_.store(cfg.auto_focus);
                     hide_cursor_.store(cfg.hide_cursor);
                     lock_cursor_.store(cfg.lock_cursor);
+                    stereo_cursor_.store(cfg.stereo_cursor);
+                    cursor_depth_.store(cfg.cursor_depth);
+                    cursor_size_.store(cfg.cursor_size);
                     LOG() << "Loaded " << path.c_str() << " profile";
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
@@ -1541,28 +1567,90 @@ void MockControllerDeviceDriver::MonitorModeThread() {
 }
 
 
+#ifdef _WIN32
+namespace {
+
+// System cursor ids (OCR_*) — numeric so we don't need OEMRESOURCE defined
+// before windows.h.
+constexpr DWORD kSystemCursorIds[] = {
+    32512, // OCR_NORMAL
+    32513, // OCR_IBEAM
+    32514, // OCR_WAIT
+    32515, // OCR_CROSS
+    32516, // OCR_UP
+    32642, // OCR_SIZENWSE
+    32643, // OCR_SIZENESW
+    32644, // OCR_SIZEWE
+    32645, // OCR_SIZENS
+    32646, // OCR_SIZEALL
+    32648, // OCR_NO
+    32649, // OCR_HAND
+    32650, // OCR_APPSTARTING
+    32651, // OCR_HELP
+};
+
+// Replace the entire system cursor set with fully transparent cursors.
+// This is the strongest cursor hide available to an external process: it
+// survives the game's WM_SETCURSOR re-assertions because the cursor the
+// game sets IS blank. Undone by RestoreSystemCursors.
+bool BlankSystemCursors() {
+    const int w = GetSystemMetrics(SM_CXCURSOR);
+    const int h = GetSystemMetrics(SM_CYCURSOR);
+    if (w <= 0 || h <= 0) return false;
+    // 1bpp masks, scanlines word-aligned. AND=1 / XOR=0 -> transparent.
+    const size_t mask_bytes = static_cast<size_t>(((w + 15) / 16) * 2) * h;
+    std::vector<BYTE> and_mask(mask_bytes, 0xFF);
+    std::vector<BYTE> xor_mask(mask_bytes, 0x00);
+    bool any = false;
+    for (DWORD id : kSystemCursorIds) {
+        HCURSOR blank = CreateCursor(nullptr, 0, 0, w, h,
+                                     and_mask.data(), xor_mask.data());
+        if (!blank) continue;
+        // SetSystemCursor takes ownership of (and eventually destroys) the
+        // handle on success; on failure it's still ours to free.
+        if (SetSystemCursor(blank, id)) any = true;
+        else DestroyCursor(blank);
+    }
+    return any;
+}
+
+// Reload the user's cursor scheme from the registry, undoing
+// BlankSystemCursors.
+void RestoreSystemCursors() {
+    SystemParametersInfoW(SPI_SETCURSORS, 0, nullptr, 0);
+}
+
+} // namespace
+#endif
+
 //-----------------------------------------------------------------------------
-// Purpose: Apply hide_cursor / lock_cursor to the connected game's window
-// from out-of-process (we live in vrserver.exe, the game is its own
-// process). Modeled on 3DVision4All's hide_cursor / confine_cursor knobs,
-// but cross-process: instead of subclassing the game's WndProc and
-// rewriting its class cursor (only possible from an injected DLL), we:
+// Purpose: Apply hide_cursor / lock_cursor / stereo_cursor to the connected
+// game from out-of-process (we live in vrserver.exe, the game is its own
+// process).
 //
-//   1. Poll for the game's main HWND.
-//   2. When the game is the foreground process, AttachThreadInput to its
-//      input queue so SetCursor / ClipCursor calls share state with the
-//      game's thread (Windows otherwise blocks cursor clipping from
-//      non-foreground processes as an anti-trap measure).
-//   3. ClipCursor to the game's window rect (lock_cursor) and/or call
-//      SetCursor(nullptr) (hide_cursor) every tick — repeated assertion is
-//      required because Windows releases the clip on every foreground
-//      transition and the game's WndProc re-issues its own cursor on each
-//      WM_SETCURSOR. ~30 Hz is fast enough to feel instantaneous.
+//   Hide (hide_cursor, or stereo_cursor which replaces the pointer): the
+//   strongest cross-process hide Windows allows — blank the entire system
+//   cursor set via SetSystemCursor while the game holds the foreground, so
+//   the cursor stays invisible no matter how often the game's WndProc
+//   re-asserts it. Restored via SPI_SETCURSORS the moment focus leaves the
+//   game (or the toggles turn off / the driver exits). A per-tick
+//   AttachThreadInput + SetCursor(NULL) supplements this for games that set
+//   a custom, non-system class cursor, which SetSystemCursor can't blank.
 //
-// Cleanup: when the user disables lock_cursor (or the game loses focus /
-// closes), we release any clip we set. We don't try to "restore" the
-// hidden cursor — the game's next WM_SETCURSOR (fires on mouse motion)
-// brings its own cursor back.
+//   Lock (lock_cursor): ClipCursor to the focused game window's CLIENT rect
+//   (borders/title bar excluded), re-asserted every ~10ms because Windows
+//   silently drops the clip on every foreground transition. AttachThreadInput
+//   to the game's input queue so the clip isn't rejected as a cross-process
+//   trap.
+//
+//   Stereo cursor: pushes draw state (active/depth/size) into the OSD
+//   renderer, which draws a per-eye arrow at the OS cursor position in place
+//   of the blanked hardware cursor (or flips on ImGui's software cursor
+//   while the OSD menu is open).
+//
+// Focus is judged by PID, not a single cached HWND — any foreground window
+// belonging to the game's process counts, and the clip follows the actual
+// foreground window.
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::CursorControlThread()
 {
@@ -1573,74 +1661,186 @@ void MockControllerDeviceDriver::CursorControlThread()
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     return;
 #else
-    bool clip_active = false;
+    bool  clip_active   = false;
+    bool  cursors_blank = false;
+    // Net ShowCursor(FALSE) calls we pushed onto the game's input queue to
+    // hide a custom (non-system) class cursor, and the thread they went to.
+    int   shows_forced  = 0;
+    DWORD forced_tid    = 0;
+
+    const auto release_clip = [&] {
+        if (clip_active) {
+            ClipCursor(nullptr);
+            clip_active = false;
+        }
+    };
+    const auto restore_cursors = [&] {
+        if (cursors_blank) {
+            RestoreSystemCursors();
+            cursors_blank = false;
+            LOG() << "CursorControl: system cursors restored";
+        }
+    };
+    // Undo the forced ShowCursor(FALSE) count on the game's queue: attach and
+    // raise the display count back to >= 0, never by more than we pushed. If
+    // the game thread is gone, there's no queue left to fix.
+    const auto restore_show_count = [&] {
+        if (shows_forced > 0) {
+            const DWORD my_tid = GetCurrentThreadId();
+            if (forced_tid && forced_tid != my_tid
+                && AttachThreadInput(my_tid, forced_tid, TRUE)) {
+                int raised = 0;
+                while (shows_forced-- > 0) {
+                    ++raised;
+                    if (ShowCursor(TRUE) >= 0) break;
+                }
+                AttachThreadInput(my_tid, forced_tid, FALSE);
+                LOG() << "CursorControl: game cursor show count restored (+" << raised << ")";
+            }
+        }
+        shows_forced = 0;
+        forced_tid   = 0;
+    };
 
     while (is_active_.load(std::memory_order_relaxed)) {
-        const bool want_hide = hide_cursor_.load(std::memory_order_relaxed);
-        const bool want_lock = lock_cursor_.load(std::memory_order_relaxed);
+        const bool want_hide   = hide_cursor_.load(std::memory_order_relaxed);
+        const bool want_lock   = lock_cursor_.load(std::memory_order_relaxed);
+        const bool want_stereo = stereo_cursor_.load(std::memory_order_relaxed);
         // Only act while our VR overlay is actually on top of the game — when
         // the user toggles topmost off (Ctrl+F8 / OSD) they're back at the
         // desktop and expect their real cursor / clip back, regardless of
         // these toggles.
         const bool on_top    = is_on_top_.load(std::memory_order_relaxed);
-        // Suppress while the OSD menu is open so the user can actually click
-        // ImGui widgets — both knobs would fight the menu's pointer otherwise.
         const bool menu_open = renderer_ && renderer_->Osd()
                                 && renderer_->Osd()->MenuVisible();
 
-        if (!on_top || menu_open || (!want_hide && !want_lock)) {
-            if (clip_active) {
-                ClipCursor(nullptr);
-                clip_active = false;
+        if (!on_top || (!want_hide && !want_lock && !want_stereo)) {
+            release_clip();
+            restore_cursors();
+            restore_show_count();
+            if (renderer_ && renderer_->Osd()) {
+                renderer_->Osd()->SetStereoCursor(false, 0.0f, 32.0f, nullptr);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             continue;
         }
 
         const uint32_t pid = app_pid_.load();
-        HWND game = (pid != 0 && IsProcessRunning(pid)) ? GetHWNDFromPID(pid) : nullptr;
-        const bool game_is_fg = game && GetForegroundWindow() == game;
+        HWND  fg     = GetForegroundWindow();
+        DWORD fg_pid = 0;
+        const DWORD fg_tid = fg ? GetWindowThreadProcessId(fg, &fg_pid) : 0;
+        const bool game_is_fg = pid != 0 && fg && fg_pid == pid;
+        const bool self_is_fg = fg && fg_pid == GetCurrentProcessId();
 
-        if (!game_is_fg) {
-            if (clip_active) {
-                ClipCursor(nullptr);
-                clip_active = false;
+        // Stereo cursor draws over the focused game, or over our own OSD
+        // menu (where the renderer switches to ImGui's software cursor).
+        // The game window handle lets the renderer normalize the arrow
+        // against the GAME's client rect so it tracks the in-game cursor 1:1.
+        const bool stereo_active = want_stereo
+            && (game_is_fg || (menu_open && self_is_fg));
+        if (renderer_ && renderer_->Osd()) {
+            renderer_->Osd()->SetStereoCursor(
+                stereo_active,
+                cursor_depth_.load(std::memory_order_relaxed),
+                static_cast<float>(cursor_size_.load(std::memory_order_relaxed)),
+                game_is_fg ? static_cast<void*>(fg) : nullptr);
+        }
+
+        // Hardware-cursor hide. The stereo cursor implies a hide (it IS the
+        // pointer); plain hide_cursor keeps the old suppress-while-menu-open
+        // behavior, since without the stereo cursor there'd be no visible
+        // pointer left to click ImGui widgets with.
+        const bool hw_hide = (game_is_fg && !menu_open && (want_hide || want_stereo))
+                          || (menu_open && self_is_fg && want_stereo);
+        if (hw_hide && !cursors_blank) {
+            cursors_blank = BlankSystemCursors();
+            if (cursors_blank) {
+                LOG() << "CursorControl: system cursors blanked (hide engaged, fg_pid=" << fg_pid << ")";
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        } else if (!hw_hide) {
+            restore_cursors();
+        }
+
+        if (!game_is_fg || menu_open) {
+            release_clip();
+            restore_show_count();
+            std::this_thread::sleep_for(std::chrono::milliseconds(menu_open ? 33 : 100));
             continue;
         }
 
-        const DWORD game_tid = GetWindowThreadProcessId(game, nullptr);
+        // Game has the foreground: attach to its input queue so ClipCursor /
+        // SetCursor share state with the game's thread (Windows otherwise
+        // blocks cursor clipping from non-foreground processes).
         const DWORD my_tid   = GetCurrentThreadId();
-        const BOOL  attached = (game_tid && game_tid != my_tid)
-                                ? AttachThreadInput(my_tid, game_tid, TRUE)
+        const BOOL  attached = (fg_tid && fg_tid != my_tid)
+                                ? AttachThreadInput(my_tid, fg_tid, TRUE)
                                 : FALSE;
 
         if (want_lock) {
-            RECT r;
-            if (GetWindowRect(game, &r)) {
-                ClipCursor(&r);
-                clip_active = true;
+            RECT rc{};
+            POINT tl{}, br{};
+            if (GetClientRect(fg, &rc)) {
+                tl = { rc.left, rc.top };
+                br = { rc.right, rc.bottom };
+                if (ClientToScreen(fg, &tl) && ClientToScreen(fg, &br)
+                    && br.x > tl.x && br.y > tl.y) {
+                    RECT clip{ tl.x, tl.y, br.x, br.y };
+                    ClipCursor(&clip);
+                    if (!clip_active) {
+                        LOG() << "CursorControl: cursor clipped to game client rect ("
+                              << tl.x << "," << tl.y << ")-(" << br.x << "," << br.y << ")";
+                    }
+                    clip_active = true;
+                }
             }
-        } else if (clip_active) {
-            ClipCursor(nullptr);
-            clip_active = false;
+        } else {
+            release_clip();
         }
 
-        if (want_hide) {
+        if (want_hide || want_stereo) {
+            // Belt-and-braces for custom class cursors (see header comment).
             SetCursor(nullptr);
+
+            // Games that draw a custom cursor re-assert it faster than the
+            // SetCursor(NULL) tick and aren't touched by the blanked system
+            // set. Strongest remaining lever: while attached to the game's
+            // input queue, drive its ShowCursor display count negative —
+            // that state lives on the game's queue and persists after we
+            // detach, hiding ANY cursor it sets. Undone (bounded) by
+            // restore_show_count on focus loss / toggle off / exit.
+            if (attached) {
+                CURSORINFO ci{};
+                ci.cbSize = sizeof(ci);
+                if (GetCursorInfo(&ci) && (ci.flags & CURSOR_SHOWING)) {
+                    const int prev_forced = shows_forced;
+                    forced_tid = fg_tid;
+                    // Tracked count is clamped — restore only ever raises
+                    // until the count is back >= 0, so excess tracking is
+                    // pointless; re-forcing itself stays unbounded.
+                    for (int i = 0; i < 8; ++i) {
+                        if (shows_forced < 1024) ++shows_forced;
+                        if (ShowCursor(FALSE) < 0) break;
+                    }
+                    if (prev_forced == 0 && shows_forced > 0) {
+                        LOG() << "CursorControl: forced game cursor display count negative (net "
+                              << shows_forced << ")";
+                    }
+                }
+            }
         }
 
         if (attached) {
-            AttachThreadInput(my_tid, game_tid, FALSE);
+            AttachThreadInput(my_tid, fg_tid, FALSE);
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(33));
+        // Fast re-assert: Windows drops the clip on every foreground
+        // transition and games re-show their cursor at will.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    if (clip_active) {
-        ClipCursor(nullptr);
-    }
+    release_clip();
+    restore_cursors();
+    restore_show_count();
 #endif
 }
 
@@ -1695,6 +1895,9 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         auto_focus_.store(config.auto_focus);
         hide_cursor_.store(config.hide_cursor);
         lock_cursor_.store(config.lock_cursor);
+        stereo_cursor_.store(config.stereo_cursor);
+        cursor_depth_.store(config.cursor_depth);
+        cursor_size_.store(config.cursor_size);
 
         if (config.auto_focus) {
             // Run off-thread: this is called from RunFrame, and a 10s sleep

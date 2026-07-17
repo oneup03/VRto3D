@@ -1013,6 +1013,24 @@ void OsdMenu::Impl::DrawSystemTab() {
         }
         ImGui::SameLine();
         ImGui::TextDisabled("(clip cursor to game window while focused)");
+        if (ImGui::Checkbox("Stereo Cursor",       &cfg.stereo_cursor)) {
+            dirty = true;
+            if (callbacks.set_stereo_cursor) callbacks.set_stereo_cursor(cfg.stereo_cursor);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(hide OS cursor, draw a per-eye 3D cursor instead)");
+        if (cfg.stereo_cursor) {
+            if (ImGui::DragFloat("Cursor Depth", &cfg.cursor_depth, 0.1f, -30.0f, 30.0f, "%.1f px")) {
+                dirty = true;
+                if (callbacks.set_cursor_depth) callbacks.set_cursor_depth(cfg.cursor_depth);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(0 = screen plane, + = into screen)");
+            if (ImGui::DragInt("Cursor Size", &cfg.cursor_size, 1, 8, 256, "%d px")) {
+                dirty = true;
+                if (callbacks.set_cursor_size) callbacks.set_cursor_size(cfg.cursor_size);
+            }
+        }
 #endif
         char buf[512];
         std::snprintf(buf, sizeof(buf), "%s", cfg.launch_script.c_str());
@@ -1041,6 +1059,13 @@ void OsdMenu::Impl::DrawSystemTab() {
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(1, 0.85f, 0.2f, 1),
                                "Warning: overwrites existing profiles");
+        }
+        if (callbacks.take_screenshot) {
+            if (ImGui::Button("Take Screenshot")) {
+                callbacks.take_screenshot();
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(also Ctrl+F12)");
         }
         if (callbacks.open_config_folder) {
             if (ImGui::Button("Open Profile Folder")) {
