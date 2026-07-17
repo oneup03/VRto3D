@@ -189,6 +189,17 @@ struct OsdRenderer::Impl {
 
     void ApplyMenuVisibility(bool now_visible) {
         if (now_visible == prev_menu_visible) return;
+        // NvidiaDX9: NV3D-Lib owns the FSE popup and its click-through state,
+        // and toggles it via InterfaceDX11::SetInteractive (driven by the
+        // presenter from this same menu-visibility signal). Manipulating
+        // WS_EX_TRANSPARENT here would be a cross-thread style change on the
+        // FSE D3D9Ex window (DWM-wedge risk) and wouldn't even stop click
+        // pass-through, since the library's WndProc HTTRANSPARENT path stays
+        // active. So leave the window alone in this mode.
+        if (active_output_mode == OutputMode::NvidiaDX9) {
+            prev_menu_visible = now_visible;
+            return;
+        }
         HWND hwnd = DiscoverHwnd();
         if (!hwnd) { prev_menu_visible = now_visible; return; }
         // Only toggle WS_EX_TRANSPARENT; WS_EX_LAYERED stays set for the

@@ -31,6 +31,7 @@
 #include "dx11_renderer.h"
 #include "focus_policy.h"
 #include "hmd_device_driver.h"
+#include "osd/osd_renderer.h"
 #include "platform.h"
 #include "vrto3dlib/debug_log.hpp"
 #include "vrto3dlib/win32_helper.hpp"
@@ -170,6 +171,19 @@ void NvStereoDx9Presenter::RenderLoop()
         if (!renderer_->WaitAndDrawPending(33)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+        // Service this thread's message queue every iteration. The OSD's
+        // WH_MOUSE_LL mouse hook is installed from THIS thread (OsdRenderer::
+        // RenderFrame → OsdInput::SetMouseHookActive runs inside our
+        // RecordComposite), and low-level hook callbacks are only delivered
+        // while the installing thread pumps messages — without this, the hook
+        // never fires and OSD clicks are dead. The old in-tree presenter got
+        // this for free from its window thread's PollEvents(); this thread
+        // owns no windows, so the pump exists solely to service the hook.
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
 }
 
@@ -240,6 +254,34 @@ void NvStereoDx9Presenter::RecordComposite(ID3D11Texture2D* sbs_input)
         }
     }
 
+    // OSD wiring. renderer_->Osd() is null until the OSD is lazily created on
+    // this (render) thread — which happens only after the driver's
+    // ConfigureOsd(nullptr) has run — so the first non-null observation here
+    // is guaranteed to be past that point.
+    if (auto* osd = renderer_->Osd()) {
+        // (1) Hand the library-owned popup HWND to the OSD so it can map
+        //     screen cursor coords into the popup's client area. Done here
+        //     (not in Init) because ConfigureOsd(nullptr) runs after Init and
+        //     would clobber an earlier set. Without a valid HWND the OSD's
+        //     cursor mapping never runs and the menu is unclickable.
+        if (!osd_hwnd_pushed_) {
+            renderer_->SetOsdHeadsetHwnd(iface_->GetWindowHandle());
+            osd_hwnd_pushed_ = true;
+        }
+        // (2) Drive the popup's interactivity from OSD-menu visibility. We're
+        //     on the render thread — the same thread that renders the OSD — so
+        //     reading MenuVisible() is race-free. Menu open → make the FSE
+        //     popup solid so clicks land on the OSD instead of passing through
+        //     to the game; close → restore click-through. The library owns the
+        //     actual toggle (WndProc + WS_EX_TRANSPARENT), which is why VRto3D's
+        //     OSD no longer manipulates the window styles itself for this mode.
+        const bool menu = osd->MenuVisible();
+        if (menu != last_interactive_) {
+            last_interactive_ = menu;
+            iface_->SetInteractive(menu);
+        }
+    }
+
     // Occluded-present protection: PresentEx against a minimized FSE popup
     // wedges some drivers. want_visible_ flips before the focus thread calls
     // SetVisible, so submissions stop before/while the library drains.
@@ -293,9 +335,17 @@ void NvStereoDx9Presenter::FocusThreadLoop()
 {
     using namespace std::chrono_literals;
 
-    // Popup starts visible (the library creates it shown with FSE engaged);
-    // act on policy transitions only, like the old loop.
-    bool was_on_top = false;
+    // The library creates its popup VISIBLE + on-top (FSE engaged). Our
+    // policy, by contrast, starts lowered (is_on_top_/man_on_top_ init false
+    // and no app is connected yet → ComputeWantOnTop == false). Those two
+    // disagree, so we must drive SetVisible on the FIRST iteration to reconcile
+    // them — otherwise want(false) == was_on_top(false), no transition fires,
+    // the popup is never told to minimize, and it stays stuck maximized until
+    // some later want=true→false round-trip (the "starts maximized / can't
+    // minimize" bug). `first` forces that initial sync; thereafter we act on
+    // transitions only.
+    bool was_on_top = true;   // matches the library's initial visible state
+    bool first = true;
     FocusLatchState latch;   // auto-focus per-PID latch (focus_policy.h)
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
@@ -308,14 +358,26 @@ void NvStereoDx9Presenter::FocusThreadLoop()
         fi.auto_focus   = focus_.auto_focus ? focus_.auto_focus->load()
                                             : auto_focus_cache_;
         fi.app_running  = platform::IsProcessRunning(fi.app_pid);
-        fi.force_on_top = false;
+        // An open OSD must be visible to use — force the popup up while the
+        // menu is open (mirrors the Linux VkRenderer focus block). Without
+        // this, opening the menu while the popup is hidden softlocks: the
+        // open menu suppresses the driver's hotkey poll (incl. Ctrl+F8), so
+        // the user can't restore the window to see what they're doing. On
+        // menu close this falls back to the normal policy, re-minimizing if
+        // the popup was lowered. Cross-thread MenuVisible() reads are
+        // established practice (PollHotkeysThread / CursorControlThread).
+        {
+            auto* osd = renderer_ ? renderer_->Osd() : nullptr;
+            fi.force_on_top = osd && osd->MenuVisible();
+        }
 
         bool set_is = false, set_man = false;
         const bool want = ComputeWantOnTop(fi, latch, &set_is, &set_man);
         if (set_is  && focus_.is_on_top)  focus_.is_on_top->store(true);
         if (set_man && focus_.man_on_top) focus_.man_on_top->store(true);
 
-        if (want != was_on_top) {
+        if (first || want != was_on_top) {
+            first = false;
             // Stop submissions first (see RecordComposite), then let the
             // library's window thread do the SW_MINIMIZE/SW_RESTORE + topmost
             // + suppression sequencing. Never touch the popup HWND from here:

@@ -130,6 +130,12 @@ private:
 
     int frames_since_dev_check_ = 0;
     int present_fail_streak_    = 0;
+    // Tracks the last OSD-menu-driven interactivity state pushed to the
+    // library (true = popup solid/clickable for the OSD, false = click-through).
+    bool last_interactive_      = false;
+    // One-shot: the library popup HWND has been handed to the OSD for cursor
+    // mapping (done on the render thread, after the driver's ConfigureOsd).
+    bool osd_hwnd_pushed_       = false;
 
     std::atomic<bool> dead_{false};
     // Mirrors the last SetVisible state. Stored BEFORE calling SetVisible so
