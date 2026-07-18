@@ -23,6 +23,7 @@ jobs:
           git config --global user.name "GitHub Actions"
 
       - name: Update Wiki Submodule
+        id: wiki
         run: |
           git submodule update --init --remote wiki || true
           cd wiki
@@ -34,8 +35,20 @@ jobs:
             git add wiki
             git commit -m "Automated update of wiki submodule"
             git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No changes detected, skipping commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # This job's push uses GITHUB_TOKEN, which won't trigger on:push
+      # workflows. Explicitly dispatch the Pages rebuild (workflow_dispatch
+      # works with GITHUB_TOKEN) so the docs site picks up the new wiki
+      # content, without kicking off a full driver Build.
+      - name: Trigger Pages rebuild
+        if: steps.wiki.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --ref "${{ github.ref_name }}"
