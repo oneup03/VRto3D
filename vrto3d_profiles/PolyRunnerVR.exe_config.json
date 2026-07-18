@@ -5,16 +5,16 @@
     "convergence": 4.0,
     "pitch_enable": true,
     "yaw_enable": true,
-    "pose_reset_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
-    "ctrl_toggle_key": "XINPUT_GAMEPAD_RIGHT_THUMB",
+    "pose_reset_key": "Pad_RS",
+    "ctrl_toggle_key": "Pad_RS",
     "ctrl_toggle_type": "toggle",
     "pitch_radius": 0.0,
     "ctrl_deadzone": 0.05000000074505806,
     "ctrl_sensitivity": 1.0,
     "user_settings": [
         {
-            "user_load_key": "VK_NUMPAD1",
-            "user_store_key": "VK_NUMPAD4",
+            "user_load_key": "Numpad1",
+            "user_store_key": "Numpad4",
             "user_key_type": "switch",
             "user_depth": 0.4000000059604645,
             "user_convergence": 4.0

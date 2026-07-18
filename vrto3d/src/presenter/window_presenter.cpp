@@ -1,0 +1,886 @@
+/*
+ * This file is part of VRto3D.
+ *
+ * VRto3D is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * VRto3D is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with VRto3D. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "window_presenter.h"
+
+#include <chrono>
+#include <cstring>
+
+#include <d3dcompiler.h>
+#pragma comment(lib, "d3dcompiler.lib")
+
+#include "dx11_renderer.h"
+#include "focus_policy.h"
+#include "hmd_device_driver.h"
+#include "vrto3dlib/debug_log.hpp"
+#include "vrto3dlib/win32_helper.hpp"
+
+using Microsoft::WRL::ComPtr;
+
+namespace vrto3d {
+
+namespace {
+
+// Mode constants matching OutputMode values the shader handles (LeiaSR / NvidiaDX9
+// are handled by their own presenters — not this one).
+//
+// DualDisplay / DualDisplayFlip share the SbS shader path; their distinction is
+// the window spans two contiguous monitors (handled at window-creation time).
+// DualDisplayFlip flips the left half vertically.
+constexpr uint32_t kModeSbS                           = 0;
+constexpr uint32_t kModeTaB                           = 1;
+constexpr uint32_t kModeRowInterlaced                 = 2;
+constexpr uint32_t kModeColInterlaced                 = 3;
+constexpr uint32_t kModeCheckerboard                  = 4;
+constexpr uint32_t kModeVirtualDesktop                = 5;
+constexpr uint32_t kModeDualDisplayFlip               = 6;
+constexpr uint32_t kModeAnaglyphRedCyan               = 7;
+constexpr uint32_t kModeAnaglyphRedCyanDubois         = 8;
+constexpr uint32_t kModeAnaglyphRedCyanDeghosted      = 9;
+constexpr uint32_t kModeAnaglyphRedCyanCompromise     = 10;
+constexpr uint32_t kModeAnaglyphGreenMagenta          = 11;
+constexpr uint32_t kModeAnaglyphGreenMagentaDubois    = 12;
+constexpr uint32_t kModeAnaglyphGreenMagentaDeghosted = 13;
+constexpr uint32_t kModeAnaglyphBlueAmber             = 14;
+constexpr uint32_t kModeMono                          = 15;
+
+uint32_t ModeToShaderEnum(OutputMode m)
+{
+    switch (m) {
+        case OutputMode::SbS:                            return kModeSbS;
+        case OutputMode::TaB:                            return kModeTaB;
+        case OutputMode::RowInterlaced:                  return kModeRowInterlaced;
+        case OutputMode::ColInterlaced:                  return kModeColInterlaced;
+        case OutputMode::Checkerboard:                   return kModeCheckerboard;
+        case OutputMode::VirtualDesktop:                 return kModeVirtualDesktop;
+        case OutputMode::FramePacked720p60:              return kModeTaB;
+        case OutputMode::FramePacked1080p24:             return kModeTaB;
+        case OutputMode::FramePacked1080p60:             return kModeTaB;
+        case OutputMode::FramePacked1080p60CVT:          return kModeTaB;
+        case OutputMode::DualDisplay:                    return kModeSbS;
+        case OutputMode::DualDisplayFlip:                return kModeDualDisplayFlip;
+        case OutputMode::AnaglyphRedCyan:                return kModeAnaglyphRedCyan;
+        case OutputMode::AnaglyphRedCyanDubois:          return kModeAnaglyphRedCyanDubois;
+        case OutputMode::AnaglyphRedCyanDeghosted:       return kModeAnaglyphRedCyanDeghosted;
+        case OutputMode::AnaglyphRedCyanCompromise:      return kModeAnaglyphRedCyanCompromise;
+        case OutputMode::AnaglyphGreenMagenta:           return kModeAnaglyphGreenMagenta;
+        case OutputMode::AnaglyphGreenMagentaDubois:     return kModeAnaglyphGreenMagentaDubois;
+        case OutputMode::AnaglyphGreenMagentaDeghosted:  return kModeAnaglyphGreenMagentaDeghosted;
+        case OutputMode::AnaglyphBlueAmber:              return kModeAnaglyphBlueAmber;
+        case OutputMode::Mono:                           return kModeMono;
+        default:                                         return kModeSbS;
+    }
+}
+
+// Vertex shader: generates a full-screen triangle from SV_VertexID (no vertex buffer).
+const char* kVsSource = R"(
+struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
+VSOut main(uint vid : SV_VertexID) {
+    VSOut o;
+    float2 p = float2((vid << 1) & 2, vid & 2);
+    o.uv  = p;
+    o.pos = float4(p * float2(2, -2) + float2(-1, 1), 0, 1);
+    return o;
+}
+)";
+
+// Pixel shader: samples the 2W x H SbS input texture and repacks according to `mode`.
+// cbuffer layout mirrors CBParams in the header.
+const char* kPsSource = R"(
+Texture2D    g_sbs : register(t0);
+SamplerState g_smp : register(s0);
+
+cbuffer Params : register(b0) {
+    uint  mode;
+    uint  framepack_offset;
+    uint  eye_swap;
+    float out_width;
+    float out_height;
+    float aspect_ratio;
+};
+
+// Given a half (0=left, 1=right), sample the input SbS at the given (u_half, v).
+// u_half in [0,1] = position within the eye's half of the input.
+float4 SampleEye(uint half_idx, float u_half, float v) {
+    // eye_swap flips which half-source we read.
+    uint eye = (eye_swap != 0) ? (1u - half_idx) : half_idx;
+    float u_src = 0.5 * u_half + 0.5 * float(eye);
+    return g_sbs.Sample(g_smp, float2(u_src, v));
+}
+
+float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
+    // SbS
+    if (mode == 0) {
+        uint half_idx = (uv.x < 0.5) ? 0u : 1u;
+        float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
+        return SampleEye(half_idx, u_half, uv.y);
+    }
+
+    // TaB
+    if (mode == 1) {
+        float gap = (framepack_offset > 0) ? (float(framepack_offset) / out_height) : 0.0;
+        float half_height = (1.0 - gap) * 0.5;
+        if (uv.y < half_height) {
+            // Top half -> left eye
+            return SampleEye(0u, uv.x, uv.y / half_height);
+        } else if (uv.y >= half_height + gap) {
+            // Bottom half -> right eye
+            float v_rel = (uv.y - (half_height + gap)) / half_height;
+            return SampleEye(1u, uv.x, v_rel);
+        } else {
+            return float4(0,0,0,1);  // framepack gap
+        }
+    }
+
+    // Row-interlaced: alternating rows; odd rows = right eye.
+    if (mode == 2) {
+        uint row = (uint)floor(uv.y * out_height);
+        uint half_idx = (row & 1u);
+        return SampleEye(half_idx, uv.x, uv.y);
+    }
+
+    // Col-interlaced
+    if (mode == 3) {
+        uint col = (uint)floor(uv.x * out_width);
+        uint half_idx = (col & 1u);
+        return SampleEye(half_idx, uv.x, uv.y);
+    }
+
+    // Checkerboard
+    if (mode == 4) {
+        uint row = (uint)floor(uv.y * out_height);
+        uint col = (uint)floor(uv.x * out_width);
+        uint half_idx = ((row + col) & 1u);
+        return SampleEye(half_idx, uv.x, uv.y);
+    }
+
+    // VirtualDesktop: SbS in center band of a 2W x 2H window (rows [0.25, 0.75)).
+    if (mode == 5) {
+        if (uv.y < 0.25 || uv.y >= 0.75) return float4(0,0,0,1);
+        float v = (uv.y - 0.25) * 2.0;
+        uint half_idx = (uv.x < 0.5) ? 0u : 1u;
+        float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
+        return SampleEye(half_idx, u_half, v);
+    }
+
+    // DualDisplayFlip: same horizontal split as SbS/DualDisplay, but the LEFT
+    // half is sampled with v inverted (vertical flip).
+    if (mode == 6) {
+        uint half_idx = (uv.x < 0.5) ? 0u : 1u;
+        float u_half  = (uv.x < 0.5) ? (uv.x * 2.0) : ((uv.x - 0.5) * 2.0);
+        float v_src   = (half_idx == 0u) ? (1.0 - uv.y) : uv.y;
+        return SampleEye(half_idx, u_half, v_src);
+    }
+
+    // ----- Anaglyph variants (3DToElse / iaian7+vectorform formulas) -----
+    // Sample full image of each eye; cA = left, cB = right.
+    float4 cA = SampleEye(0u, uv.x, uv.y);
+    float4 cB = SampleEye(1u, uv.x, uv.y);
+
+    // Anaglyph red-cyan (simple)
+    if (mode == 7) {
+        return float4(cA.r, cB.g, cB.b, 1.0);
+    }
+
+    // Anaglyph red-cyan Dubois
+    if (mode == 8) {
+        float r = saturate( 0.437 * cA.r + 0.449 * cA.g + 0.164 * cA.b
+                           - 0.011 * cB.r - 0.032 * cB.g - 0.007 * cB.b );
+        float g = saturate(-0.062 * cA.r - 0.062 * cA.g - 0.024 * cA.b
+                           + 0.377 * cB.r + 0.761 * cB.g + 0.009 * cB.b );
+        float b = saturate(-0.048 * cA.r - 0.050 * cA.g - 0.017 * cA.b
+                           - 0.026 * cB.r - 0.093 * cB.g + 1.234 * cB.b );
+        return float4(r, g, b, 1.0);
+    }
+
+    // Anaglyph red-cyan deghosted (iaian7 / vectorform)
+    if (mode == 9) {
+        float Contrast = 1.0;
+        float DeGhost  = 0.06 * 0.1;
+        float contrast = (Contrast * 0.5) + 0.5;
+        float LOne = contrast * 0.45;
+        float ROne = contrast;
+
+        float4 image = float4(0,0,0,1);
+        float4 accum;
+        accum = saturate(cA * float4(LOne, (1.0-LOne)*0.5, (1.0-LOne)*0.5, 1.0));
+        image.r = pow(accum.r + accum.g + accum.b, 1.00);
+        accum = saturate(cB * float4(1.0-ROne, ROne, 0.0, 1.0));
+        image.g = pow(accum.r + accum.g + accum.b, 1.15);
+        accum = saturate(cB * float4(1.0-ROne, 0.0, ROne, 1.0));
+        image.b = pow(accum.r + accum.g + accum.b, 1.15);
+
+        accum = image;
+        image.r = accum.r + (accum.r * DeGhost) + (accum.g * (DeGhost * -0.5)) + (accum.b * (DeGhost * -0.5));
+        image.g = accum.g + (accum.r * (DeGhost * -0.25)) + (accum.g * (DeGhost * 0.5)) + (accum.b * (DeGhost * -0.25));
+        image.b = accum.b + (accum.r * (DeGhost * -0.25)) + (accum.g * (DeGhost * -0.25)) + (accum.b * (DeGhost * 0.5));
+        image.a = 1.0;
+        return image;
+    }
+
+    // Anaglyph red-cyan compromise
+    if (mode == 10) {
+        float3x3 lf = float3x3(
+            float3(0.439,  0.447,  0.148),   // r_a = dot(left_rgb, this row)
+            float3(0.0,    0.0,    0.0  ),   // g_a
+            float3(0.0,    0.0,    0.0  ));  // b_a
+        float3x3 rf = float3x3(
+            float3(0.0,    0.0,    0.0  ),   // r_a
+            float3(0.095,  0.934, -0.005),   // g_a = dot(right_rgb, this row)
+            float3(-0.018, -0.028,  1.057)); // b_a = dot(right_rgb, this row)
+        return float4(saturate(mul(lf, cA.rgb) + mul(rf, cB.rgb)), 1.0);
+    }
+
+    // Anaglyph green-magenta (simple)
+    if (mode == 11) {
+        return float4(cB.r, cA.g, cB.b, 1.0);
+    }
+
+    // Anaglyph green-magenta Dubois
+    if (mode == 12) {
+        float r = saturate(-0.062 * cA.r - 0.158 * cA.g - 0.039 * cA.b
+                           + 0.529 * cB.r + 0.705 * cB.g + 0.024 * cB.b );
+        float g = saturate( 0.284 * cA.r + 0.668 * cA.g + 0.143 * cA.b
+                           - 0.016 * cB.r - 0.015 * cB.g + 0.065 * cB.b );
+        float b = saturate(-0.015 * cA.r - 0.027 * cA.g + 0.021 * cA.b
+                           + 0.009 * cB.r + 0.075 * cB.g + 0.937 * cB.b );
+        return float4(r, g, b, 1.0);
+    }
+
+    // Anaglyph green-magenta deghosted
+    if (mode == 13) {
+        float Contrast = 1.0;
+        float DeGhost  = 0.06 * 0.275;
+        float contrast = (Contrast * 0.5) + 0.5;
+        float LOne = contrast * 0.45;
+        float ROne = contrast * 0.8;
+
+        float4 image = float4(0,0,0,1);
+        float4 accum;
+        accum = saturate(cB * float4(ROne, 1.0-ROne, 0.0, 1.0));
+        image.r = pow(accum.r + accum.g + accum.b, 1.15);
+        accum = saturate(cA * float4((1.0-LOne)*0.5, LOne, (1.0-LOne)*0.5, 1.0));
+        image.g = pow(accum.r + accum.g + accum.b, 1.05);
+        accum = saturate(cB * float4(0.0, 1.0-ROne, ROne, 1.0));
+        image.b = pow(accum.r + accum.g + accum.b, 1.15);
+
+        accum = image;
+        image.r = accum.r + (accum.r * (DeGhost * 0.5))  + (accum.g * (DeGhost * -0.25)) + (accum.b * (DeGhost * -0.25));
+        image.g = accum.g + (accum.r * (DeGhost * -0.5)) + (accum.g * (DeGhost * 0.25))  + (accum.b * (DeGhost * -0.5));
+        image.b = accum.b + (accum.r * (DeGhost * -0.25))+ (accum.g * (DeGhost * -0.25)) + (accum.b * (DeGhost * 0.5));
+        image.a = 1.0;
+        return image;
+    }
+
+    // Anaglyph blue-amber (ColorCode style)
+    if (mode == 14) {
+        float Contrast = 1.0;
+        float DeGhost  = 0.06 * 0.275;
+        float contrast = (Contrast * 0.5) + 0.5;
+        float LOne = contrast * 0.45;
+        float ROne = contrast;
+
+        float4 image = float4(0,0,0,1);
+        float4 accum;
+        accum = saturate(cA * float4(ROne, 0.0, 1.0-ROne, 1.0));
+        image.r = pow(accum.r + accum.g + accum.b, 1.05);
+        accum = saturate(cA * float4(0.0, ROne, 1.0-ROne, 1.0));
+        image.g = pow(accum.r + accum.g + accum.b, 1.10);
+        accum = saturate(cB * float4((1.0-LOne)*0.5, (1.0-LOne)*0.5, LOne, 1.0));
+        image.b = pow(accum.r + accum.g + accum.b, 1.0);
+        image.b = lerp(pow(image.b, (DeGhost * 0.15) + 1.0),
+                       1.0 - pow(abs(1.0 - image.b), (DeGhost * 0.15) + 1.0),
+                       image.b);
+
+        accum = image;
+        image.r = accum.r + (accum.r * (DeGhost * 1.5))  + (accum.g * (DeGhost * -0.75)) + (accum.b * (DeGhost * -0.75));
+        image.g = accum.g + (accum.r * (DeGhost * -0.75)) + (accum.g * (DeGhost * 1.5))   + (accum.b * (DeGhost * -0.75));
+        image.b = accum.b + (accum.r * (DeGhost * -1.5)) + (accum.g * (DeGhost * -1.5))  + (accum.b * (DeGhost * 3.0));
+        return saturate(image);
+    }
+
+    // Mono — single-eye view. eye_swap selects right (1) instead of left (0).
+    if (mode == 15) {
+        return SampleEye(0u, uv.x, uv.y);
+    }
+
+    // Fallback
+    return float4(uv, 0, 1);
+}
+)";
+
+
+bool CompileShader(const char* src, const char* entry, const char* profile,
+                   ComPtr<ID3DBlob>& out_blob)
+{
+    ComPtr<ID3DBlob> errors;
+    UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+#ifdef _DEBUG
+    flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+#endif
+    HRESULT hr = D3DCompile(src, std::strlen(src), nullptr, nullptr, nullptr,
+                            entry, profile, flags, 0, &out_blob, &errors);
+    if (FAILED(hr)) {
+        if (errors) {
+            LOG() << "D3DCompile(" << entry << ") error: "
+                  << static_cast<const char*>(errors->GetBufferPointer());
+        }
+        return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+
+bool WindowPresenter::CreateShaders()
+{
+    ID3D11Device* dev = renderer_->Device();
+
+    ComPtr<ID3DBlob> vs_blob, ps_blob;
+    if (!CompileShader(kVsSource, "main", "vs_5_0", vs_blob)) return false;
+    if (!CompileShader(kPsSource, "main", "ps_5_0", ps_blob)) return false;
+
+    if (FAILED(dev->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr, &vs_))) return false;
+    if (FAILED(dev->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, &ps_)))  return false;
+
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sd.AddressU       = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressV       = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressW       = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sd.MinLOD         = 0;
+    sd.MaxLOD         = D3D11_FLOAT32_MAX;
+    if (FAILED(dev->CreateSamplerState(&sd, &sampler_))) return false;
+
+    D3D11_BUFFER_DESC bd{};
+    bd.ByteWidth      = (sizeof(CBParams) + 15u) & ~15u;
+    bd.Usage          = D3D11_USAGE_DYNAMIC;
+    bd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    if (FAILED(dev->CreateBuffer(&bd, nullptr, &cb_))) return false;
+
+    D3D11_RASTERIZER_DESC rd{};
+    rd.FillMode = D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_NONE;
+    rd.DepthClipEnable = TRUE;
+    if (FAILED(dev->CreateRasterizerState(&rd, &rasterizer_))) return false;
+
+    D3D11_BLEND_DESC bl{};
+    bl.RenderTarget[0].BlendEnable = FALSE;
+    bl.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    if (FAILED(dev->CreateBlendState(&bl, &blend_))) return false;
+
+    return true;
+}
+
+
+bool WindowPresenter::CreateSwapChain(Dx11Renderer& renderer)
+{
+    ID3D11Device* dev = renderer.Device();
+
+    ComPtr<IDXGIDevice> dxgi_dev;
+    if (FAILED(dev->QueryInterface(IID_PPV_ARGS(&dxgi_dev)))) return false;
+    ComPtr<IDXGIAdapter> adapter;
+    if (FAILED(dxgi_dev->GetAdapter(&adapter))) return false;
+    ComPtr<IDXGIFactory2> factory;
+    if (FAILED(adapter->GetParent(IID_PPV_ARGS(&factory)))) return false;
+
+    // Flip-model + waitable swap chain. The waitable handle (released once per
+    // display refresh) gates pacing on the window thread, so Present(0, 0)
+    // queues the flip and returns immediately — tear-free without blocking
+    // inside Present (which is what would stall the compositor thread via
+    // the shared context_mutex_).
+    DXGI_SWAP_CHAIN_DESC1 scd{};
+    scd.Width       = window_->Width();
+    scd.Height      = window_->Height();
+    scd.Format      = DXGI_FORMAT_R8G8B8A8_UNORM;
+    scd.SampleDesc  = { 1, 0 };
+    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scd.BufferCount = 2;
+    scd.Scaling     = DXGI_SCALING_STRETCH;
+    scd.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    scd.AlphaMode   = DXGI_ALPHA_MODE_IGNORE;
+    scd.Flags       = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+
+    HWND hwnd = static_cast<HWND>(window_->NativeHandle());
+    HRESULT hr = factory->CreateSwapChainForHwnd(dev, hwnd, &scd, nullptr, nullptr, &swapchain_);
+    if (FAILED(hr)) {
+        LOG() << "CreateSwapChainForHwnd failed hr=" << std::hex << hr;
+        return false;
+    }
+    factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
+
+    if (FAILED(swapchain_.As(&swapchain2_)) || !swapchain2_) {
+        LOG() << "WindowPresenter: QueryInterface(IDXGISwapChain2) failed";
+        return false;
+    }
+    swapchain2_->SetMaximumFrameLatency(1);
+    frame_latency_wait_ = swapchain2_->GetFrameLatencyWaitableObject();
+    if (!frame_latency_wait_) {
+        LOG() << "WindowPresenter: GetFrameLatencyWaitableObject returned null";
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 actual{};
+    swapchain_->GetDesc1(&actual);
+    LOG() << "WindowPresenter: swapchain created " << actual.Width << "x" << actual.Height
+          << " (FLIP_DISCARD, " << actual.BufferCount << " buffers, waitable="
+          << (frame_latency_wait_ ? "yes" : "no") << ")";
+
+    ComPtr<ID3D11Texture2D> bb;
+    if (FAILED(swapchain_->GetBuffer(0, IID_PPV_ARGS(&bb)))) return false;
+    if (FAILED(dev->CreateRenderTargetView(bb.Get(), nullptr, &swapchain_rtv_))) return false;
+
+    swap_width_  = window_->Width();
+    swap_height_ = window_->Height();
+    return true;
+}
+
+
+bool WindowPresenter::Init(Dx11Renderer& renderer,
+                           const StereoDisplayDriverConfiguration& cfg,
+                           const FocusContext& focus)
+{
+    renderer_         = &renderer;
+    mode_             = cfg.output_mode;
+    eye_swap_         = cfg.eye_swap;
+    aspect_ratio_     = cfg.aspect_ratio;
+    spans_two_monitors_ = (mode_ == OutputMode::DualDisplay
+                           || mode_ == OutputMode::DualDisplayFlip);
+    auto_focus_       = cfg.auto_focus;
+    focus_            = focus;
+
+    // Derive framepack_offset from the timing spec for FramePacked modes.
+    const bool is_framepack = IsFramePackedMode(mode_);
+    const FramePackTimingSpec* fp_spec = is_framepack ? GetFramePackTimingSpec(mode_) : nullptr;
+    framepack_offset_ = fp_spec ? fp_spec->gap_pixels : 0;
+
+    // For FramePacked modes, attempt to switch the display to the custom timing.
+    // This is non-fatal — if the modeset fails, we still create the window and
+    // render TaB at the current desktop resolution (just without the HDMI 3D
+    // InfoFrame that triggers the TV's frame-packing decoder).
+    if (is_framepack && fp_spec) {
+        if (timing_helper_.Apply(*fp_spec, cfg.display_index)) {
+            LOG() << "WindowPresenter: display timing applied via "
+                  << (timing_helper_.GetBackend() == DisplayTimingHelper::Backend::Nvidia   ? "NVIDIA" :
+                      timing_helper_.GetBackend() == DisplayTimingHelper::Backend::Amd      ? "AMD"    :
+                      timing_helper_.GetBackend() == DisplayTimingHelper::Backend::CruFallback ? "CRU"  : "???");
+        } else {
+            LOG() << "WindowPresenter: display timing apply FAILED — rendering TaB at desktop res";
+        }
+    }
+
+    // Resolve target monitor(s) — reuses cfg.display_index. The dual-display
+    // modes ask for a contiguous-right secondary so the window spans both.
+    platform::MonitorInfo primary{}, secondary{};
+    if (!platform::ResolveTargetMonitors(cfg.display_index, spans_two_monitors_, primary, secondary)) {
+        LOG() << "WindowPresenter::Init: ResolveTargetMonitors failed";
+        timing_helper_.Revert();
+        return false;
+    }
+
+    // For FramePacked modes where the timing was successfully applied, override
+    // the monitor info to match the frame-pack active resolution so the window
+    // and swapchain are created at the correct size (e.g. 1920x2205).
+    if (is_framepack && timing_helper_.IsActive() && fp_spec) {
+        primary.width  = static_cast<int>(fp_spec->active_w);
+        primary.height = static_cast<int>(fp_spec->active_h);
+        LOG() << "WindowPresenter: overriding monitor dimensions to "
+              << primary.width << "x" << primary.height << " for frame packing";
+    }
+
+    // Win32 windows are tied to their creating thread — only that thread can
+    // pump them, and Windows tears them down if their owner thread doesn't
+    // service messages. vrserver.exe's activation thread doesn't pump, so we
+    // spin a dedicated thread here that creates the window, builds the
+    // swapchain, runs the message loop, and stays alive for the window's life.
+    window_stop_.store(false);
+    window_ready_.store(false);
+    window_failed_.store(false);
+    window_thread_ = std::thread(&WindowPresenter::WindowThreadLoop, this, &renderer,
+                                  primary, secondary);
+
+    // Wait up to 5s for the window thread to finish setup.
+    for (int i = 0; i < 500; ++i) {
+        if (window_ready_.load() || window_failed_.load()) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (window_failed_.load() || !window_ready_.load()) {
+        LOG() << "WindowPresenter::Init: window thread failed to come up";
+        Shutdown();
+        return false;
+    }
+
+    LOG() << "WindowPresenter: window " << (window_ ? window_->Width() : 0) << "x"
+          << (window_ ? window_->Height() : 0)
+          << " on display_index=" << cfg.display_index
+          << " spans_two=" << (spans_two_monitors_ ? "yes" : "no")
+          << " mode=" << OutputModeToString(mode_);
+
+    // Kick focus thread (z-order asserts; window thread already pumps messages).
+    focus_stop_.store(false);
+    focus_thread_ = std::thread(&WindowPresenter::FocusThreadLoop, this);
+
+    LOG() << "WindowPresenter: window thread up; focus thread running";
+    return true;
+}
+
+
+void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
+                                        platform::MonitorInfo primary,
+                                        platform::MonitorInfo secondary)
+{
+    platform::EnablePerMonitorV2DpiAwareness();
+
+    window_ = platform::CreatePresentWindow(
+        primary,
+        (secondary.width > 0 ? &secondary : nullptr),
+        "VRto3D");
+    if (!window_) {
+        LOG() << "WindowThreadLoop: CreatePresentWindow failed";
+        window_failed_.store(true);
+        return;
+    }
+
+    if (!CreateShaders() || !CreateSwapChain(*renderer)) {
+        LOG() << "WindowThreadLoop: shader/swapchain init failed";
+        window_failed_.store(true);
+        window_.reset();
+        return;
+    }
+
+    // Initial black frame so DWM composites something for our HWND.
+    {
+        ID3D11DeviceContext* ctx = renderer->Context();
+        const float clear[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        ctx->ClearRenderTargetView(swapchain_rtv_.Get(), clear);
+        ID3D11RenderTargetView* null_rtv[] = { nullptr };
+        ctx->OMSetRenderTargets(1, null_rtv, nullptr);
+        swapchain_rtv_.Reset();   // release ref to back buffer before flip
+        swapchain_->Present(0, 0);
+    }
+    // Window starts non-topmost; FocusThreadLoop asserts topmost when
+    // is_on_top_ / man_on_top_ / auto_focus path triggers.
+    window_ready_.store(true);
+
+    // For frame-packed modes started without a tracked app, take the
+    // foreground ourselves so Alt+F4 reaches our WndProc (which then
+    // tears the modeset down via timing_helper_.Revert()). Other modes
+    // are typically driven by an app that needs the foreground, so we
+    // only do this for the framepack case.
+    const bool is_framepack = IsFramePackedMode(mode_);
+    const uint32_t startup_pid = focus_.app_pid ? focus_.app_pid->load() : 0;
+    if (is_framepack && startup_pid == 0) {
+        HWND self_hwnd = static_cast<HWND>(window_->NativeHandle());
+        if (self_hwnd) {
+            ForceFocus(self_hwnd,
+                       GetCurrentThreadId(),
+                       GetWindowThreadProcessId(self_hwnd, nullptr));
+            LOG() << "WindowPresenter: forced focus to our window for "
+                     "standalone frame-pack mode (Alt+F4 will quit)";
+        }
+    }
+
+    // This thread owns the window message pump AND drives rendering. Win32
+    // requires the same thread that created the window to service its message
+    // queue, and DXGI flip-model Present must be issued by the thread that
+    // created the swap chain.
+    while (!window_stop_.load(std::memory_order_relaxed)) {
+        // DWM signals frame_latency_wait_ once per display refresh; this is
+        // what gates pacing now (no vsync block inside Present). 100 ms cap
+        // so we still pump messages if DWM is paused (occlusion / lock
+        // screen) — alertable so Shutdown's thread-stop wakes us promptly.
+        if (frame_latency_wait_) {
+            WaitForSingleObjectEx(frame_latency_wait_, 100, TRUE);
+        }
+        renderer->WaitAndDrawPending(33);
+
+        // Pump window messages so the window stays responsive even if the
+        // compositor stops submitting frames.
+        if (window_) window_->PollEvents();
+    }
+
+    // Tear down on this thread (DestroyWindow must be called on the creating thread).
+    if (frame_latency_wait_) {
+        CloseHandle(frame_latency_wait_);
+        frame_latency_wait_ = nullptr;
+    }
+    swapchain_rtv_.Reset();
+    swapchain2_.Reset();
+    swapchain_.Reset();
+    rasterizer_.Reset();
+    blend_.Reset();
+    cb_.Reset();
+    sampler_.Reset();
+    ps_.Reset();
+    vs_.Reset();
+    window_.reset();
+    LOG() << "WindowThreadLoop: exited";
+}
+
+
+void WindowPresenter::RecordComposite(ID3D11Texture2D* sbs_input)
+{
+    if (!swapchain_ || !sbs_input) {
+        static std::atomic<bool> logged_null{false};
+        bool expected = false;
+        if (logged_null.compare_exchange_strong(expected, true)) {
+            LOG() << "RecordComposite: early return swapchain=" << (void*)swapchain_.Get()
+                  << " sbs_input=" << (void*)sbs_input;
+        }
+        return;
+    }
+
+    ID3D11Device* dev = renderer_->Device();
+    ID3D11DeviceContext* ctx = renderer_->Context();
+
+    // FLIP_DISCARD rotates buffer 0 every Present, so refresh the RTV each
+    // frame against the current back buffer.
+    ComPtr<ID3D11Texture2D> bb;
+    if (FAILED(swapchain_->GetBuffer(0, IID_PPV_ARGS(&bb))) || !bb) return;
+    swapchain_rtv_.Reset();
+    if (FAILED(dev->CreateRenderTargetView(bb.Get(), nullptr, &swapchain_rtv_))) return;
+
+    ComPtr<ID3D11ShaderResourceView> srv;
+    D3D11_SHADER_RESOURCE_VIEW_DESC sv{};
+    D3D11_TEXTURE2D_DESC td{};
+    sbs_input->GetDesc(&td);
+    sv.Format                    = td.Format;
+    sv.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
+    sv.Texture2D.MipLevels       = static_cast<UINT>(-1);   // all mips
+    sv.Texture2D.MostDetailedMip = 0;
+    HRESULT srv_hr = dev->CreateShaderResourceView(sbs_input, &sv, &srv);
+    if (FAILED(srv_hr)) {
+        static std::atomic<bool> logged_srv{false};
+        bool expected = false;
+        if (logged_srv.compare_exchange_strong(expected, true)) {
+            LOG() << "RecordComposite: CreateShaderResourceView failed hr=0x"
+                  << std::hex << srv_hr
+                  << " fmt=" << std::dec << td.Format
+                  << " bind=0x" << std::hex << td.BindFlags;
+        }
+        return;
+    }
+
+    // Update constant buffer.
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (SUCCEEDED(ctx->Map(cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        CBParams p{};
+        p.mode             = ModeToShaderEnum(mode_);
+        p.framepack_offset = framepack_offset_;
+        // Poll eye_swap from the live config so the OSD's "Swap Eyes"
+        // checkbox takes effect immediately (no presenter restart).
+        bool live_swap = eye_swap_;
+        if (renderer_ && renderer_->Component()) {
+            live_swap = renderer_->Component()->GetConfig().eye_swap;
+        }
+        p.eye_swap         = live_swap ? 1u : 0u;
+        p.out_width        = static_cast<float>(swap_width_);
+        p.out_height       = static_cast<float>(swap_height_);
+        p.aspect_ratio     = aspect_ratio_;
+        std::memcpy(mapped.pData, &p, sizeof(p));
+        ctx->Unmap(cb_.Get(), 0);
+    }
+
+    D3D11_VIEWPORT vp{};
+    vp.Width    = static_cast<float>(swap_width_);
+    vp.Height   = static_cast<float>(swap_height_);
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+
+    ID3D11RenderTargetView* rtv = swapchain_rtv_.Get();
+    const float clear[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    ctx->ClearRenderTargetView(rtv, clear);
+
+    ctx->OMSetRenderTargets(1, &rtv, nullptr);
+    ctx->RSSetViewports(1, &vp);
+    ctx->RSSetState(rasterizer_.Get());
+    float blend_factor[4] = { 1,1,1,1 };
+    ctx->OMSetBlendState(blend_.Get(), blend_factor, 0xFFFFFFFF);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    ctx->IASetInputLayout(nullptr);
+    ctx->VSSetShader(vs_.Get(), nullptr, 0);
+    ctx->PSSetShader(ps_.Get(), nullptr, 0);
+    ID3D11Buffer* cbs[] = { cb_.Get() };
+    ctx->PSSetConstantBuffers(0, 1, cbs);
+    ID3D11ShaderResourceView* srvs[] = { srv.Get() };
+    ctx->PSSetShaderResources(0, 1, srvs);
+    ID3D11SamplerState* samps[] = { sampler_.Get() };
+    ctx->PSSetSamplers(0, 1, samps);
+
+    ctx->Draw(3, 0);
+
+    // Unbind SRV + RTV so the back buffer reference is released before
+    // Present (FLIP requires no outstanding RTV references on flip).
+    ID3D11ShaderResourceView* null_srv[] = { nullptr };
+    ctx->PSSetShaderResources(0, 1, null_srv);
+    ID3D11RenderTargetView* null_rtv[] = { nullptr };
+    ctx->OMSetRenderTargets(1, null_rtv, nullptr);
+    swapchain_rtv_.Reset();
+}
+
+
+void WindowPresenter::Present()
+{
+    if (!swapchain_) return;
+
+    // Flip-model + waitable: SyncInterval=0 queues the flip and returns
+    // immediately; DWM consumes it at the next vblank. Pacing is gated by
+    // frame_latency_wait_ on the window thread, not by Present blocking.
+    HRESULT hr = swapchain_->Present(0, 0);
+    if (FAILED(hr)) {
+        static std::atomic<bool> logged_present_fail{false};
+        bool expected = false;
+        if (logged_present_fail.compare_exchange_strong(expected, true)) {
+            LOG() << "WindowPresenter: swapchain->Present failed hr=" << std::hex << hr;
+        }
+    } else if (hr == DXGI_STATUS_OCCLUDED) {
+        static std::atomic<bool> logged_occluded{false};
+        bool expected = false;
+        if (logged_occluded.compare_exchange_strong(expected, true)) {
+            LOG() << "WindowPresenter: swapchain occluded (window hidden / minimized)";
+        }
+    }
+}
+
+
+void WindowPresenter::Shutdown()
+{
+    if (!window_thread_.joinable() && !window_) return;   // idempotent
+    LOG() << "WindowPresenter: Shutdown called";
+
+    focus_stop_.store(true);
+    if (focus_thread_.joinable()) focus_thread_.join();
+
+    // Window thread owns the window + swapchain; signal it to exit and join.
+    window_stop_.store(true);
+    if (window_thread_.joinable()) window_thread_.join();
+
+    // Revert display timing after the window is torn down so the desktop
+    // returns to its original resolution. Safe to call even if Apply was
+    // never called or failed.
+    timing_helper_.Revert();
+
+    renderer_ = nullptr;
+}
+
+
+void WindowPresenter::FocusThreadLoop()
+{
+    using namespace std::chrono_literals;
+
+    bool was_on_top = false;
+    bool nudged     = false;
+    int  reassert_counter = 0;
+    FocusLatchState focus_latch;   // auto-focus per-PID latch (focus_policy.h)
+
+    while (!focus_stop_.load(std::memory_order_relaxed)) {
+        if (!window_) break;
+
+        // Note: do NOT pump messages here — the window's message queue must
+        // be serviced from its creating thread (WindowThreadLoop).
+
+        const bool is_on_top   = focus_.is_on_top   && focus_.is_on_top->load();
+        const bool man_on_top  = focus_.man_on_top  && focus_.man_on_top->load();
+        const uint32_t pid     = focus_.app_pid ? focus_.app_pid->load() : 0;
+        // Live mirror — falls back to the init-time cache if the driver
+        // didn't plumb the pointer (older code paths / unit tests).
+        const bool auto_focus  = focus_.auto_focus  ? focus_.auto_focus->load() : auto_focus_;
+
+        // Multi-display placement nudge, once after first show.
+        if (spans_two_monitors_ && !nudged) {
+            window_->MultiDisplayNudge();
+            nudged = true;
+        }
+
+        const bool app_running = platform::IsProcessRunning(pid);
+
+        // Shared decision (see focus_policy.h) — kept identical to the Linux
+        // VkRenderer focus block so the two can't drift.
+        FocusInputs fi;
+        fi.is_on_top   = is_on_top;
+        fi.man_on_top  = man_on_top;
+        fi.auto_focus  = auto_focus;
+        fi.app_pid     = pid;
+        fi.app_running = app_running;
+        fi.force_on_top = false;  // no OSD-forced-on-top signal on this path
+        bool set_is_on_top = false, set_man_on_top = false;
+        const bool want_on_top =
+            ComputeWantOnTop(fi, focus_latch, &set_is_on_top, &set_man_on_top);
+        if (set_is_on_top && focus_.is_on_top)  focus_.is_on_top->store(true);
+        if (set_man_on_top && focus_.man_on_top) focus_.man_on_top->store(true);
+
+        if (want_on_top != was_on_top) {
+            HWND vr_hwnd = static_cast<HWND>(window_->NativeHandle());
+            if (want_on_top) {
+                window_->BringToTop();
+                // Make the VR window click-through so input falls through to
+                // the game window underneath.
+                if (vr_hwnd) {
+                    LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
+                                      ex | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+                    SetLayeredWindowAttributes(vr_hwnd, 0, 255, LWA_ALPHA);
+                }
+                // When SteamVR is launched by the app, the game window may
+                // not exist yet at the +8s mark, or SteamVR's bring-up
+                // (vrmonitor / status window) may grab foreground after
+                // our first ForceFocus. Run a watch loop that re-asserts
+                // focus whenever the foreground drifts off the game.
+                std::thread([pid, man_on_top = focus_.man_on_top]() {
+                    for (int i = 0; i < 15; ++i) {
+                        if (man_on_top && !man_on_top->load()) return;
+                        HWND game_hwnd = GetHWNDFromPID(pid);
+                        if (game_hwnd && GetForegroundWindow() != game_hwnd) {
+                            ForceFocus(game_hwnd,
+                                       GetCurrentThreadId(),
+                                       GetWindowThreadProcessId(game_hwnd, nullptr));
+                        }
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                }).detach();
+            } else {
+                window_->ReleaseTopmost();
+                if (vr_hwnd) {
+                    // WS_EX_LAYERED stays on for the window's lifetime; only
+                    // WS_EX_TRANSPARENT toggles. Tearing down the layered
+                    // surface on a DPI-scaled display can leave it recreated
+                    // at virtualized dimensions.
+                    LONG_PTR ex = GetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE);
+                    SetWindowLongPtrW(vr_hwnd, GWL_EXSTYLE,
+                                      ex & ~WS_EX_TRANSPARENT);
+                }
+            }
+            was_on_top = want_on_top;
+            reassert_counter = 0;
+        }
+        // While we want to be on top, re-assert ~once per second so other
+        // apps that grab HWND_TOPMOST (dialogs, dashboards) don't push us
+        // behind for long.
+        else if (want_on_top && ++reassert_counter >= 20) {
+            reassert_counter = 0;
+            window_->BringToTop();
+        }
+
+        std::this_thread::sleep_for(50ms);
+    }
+}
+
+}  // namespace vrto3d

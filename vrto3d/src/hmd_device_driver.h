@@ -23,12 +23,28 @@
 #include <string>
 
 #include "accela_hamilton_runtime.h"
+#include "focus_context.h"
 #include "vrto3dlib/json_manager.h"
 #include "vrto3dlib/uevr_receiver.hpp"
 
  // Forward declare XINPUT_STATE
 struct _XINPUT_STATE;
 typedef _XINPUT_STATE XINPUT_STATE;
+
+// Platform renderer pair: D3D11 on Windows, Vulkan on Linux. Same public
+// surface (Init/Shutdown/ConfigureOsd/Osd/RequestScreenshot/OnAppConnect/...),
+// selected at compile time so shared driver code uses the aliases only.
+#ifdef _WIN32
+class Dx11Renderer;
+class DirectModeComponent;
+using StereoRenderer   = Dx11Renderer;
+using StereoDirectMode = DirectModeComponent;
+#else
+class VkRenderer;
+class DirectModeComponentVk;
+using StereoRenderer   = VkRenderer;
+using StereoDirectMode = DirectModeComponentVk;
+#endif
 
 
 class StereoDisplayComponent : public vr::IVRDisplayComponent
@@ -37,6 +53,10 @@ public:
     explicit StereoDisplayComponent( const StereoDisplayDriverConfiguration &config );
 
     // ----- Functions to override vr::IVRDisplayComponent -----
+    // IVRDisplayComponent's distortion / viewport / bounds members are pure
+    // virtuals and must be overridden for the class to be instantiable, but
+    // in direct mode the compositor never calls them — the overrides below
+    // are stubs.
     bool IsDisplayOnDesktop() override;
     bool IsDisplayRealDisplay() override;
     void GetRecommendedRenderTargetSize( uint32_t *pnWidth, uint32_t *pnHeight ) override;
@@ -47,18 +67,38 @@ public:
     void GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight ) override;
     StereoDisplayDriverConfiguration GetConfig();
     void AdjustDepth(float new_depth, bool is_delta);
-    void AdjustConvergence(float new_conv, bool is_delta);
+    void AdjustConvergence(float new_conv, bool is_delta, bool resync = true);
     void AdjustFoV(float new_fov);
     float GetDepth();
     float GetConvergence();
     float GetFoV();
+
+    // Auto-depth: an external GPU pass measures the SbS frame's max disparity
+    // each frame and feeds it back via FeedAutoDepthSample. While enabled, the
+    // component lerps depth_ toward a target derived from `manual_depth_ *
+    // (target / observed)`, capped by `manual_depth_` (the user's intended
+    // ceiling). Toggling off snaps depth_ back to manual_depth_.
+    bool  IsAutoDepthEnabled() const;
+    void  SetAutoDepthEnabled(bool enabled);
+    float GetManualDepth() const;
+    float GetAutoDepthTargetDisparity() const;
+    void  SetAutoDepthTargetDisparity(float frac);
+    float GetAutoDepthSmoothing() const;
+    void  SetAutoDepthSmoothing(float v);
+    // Diagnostic toggle for the AutoDepthAnalyzer's periodic histogram /
+    // disparity logs. Off by default — only useful when tuning thresholds.
+    bool  IsAutoDepthLoggingEnabled() const;
+    void  SetAutoDepthLoggingEnabled(bool enabled);
+    // disp_step_px = the analyzer's disparity quantization (histogram bucket
+    // width in source pixels); the input deadband is derived from it.
+    void  FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px,
+                              uint32_t disp_step_px);
 
     // UE3D Monitor Mode
     void SetMonitorMode(bool enabled);
     bool IsMonitorMode();
 
     std::string CheckUserSettings();
-    std::string CheckPositionInput();
     void AdjustSensitivity(float delta);
     void AdjustRadius(float delta);
     void AdjustTrackFilterRotation(float delta);
@@ -68,11 +108,19 @@ public:
     void AdjustTrackFilterZoomSmoothing(float delta);
     void AdjustTrackFilterMaxZoom(float delta);
     void SetReset();
+    // Raise the reset flag so the next XInputUpdateThread tick consumes it
+    // (zeros pitch/yaw, OpenTrack state, and clears the flag via
+    // MockControllerDeviceDriver::ConsumePoseReset).
+    void RequestPoseReset();
     void LoadSettings(StereoDisplayDriverConfiguration& config);
     void ResetProjection();
     void Init(uint32_t device_index);
 
 private:
+    // Push new depth into depth_ (atomic CAS) and the OpenVR
+    // Prop_UserIpdMeters_Float property. Used by both manual and auto paths.
+    void ApplyDepth(float new_depth);
+
     StereoDisplayDriverConfiguration config_;
     std::atomic< float > depth_;
     std::atomic< float > convergence_;
@@ -83,17 +131,44 @@ private:
 
     // UE3D Monitor Mode
     std::atomic< bool > monitor_mode_{ false };
+
+    // Auto-depth state
+    std::atomic< bool >  auto_depth_enabled_{ false };
+    std::atomic< float > manual_depth_{ 0.1f };
+    std::atomic< float > auto_depth_target_disparity_{ 0.005f };
+    std::atomic< float > auto_depth_smoothing_{ 0.08f };
+    // EMA of incoming disparity-fraction samples (input-side jitter filter).
+    // -1 = uninitialized. Reset whenever auto-depth is toggled off.
+    std::atomic< float > auto_depth_disp_ema_{ -1.0f };
+    std::atomic< bool >  auto_depth_log_enabled_{ false };
+    // Short temporal median over raw disparity fractions ahead of the EMA —
+    // a single-frame spike (particle, muzzle flash, camera clip) must not
+    // yank the control loop. Touched only by FeedAutoDepthSample (renderer
+    // thread); other threads request a clear via auto_depth_filter_reset_.
+    static constexpr int kAutoDepthHist = 5;
+    float auto_depth_frac_hist_[kAutoDepthHist] = {};
+    int   auto_depth_hist_n_ = 0;
+    int   auto_depth_hist_i_ = 0;
+    std::atomic< bool > auto_depth_filter_reset_{ false };
 };
 
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Represents a Mock HMD in the system
+// Purpose: Virtual HMD operating in SteamVR direct mode. The
+// IVRDriverDirectModeComponent (held by direct_mode_component_) takes ownership
+// of the per-eye texture exchange — game eye textures flow in via SubmitLayer
+// rather than the compositor's IVRVirtualDisplay::Present path. Direct mode is
+// what lets us bypass the compositor's lens-distortion / panel-mask pass that
+// would otherwise carve black corners out of every frame.
 //-----------------------------------------------------------------------------
 class MockControllerDeviceDriver : public vr::ITrackedDeviceServerDriver
 {
 public:
     MockControllerDeviceDriver();
+    ~MockControllerDeviceDriver();
+
+    // ITrackedDeviceServerDriver
     vr::EVRInitError Activate( uint32_t unObjectId ) override;
     void EnterStandby() override;
     void *GetComponent( const char *pchComponentNameAndVersion ) override;
@@ -105,11 +180,37 @@ public:
     void XInputUpdateThread();
     void PoseUpdateThread();
     void PollHotkeysThread();
-    void FocusUpdateThread();
-    void AutoDepthThread();
+    void MonitorModeThread();
+    // Polls the connected game's foreground state and asserts cursor
+    // visibility / clip state per the live hide_cursor_ / lock_cursor_ /
+    // stereo_cursor_ atomics: blanks the system cursor set while the game is
+    // focused (hide / stereo cursor), clips the cursor to the focused game
+    // window's client rect (lock), and pushes the stereo-cursor draw state
+    // into the OSD renderer each tick.
+    void CursorControlThread();
 
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
     void SetAsync(bool enable);
+
+    // Pose-reset consumption point. Called by XInputUpdateThread (and the
+    // OSD Recenter button path) once the XInput-derived pitch/yaw have been
+    // zeroed: also zeros the cached OpenTrack attitude/position so disabling
+    // OpenTrack — or pressing the pose-reset hotkey while it's on — doesn't
+    // leave stale UDP-derived bias to be re-applied later. Finally clears the
+    // pose_reset flag via StereoDisplayComponent::SetReset().
+    void ConsumePoseReset();
+
+    // Accessors used by VirtualDisplayDevice to reach shared config / focus
+    // state without duplicating it.
+    const StereoDisplayComponent* GetStereoComponent() const { return stereo_display_component_.get(); }
+    StereoDisplayComponent*       GetStereoComponent()       { return stereo_display_component_.get(); }
+    vrto3d::FocusContext          GetFocusContext();
+
+    // Reach the renderer + direct-mode component so the device provider can
+    // drain stale shared-texture handles on VREvent_ProcessDisconnected and
+    // toggle the renderer's pause-on-disconnect circuit-breaker.
+    StereoRenderer*   GetRenderer()            { return renderer_.get(); }
+    StereoDirectMode* GetDirectModeComponent() { return direct_mode_component_.get(); }
 
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;
@@ -125,11 +226,26 @@ private:
     std::atomic< bool > no_profile_;
 
     std::atomic< bool > is_active_;
-    std::atomic< uint32_t > device_index_;
+    std::atomic< uint32_t > device_index_;         // HMD object id (from Activate)
+    std::unique_ptr< StereoRenderer > renderer_;
+    std::unique_ptr< StereoDirectMode > direct_mode_component_;
     std::atomic< bool > is_on_top_;
     std::atomic< bool > man_on_top_;
-    std::atomic< bool > ue3d_on_top_;
-    std::atomic< bool > take_screenshot_;
+    // Snapshot of man_on_top_ at the moment of ProcessDisconnected, so a
+    // same-pid reconnect (e.g. RealVR re-init) can refocus immediately
+    // only if the user actually had focus enabled before the disconnect.
+    std::atomic< bool > focus_pre_disconnect_{ false };
+    // Live mirror of stereo_display_component_->GetConfig().auto_focus.
+    // Updated whenever a profile/config is (re)loaded so the presenter's
+    // focus loop sees toggles immediately. Default true matches stereo_config.h.
+    std::atomic< bool > auto_focus_{ true };
+    // Live mirrors of the corresponding cfg fields. Polled by CursorControlThread
+    // so OSD toggles take effect without a restart.
+    std::atomic< bool > hide_cursor_{ false };
+    std::atomic< bool > lock_cursor_{ false };
+    std::atomic< bool > stereo_cursor_{ false };
+    std::atomic< float > cursor_depth_{ 0.0f };
+    std::atomic< int > cursor_size_{ 32 };
     std::atomic< bool > launch_script_executed_;
 
     std::mutex pose_mutex_;
@@ -143,9 +259,9 @@ private:
     std::thread xinput_thread_;
     std::thread pose_thread_;
     std::thread hotkey_thread_;
-    std::thread focus_thread_;
-    std::thread depth_thread_;
+    std::thread monitor_thread_;
     std::thread track_thread_;
+    std::thread cursor_thread_;
 
     vr::HmdQuaternion_t open_track_att_;
     std::array<double, 3> open_track_pos_;

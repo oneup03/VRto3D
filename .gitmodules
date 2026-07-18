@@ -10,3 +10,20 @@
 [submodule "external/VRto3DLib"]
 	path = external/VRto3DLib
 	url = https://github.com/oneup03/VRto3DLib.git
+[submodule "external/nvapi"]
+	path = external/nvapi
+	url = https://github.com/NVIDIA/nvapi.git
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = master
+[submodule "external/adl_sdk"]
+	path = external/adl_sdk
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/display-library
+[submodule "external/SR-lib"]
+	path = external/SR-lib
+	url = https://github.com/bo3b/SR-lib.git
+[submodule "external/NV3D-Lib"]
+	path = external/NV3D-Lib
+	url = https://github.com/oneup03/NV3D-Lib.git
+	branch = nv3d-glass

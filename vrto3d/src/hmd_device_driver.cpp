@@ -17,11 +17,33 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include "hmd_device_driver.h"
-#include "vrto3dlib/key_mappings.h"
+#ifdef _WIN32
+#include "direct_mode_component.h"
+#include "dx11_renderer.h"
+#include "vrto3dlib/key_codes.h"
+#else
+#include "vk/direct_mode_component_vk.h"
+#include "vk/vk_renderer.h"
+#include "vrto3dlib/key_codes.h"
+#endif
+#include "platform.h"
 #include "vrto3dlib/json_manager.h"
+#include "osd/osd_renderer.h"
+#include "osd/osd_menu.h"
+#include "vr_recenter.h"
+
+#ifdef _WIN32
+#include <shellapi.h>
+#include <shlobj.h>
+#include <urlmon.h>
+#pragma comment(lib, "urlmon.lib")
+#endif
 #include "vrto3dlib/app_id_mgr.h"
-#include "vrto3dlib/overlay_mgr.h"
+#ifdef _WIN32
 #include "vrto3dlib/win32_helper.hpp"
+#else
+#include "vrto3dlib/linux_helper.hpp"
+#endif
 #include "vrmath.h"
 
 #include <string>
@@ -30,12 +52,62 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <vector>
 
+#ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment (lib, "WSock32.Lib")
 #include <windows.h>
 #include <xinput.h>
+#else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <filesystem>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <sched.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include "vrto3dlib/input_state.h"
+// Socket-compat shims so the shared OpenTrack UDP thread body compiles
+// unchanged against BSD sockets.
+using SOCKET = int;
+using DWORD = uint32_t;
+static constexpr int INVALID_SOCKET = -1;
+static constexpr int SOCKET_ERROR = -1;
+static inline int closesocket(int s) { return close(s); }
+// XINPUT_STATE-shaped snapshot filled from the evdev gamepad backend.
+struct PortableGamepad {
+    uint16_t wButtons = 0;
+    uint8_t  bLeftTrigger = 0, bRightTrigger = 0;
+    int16_t  sThumbLX = 0, sThumbLY = 0, sThumbRX = 0, sThumbRY = 0;
+};
+struct _XINPUT_STATE {
+    uint32_t dwPacketNumber = 0;
+    PortableGamepad Gamepad;
+};
+static inline uint32_t XInputGetStateShim(uint32_t /*idx*/, _XINPUT_STATE* out)
+{
+    const auto pad = vrto3d::input::GetGamepadState();
+    out->Gamepad.wButtons = pad.wButtons;
+    out->Gamepad.bLeftTrigger = pad.bLeftTrigger;
+    out->Gamepad.bRightTrigger = pad.bRightTrigger;
+    out->Gamepad.sThumbLX = pad.sThumbLX;
+    out->Gamepad.sThumbLY = pad.sThumbLY;
+    out->Gamepad.sThumbRX = pad.sThumbRX;
+    out->Gamepad.sThumbRY = pad.sThumbRY;
+    return pad.connected ? 0u : 1167u;  // ERROR_DEVICE_NOT_CONNECTED
+}
+#define _XInputGetState XInputGetStateShim
+#ifndef ERROR_SUCCESS
+#define ERROR_SUCCESS 0u
+#endif
+static inline void SwitchToXinpuGetStateEx() {}
+#ifndef ZeroMemory
+#define ZeroMemory(p, s) memset((p), 0, (s))
+#endif
+#endif
 
 
 // Load settings from default.vrsettings
@@ -91,7 +163,6 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     // Display settings
     StereoDisplayDriverConfiguration display_configuration{};
     display_configuration.display_index = 0;
-    display_configuration.multi_display = false;
     display_configuration.window_x = 0;
     display_configuration.window_y = 0;
     display_configuration.window_width = 1920;
@@ -102,7 +173,13 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
     json_manager.LoadProfileFromJson(DEF_CFG, display_configuration);
 
     // Resolve display-index-driven window bounds from the active desktop layout
+#ifdef _WIN32
     const bool monitor_bounds_applied = ApplyDisplaySelectionToWindowConfig(display_configuration);
+#else
+    // Presenters fullscreen onto the selected output themselves on Linux —
+    // window_x/y bounds are not used for placement.
+    const bool monitor_bounds_applied = false;
+#endif
     LOG()
         << "Pre-init window bounds before StereoDisplayComponent: resolved="
         << (monitor_bounds_applied ? "true" : "false")
@@ -122,12 +199,15 @@ MockControllerDeviceDriver::MockControllerDeviceDriver()
 //-----------------------------------------------------------------------------
 vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
 {
+    // Direct mode registers the HMD once; no sibling DisplayRedirect object
+    // needs activating.
+    is_active_.store(true);
     device_index_ = unObjectId;
-    is_active_ = true;
+    // Start NOT on top (both platforms): the overlay lowers to reveal the
+    // desktop/game until an app connects to SteamVR, at which point the
+    // auto-focus path raises it (mirrored on Linux in VkRenderer's focus loop).
     is_on_top_ = false;
     man_on_top_ = false;
-    ue3d_on_top_ = false;
-    take_screenshot_ = false;
     app_updated_ = false;
     no_profile_ = false;
 
@@ -146,6 +226,57 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetStringProperty( container, vr::Prop_TrackingFirmwareVersion_String, "1.0");
     vrp->SetStringProperty( container, vr::Prop_HardwareRevision_String, "1.0");
 
+    // Query the target output monitor (resolved by display_index) for
+    // display frequency + approximate vsync-to-photons latency, then write
+    // the computed values back into the config so downstream consumers
+    // (pose thread cadence, hotkey sleep counts) pick them up.
+    {
+        auto cfg = stereo_display_component_->GetConfig();
+        platform::MonitorInfo primary{}, secondary{};
+        // JSON-supplied display_frequency overrides auto-detection. 0 (the
+        // default) means "ask the monitor".
+        if (cfg.display_frequency <= 0.0f) {
+            if (platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary)) {
+                cfg.display_frequency = platform::QueryRefreshHz(primary, 60.0f);
+            } else {
+                cfg.display_frequency = 60.0f;
+            }
+        } else {
+            // Still resolve the monitor so the log line reports the target.
+            platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary);
+        }
+
+        // Frame-sequential modes (NVIDIA 3D Vision, WibbleWobble lightfield)
+        // alternate L/R eyes at the panel's refresh rate, so the actual
+        // stereo-pair rate is panel_rate / 2. Producing SBS pairs faster than
+        // that just wastes GPU bandwidth (every other pair gets dropped) and
+        // adds latency through the consumer's frame queue.
+        const bool frame_sequential =
+            cfg.output_mode == OutputMode::NvidiaDX9
+         || cfg.output_mode == OutputMode::WibbleWobble;
+        if (frame_sequential && cfg.display_frequency > 1.0f) {
+            const float panel_hz = cfg.display_frequency;
+            cfg.display_frequency = panel_hz * 0.5f;
+            LOG() << "Display: frame-sequential mode — halving reported "
+                     "display freq to compositor (" << panel_hz << "Hz panel -> "
+                  << cfg.display_frequency << "Hz stereo-pair rate)";
+        }
+
+        cfg.display_latency   = (cfg.display_frequency > 1.0f)
+            ? (0.5f / cfg.display_frequency) : 0.011f;
+        cfg.sleep_count_max   = (int)(floor(1600.0 / (1000.0 / cfg.display_frequency)));
+        stereo_display_component_->LoadSettings(cfg);
+        auto_focus_.store(cfg.auto_focus);
+        hide_cursor_.store(cfg.hide_cursor);
+        lock_cursor_.store(cfg.lock_cursor);
+        stereo_cursor_.store(cfg.stereo_cursor);
+        cursor_depth_.store(cfg.cursor_depth);
+        cursor_size_.store(cfg.cursor_size);
+        LOG() << "Display: target=" << primary.device_name
+              << " freq=" << cfg.display_frequency << "Hz"
+              << " latency=" << cfg.display_latency << "s";
+    }
+
     // Display settings
     vrp->SetFloatProperty( container, vr::Prop_UserIpdMeters_Float, stereo_display_component_->GetConfig().depth);
     vrp->SetFloatProperty( container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.f);
@@ -155,7 +286,21 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     vrp->SetBoolProperty( container, vr::Prop_ReportsTimeSinceVSync_Bool, false);
     vrp->SetBoolProperty( container, vr::Prop_IsOnDesktop_Bool, false);
     vrp->SetBoolProperty( container, vr::Prop_DisplayDebugMode_Bool, true);
-    vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, false);
+    vrp->SetBoolProperty( container, vr::Prop_HasDriverDirectModeComponent_Bool, true);
+
+    // Direct-mode virtual-display integration: advertise our adapter LUID so
+    // the compositor composites on the same GPU the renderer will use, and
+    // signal that we fire VsyncEvent ourselves from the renderer thread.
+    {
+#ifdef _WIN32
+        LUID luid = platform::PrimaryAdapterLuid();
+        uint64_t luid_u64 = (static_cast<uint64_t>(luid.HighPart) << 32) | luid.LowPart;
+        vrp->SetUint64Property(container, vr::Prop_GraphicsAdapterLuid_Uint64, luid_u64);
+#endif
+        // No LUID handshake on Linux — the compositor and driver agree on the
+        // GPU implicitly.
+        vrp->SetBoolProperty  (container, vr::Prop_DriverDirectModeSendsVsyncEvents_Bool, true);
+    }
     if (stereo_display_component_->GetConfig().dash_enable)
     {
         vrp->SetFloatProperty(container, vr::Prop_DashboardScale_Float, 1.0f);
@@ -169,7 +314,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     // Get the current time
     std::time_t t = std::time(nullptr);
     std::tm tm;
+#ifdef _WIN32
     localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
     // Construct the JSON string with variables
     std::stringstream ss;
     ss << R"(
@@ -268,7 +417,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
     {
         std::thread([launch_script]() {
             LOG() << "Executing launch_script: " << launch_script.c_str();
+#ifdef _WIN32
             const std::string command = "cmd.exe /C " + launch_script;
+#else
+            const std::string command = launch_script;  // /bin/sh via system()
+#endif
             const int result = std::system(command.c_str());
             if (result == 0) {
                 LOG() << "launch_script completed successfully";
@@ -279,24 +432,406 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         }).detach();
     }
     
-    // Thread setup
+    // Thread setup. FocusUpdateThread is gone — its responsibilities (window
+    // placement + always-on-top) now live inside WindowPresenter, which is
+    // owned by VirtualDisplayDevice and observes the focus atomics below via
+    // GetFocusContext().
     xinput_thread_ = std::thread(&MockControllerDeviceDriver::XInputUpdateThread, this);
     pose_thread_ = std::thread(&MockControllerDeviceDriver::PoseUpdateThread, this);
     hotkey_thread_ = std::thread(&MockControllerDeviceDriver::PollHotkeysThread, this);
-    focus_thread_ = std::thread(&MockControllerDeviceDriver::FocusUpdateThread, this);
-    depth_thread_ = std::thread(&MockControllerDeviceDriver::AutoDepthThread, this);
-    if (stereo_display_component_->GetConfig().use_open_track) {
-        open_track_att_ = HmdQuaternion_Identity;
-		open_track_pos_ = { 0.0, 0.0, 0.0 };
-        track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
-    }
+    monitor_thread_ = std::thread(&MockControllerDeviceDriver::MonitorModeThread, this);
+    // Always start OpenTrack listener; the use_open_track flag is checked at
+    // consumption time (PoseUpdateThread / Stereo component) so it can be
+    // toggled live from the OSD without restarting the driver.
+    open_track_att_ = HmdQuaternion_Identity;
+    open_track_pos_ = { 0.0, 0.0, 0.0 };
+    track_thread_ = std::thread(&MockControllerDeviceDriver::OpenTrackThread, this);
+    cursor_thread_ = std::thread(&MockControllerDeviceDriver::CursorControlThread, this);
 
+#ifdef _WIN32
     HANDLE thread_handle = pose_thread_.native_handle();
 
     // Set the thread priority
     if (!SetThreadPriority(thread_handle, THREAD_PRIORITY_HIGHEST)) {
         // Handle error if setting priority fails
         LOG() << "Failed to set thread priority: " << GetLastError();
+    }
+#else
+    {
+        sched_param sch{};
+        sch.sched_priority = 0;
+        pthread_setschedparam(pose_thread_.native_handle(), SCHED_OTHER, &sch);
+        // Global input needs /dev/input access (user in the `input` group).
+        if (!vrto3d::input::Start()) {
+            LOG() << "evdev input unavailable — hotkeys/gamepad dead. "
+                     "Add your user to the `input` group: sudo usermod -aG input $USER";
+        }
+    }
+#endif
+
+    // Direct mode: build the platform renderer + selected presenter, then
+    // stand up the IVRDriverDirectModeComponent that hands per-eye game
+    // textures through to the renderer.
+    {
+        renderer_ = std::make_unique<StereoRenderer>();
+#ifdef _WIN32
+        LUID luid = platform::PrimaryAdapterLuid();
+        const bool renderer_ok =
+            renderer_->Init(luid, stereo_display_component_->GetConfig(), GetFocusContext());
+#else
+        const bool renderer_ok =
+            renderer_->Init(stereo_display_component_->GetConfig(), GetFocusContext());
+#endif
+        if (!renderer_ok) {
+            LOG() << "Renderer Init failed; direct-mode path will be inactive";
+            renderer_.reset();
+        } else {
+            direct_mode_component_ = std::make_unique<StereoDirectMode>(renderer_.get());
+            // Wire OSD callbacks. The OsdRenderer is lazy-initialized on the
+            // window thread when the first frame arrives.
+            vrto3d::osd::MenuCallbacks cb;
+            cb.save_game_profile = [this](std::string toast) {
+                if (prev_name_.empty()) return;
+                auto cfg = stereo_display_component_->GetConfig();
+                JsonManager().SaveProfileToJson(prev_name_ + "_config.json", cfg);
+                if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
+            };
+            cb.save_default_profile = [this](std::string toast) {
+                auto cfg = stereo_display_component_->GetConfig();
+                // SaveFullConfigToJson writes every key (display_index,
+                // output_mode, render dims, OpenTrack, track filter, LeiaSR,
+                // launch_script, etc.) — required so System-tab edits persist.
+                JsonManager().SaveFullConfigToJson(DEF_CFG, cfg);
+                if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
+            };
+            cb.reload_game_profile = [this](std::string toast) {
+                if (prev_name_.empty()) return;
+                auto cfg = stereo_display_component_->GetConfig();
+                if (JsonManager().LoadProfileFromJson(prev_name_ + "_config.json", cfg)) {
+                    stereo_display_component_->LoadSettings(cfg);
+                    SetAsync(cfg.async_enable);
+                    auto_focus_.store(cfg.auto_focus);
+                    hide_cursor_.store(cfg.hide_cursor);
+                    lock_cursor_.store(cfg.lock_cursor);
+                    stereo_cursor_.store(cfg.stereo_cursor);
+                    cursor_depth_.store(cfg.cursor_depth);
+                    cursor_size_.store(cfg.cursor_size);
+                    app_name_ = prev_name_;
+                    if (renderer_ && renderer_->Osd()) {
+                        renderer_->Osd()->SetAppName(app_name_);
+                        renderer_->Osd()->SetText(toast);
+                    }
+                }
+            };
+            cb.reload_default_profile = [this](std::string toast) {
+                auto cfg = stereo_display_component_->GetConfig();
+                // LoadProfileFromJson only reads per-profile fields; for the
+                // default config we also need to refresh global driver fields
+                // (display_index, output_mode, render dims, hmd_x/y/yaw,
+                // OpenTrack, track filter, LeiaSR sens, async_enable, etc).
+                // LoadParamsFromJson reads exactly that superset.
+                JsonManager().LoadParamsFromJson(cfg);
+                if (JsonManager().LoadProfileFromJson(DEF_CFG, cfg)) {
+                    stereo_display_component_->LoadSettings(cfg);
+                    SetAsync(cfg.async_enable);
+                    auto_focus_.store(cfg.auto_focus);
+                    hide_cursor_.store(cfg.hide_cursor);
+                    lock_cursor_.store(cfg.lock_cursor);
+                    stereo_cursor_.store(cfg.stereo_cursor);
+                    cursor_depth_.store(cfg.cursor_depth);
+                    cursor_size_.store(cfg.cursor_size);
+                    app_name_ = "";
+                    if (renderer_ && renderer_->Osd()) {
+                        renderer_->Osd()->SetAppName(app_name_);
+                        renderer_->Osd()->SetText(toast);
+                    }
+                }
+            };
+            cb.reset_defaults = [this](std::string toast) {
+                // Factory reset: start from a fresh (in-code default) config,
+                // but keep the display/output hardware fields from the live
+                // config so a reset restores the stereo/shader/tracking
+                // tunables without scrambling the user's monitor selection,
+                // render dimensions, or refresh — those are the
+                // "Requires Restart" fields and are hardware-specific.
+                auto cur = stereo_display_component_->GetConfig();
+                StereoDisplayDriverConfiguration def{};
+                def.display_index     = cur.display_index;
+                def.output_mode       = cur.output_mode;
+                def.window_x          = cur.window_x;
+                def.window_y          = cur.window_y;
+                def.window_width      = cur.window_width;
+                def.window_height     = cur.window_height;
+                def.render_width      = cur.render_width;
+                def.render_height     = cur.render_height;
+                def.aspect_ratio      = cur.aspect_ratio;
+                def.display_frequency = cur.display_frequency;
+                def.display_latency   = cur.display_latency;
+                def.sleep_count_max   = cur.sleep_count_max;
+                stereo_display_component_->LoadSettings(def);
+                SetAsync(def.async_enable);
+                auto_focus_.store(def.auto_focus);
+                hide_cursor_.store(def.hide_cursor);
+                lock_cursor_.store(def.lock_cursor);
+                stereo_cursor_.store(def.stereo_cursor);
+                cursor_depth_.store(def.cursor_depth);
+                cursor_size_.store(def.cursor_size);
+                if (renderer_ && renderer_->Osd()) renderer_->Osd()->SetText(toast);
+            };
+            cb.reset_projection = [this]() {
+                stereo_display_component_->ResetProjection();
+            };
+            cb.get_auto_depth_enabled = [this]() {
+                return stereo_display_component_->IsAutoDepthEnabled();
+            };
+            cb.set_auto_depth_enabled = [this](bool on) {
+                stereo_display_component_->SetAutoDepthEnabled(on);
+            };
+            cb.get_auto_depth_target = [this]() {
+                return stereo_display_component_->GetAutoDepthTargetDisparity();
+            };
+            cb.set_auto_depth_target = [this](float v) {
+                stereo_display_component_->SetAutoDepthTargetDisparity(v);
+            };
+            cb.get_auto_depth_smoothing = [this]() {
+                return stereo_display_component_->GetAutoDepthSmoothing();
+            };
+            cb.set_auto_depth_smoothing = [this](float v) {
+                stereo_display_component_->SetAutoDepthSmoothing(v);
+            };
+            cb.get_auto_depth_logging = [this]() {
+                return stereo_display_component_->IsAutoDepthLoggingEnabled();
+            };
+            cb.set_auto_depth_logging = [this](bool on) {
+                stereo_display_component_->SetAutoDepthLoggingEnabled(on);
+            };
+            cb.calibrate_leiasr_head = [this]() {
+#ifdef _WIN32
+                if (renderer_ && renderer_->Presenter()) {
+                    renderer_->Presenter()->RequestCalibrate();
+                    if (renderer_->Osd())
+                        renderer_->Osd()->SetText("LeiaSR head pose calibrated");
+                }
+#endif  // LeiaSR is a Windows-only presenter
+            };
+            cb.recenter_pose = [this]() {
+                // Raise the flag; XInputUpdateThread picks it up on its next
+                // 8ms tick and ConsumePoseReset zeros pitch/yaw + OT state
+                // and dispatches the deferred OpenVR ResetZeroPose.
+                stereo_display_component_->RequestPoseReset();
+                if (renderer_ && renderer_->Osd())
+                    renderer_->Osd()->SetText("Recentered");
+            };
+            cb.toggle_always_on_top = [this]() {
+                is_on_top_  = !is_on_top_;
+                man_on_top_ = is_on_top_.load();
+            };
+            cb.always_on_top = [this]() { return man_on_top_.load(); };
+            cb.request_game_focus = [this]() {
+                uint32_t pid = app_pid_.load();
+                LOG() << "request_game_focus fired pid=" << pid;
+                if (pid == 0 || !IsProcessRunning(pid)) return;
+#ifndef _WIN32
+                // No cross-client focus stealing on Wayland; X11 raise lives
+                // in the presenter's topmost handling.
+                return;
+#else
+                std::thread([this, pid]() {
+                    // Let any held hotkey modifiers (Ctrl+Home was likely
+                    // just used to close the menu) settle before we try
+                    // to take foreground — the ALT-key trick inside
+                    // ForceFocus misbehaves when Ctrl is still held.
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    if (!man_on_top_.load()) return;
+                    HWND game_hwnd = GetHWNDFromPID(pid);
+                    if (!game_hwnd) return;
+                    // Skip if the game already has foreground — every
+                    // ForceFocus call briefly raises the game window over our
+                    // topmost VR window before the focus loop re-asserts it,
+                    // which the user sees as a flicker.
+                    if (GetForegroundWindow() == game_hwnd) return;
+                    ForceFocus(game_hwnd,
+                               GetCurrentThreadId(),
+                               GetWindowThreadProcessId(game_hwnd, nullptr));
+                    LOG() << "request_game_focus fg_match="
+                          << (GetForegroundWindow() == game_hwnd);
+                }).detach();
+#endif
+            };
+#ifdef _WIN32
+            cb.open_config_folder = [this]() {
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string path = steam + "\\config\\vrto3d";
+                ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            };
+            cb.open_screenshot_folder = [this]() {
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string path = steam + "\\steamapps\\common\\SteamVR\\screenshots";
+                SHCreateDirectoryExA(nullptr, path.c_str(), nullptr);
+                ShellExecuteA(nullptr, "open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            };
+#else
+            cb.open_config_folder = [this]() {
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string cmd = "xdg-open '" + steam + "/config/vrto3d' >/dev/null 2>&1 &";
+                [[maybe_unused]] int rc = std::system(cmd.c_str());
+            };
+            cb.open_screenshot_folder = [this]() {
+                std::string steam = GetSteamInstallPath();
+                if (steam.empty()) return;
+                std::string path = steam + "/steamapps/common/SteamVR/screenshots";
+                std::error_code ec;
+                std::filesystem::create_directories(path, ec);
+                std::string cmd = "xdg-open '" + path + "' >/dev/null 2>&1 &";
+                [[maybe_unused]] int rc = std::system(cmd.c_str());
+            };
+#endif
+            cb.take_screenshot = [this]() {
+                if (!renderer_) return;
+                std::string name = !app_name_.empty() ? app_name_
+                                  : !prev_name_.empty() ? prev_name_
+                                  : std::string("vrto3d");
+                renderer_->RequestScreenshot(name);
+            };
+            cb.set_async = [this](bool on) {
+                SetAsync(on);
+            };
+            cb.set_auto_focus = [this](bool on) {
+                auto_focus_.store(on);
+                // Disabling auto focus also drops any current always-on-top
+                // hold so the user's choice takes effect immediately rather
+                // than only blocking future auto-focus actions.
+                if (!on) {
+                    is_on_top_  = false;
+                    man_on_top_ = false;
+                }
+            };
+            cb.set_hide_cursor = [this](bool on) { hide_cursor_.store(on); };
+            cb.set_lock_cursor = [this](bool on) { lock_cursor_.store(on); };
+            cb.set_stereo_cursor = [this](bool on)  { stereo_cursor_.store(on); };
+            cb.set_cursor_depth  = [this](float px) { cursor_depth_.store(px); };
+            cb.set_cursor_size   = [this](int px)   { cursor_size_.store(px); };
+            cb.download_latest_profiles = [this]() {
+                // Re-entrancy guard — ignore clicks while a previous download
+                // is still in flight.
+                static std::atomic<bool> in_flight{false};
+                bool expected = false;
+                if (!in_flight.compare_exchange_strong(expected, true)) {
+                    if (renderer_ && renderer_->Osd())
+                        renderer_->Osd()->SetText("Profile download already running");
+                    return;
+                }
+                std::thread([this]{
+                    auto toast = [this](const std::string& msg,
+                                        std::chrono::milliseconds ttl =
+                                          std::chrono::milliseconds(3000)) {
+                        if (renderer_ && renderer_->Osd())
+                            renderer_->Osd()->SetText(msg, ttl);
+                    };
+                    static std::atomic<bool>& done = in_flight;
+                    struct ResetOnExit { std::atomic<bool>& f; ~ResetOnExit(){ f.store(false); } } _r{done};
+
+                    std::string steam = GetSteamInstallPath();
+                    if (steam.empty()) {
+                        toast("Profile download failed: Steam path not found");
+                        return;
+                    }
+#ifndef _WIN32
+                    const std::string folder = steam + "/config/vrto3d";
+                    const std::string zip    = folder + "/vrto3d_profiles.zip";
+                    toast("Downloading latest profiles…", std::chrono::milliseconds(60000));
+                    std::error_code ec;
+                    std::filesystem::create_directories(folder, ec);
+                    const std::string dl =
+                        "curl -fsSL -o '" + zip + "' "
+                        "https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip";
+                    if (std::system(dl.c_str()) != 0) {
+                        toast("Profile download failed (curl)");
+                        return;
+                    }
+                    toast("Extracting profiles", std::chrono::milliseconds(30000));
+                    const std::string ex = "bsdtar -xf '" + zip + "' -C '" + folder + "'";
+                    const int rc = std::system(ex.c_str());
+                    ::remove(zip.c_str());
+                    if (rc != 0) {
+                        toast("Extract failed (bsdtar)");
+                    } else {
+                        toast("Profiles installed to config/vrto3d");
+                    }
+#else
+                    const std::string folder = steam + "\\config\\vrto3d";
+                    const std::string zip    = folder + "\\vrto3d_profiles.zip";
+                    const wchar_t* url =
+                        L"https://github.com/oneup03/VRto3D/releases/download/latest/vrto3d_profiles.zip";
+
+                    toast("Downloading latest profiles…", std::chrono::milliseconds(60000));
+
+                    // Make sure the destination folder exists.
+                    CreateDirectoryA(folder.c_str(), nullptr);
+
+                    std::wstring wzip(zip.begin(), zip.end());
+                    HRESULT hr = URLDownloadToFileW(nullptr, url, wzip.c_str(), 0, nullptr);
+                    if (FAILED(hr)) {
+                        char buf[160];
+                        std::snprintf(buf, sizeof(buf),
+                                      "Profile download failed (hr=0x%08lX)",
+                                      static_cast<unsigned long>(hr));
+                        toast(buf);
+                        return;
+                    }
+
+                    toast("Extracting profiles", std::chrono::milliseconds(30000));
+
+                    // Use PowerShell's Expand-Archive to unpack — no extra
+                    // dependency, available on every supported Windows.
+                    std::string cmd =
+                        "powershell.exe -NoProfile -ExecutionPolicy Bypass "
+                        "-Command \"Expand-Archive -LiteralPath '" + zip +
+                        "' -DestinationPath '" + folder + "' -Force\"";
+
+                    STARTUPINFOA si{};
+                    si.cb = sizeof(si);
+                    si.dwFlags = STARTF_USESHOWWINDOW;
+                    si.wShowWindow = SW_HIDE;
+                    PROCESS_INFORMATION pi{};
+                    std::vector<char> cmdline(cmd.begin(), cmd.end());
+                    cmdline.push_back('\0');
+                    BOOL ok = CreateProcessA(nullptr, cmdline.data(), nullptr, nullptr,
+                                             FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
+                                             &si, &pi);
+                    DWORD exit_code = 1;
+                    if (ok) {
+                        WaitForSingleObject(pi.hProcess, 60000);
+                        GetExitCodeProcess(pi.hProcess, &exit_code);
+                        CloseHandle(pi.hProcess);
+                        CloseHandle(pi.hThread);
+                    }
+                    DeleteFileA(zip.c_str());
+
+                    if (!ok) {
+                        toast("Extract failed: PowerShell unavailable");
+                    } else if (exit_code != 0) {
+                        char buf[160];
+                        std::snprintf(buf, sizeof(buf),
+                                      "Extract failed (exit %lu)",
+                                      static_cast<unsigned long>(exit_code));
+                        toast(buf);
+                    } else {
+                        toast("Profiles installed to config\\vrto3d");
+                    }
+#endif
+                }).detach();
+            };
+
+            // The headset HWND is created by the presenter on its window
+            // thread; FindWindow is the only way to discover it from here.
+            // OsdRenderer handles null gracefully — input mouse mapping just
+            // skips until the HWND becomes available.
+            renderer_->ConfigureOsd(stereo_display_component_.get(), std::move(cb), nullptr);
+        }
     }
 
     LOG() << "Activation Complete";
@@ -312,6 +847,10 @@ void *MockControllerDeviceDriver::GetComponent( const char *pchComponentNameAndV
     if ( strcmp( pchComponentNameAndVersion, vr::IVRDisplayComponent_Version ) == 0 )
     {
         return stereo_display_component_.get();
+    }
+    if ( strcmp( pchComponentNameAndVersion, vr::IVRDriverDirectModeComponent_Version ) == 0 )
+    {
+        return direct_mode_component_.get();
     }
 
     return nullptr;
@@ -335,7 +874,11 @@ void MockControllerDeviceDriver::OpenTrackThread()
 {
     SOCKET socket_s;
     struct sockaddr_in from = {};
+#ifdef _WIN32
     int from_len = sizeof(from);
+#else
+    socklen_t from_len = sizeof(from);
+#endif
     struct TOpenTrack {
         double X;
         double Y;
@@ -347,6 +890,7 @@ void MockControllerDeviceDriver::OpenTrackThread()
     TOpenTrack open_track;
     auto ot_port = stereo_display_component_->GetConfig().open_track_port;
 
+#ifdef _WIN32
     WSADATA wsaData;
     int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
@@ -378,8 +922,36 @@ void MockControllerDeviceDriver::OpenTrackThread()
             }
         }
     }
+#else
+    {
+        struct sockaddr_in local = {};
+        local.sin_family = AF_INET;
+        local.sin_port = htons(ot_port);
+        local.sin_addr.s_addr = INADDR_ANY;
+
+        socket_s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (socket_s == INVALID_SOCKET) {
+            LOG() << "OpenTrack socket creation failed: " << errno;
+        } else {
+            fcntl(socket_s, F_SETFL, fcntl(socket_s, F_GETFL, 0) | O_NONBLOCK);
+            if (bind(socket_s, (struct sockaddr*)&local, sizeof(local)) == SOCKET_ERROR) {
+                LOG() << "OpenTrack bind failed: " << errno;
+                closesocket(socket_s);
+                socket_s = INVALID_SOCKET;
+            }
+        }
+    }
+#endif
 
     while (is_active_) {
+        // Skip the recv pump entirely when OpenTrack is off; the OSD can flip
+        // use_open_track live, so we keep the thread (and bound socket) alive
+        // and just sleep a coarser tick while disabled.
+        if (!stereo_display_component_->GetConfig().use_open_track) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
         //Read UDP socket with OpenTrack data
         memset(&open_track, 0, sizeof(open_track));
         auto bytes_read = recvfrom(socket_s, (char*)(&open_track), sizeof(open_track), 0, (sockaddr*)&from, &from_len);
@@ -400,7 +972,9 @@ void MockControllerDeviceDriver::OpenTrackThread()
         else std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     closesocket(socket_s);
+#ifdef _WIN32
     WSACleanup();
+#endif
 }
 
 
@@ -411,11 +985,34 @@ void MockControllerDeviceDriver::XInputUpdateThread()
 {
     float current_pitch = 0.0f;
     vr::HmdQuaternion_t current_yaw_quat = HmdQuaternion_Identity;
+    bool was_idle = false;
 
     while (is_active_)
     {
         const auto loop_start = std::chrono::steady_clock::now();
         const auto config = stereo_display_component_->GetConfig();
+
+        // When neither stick is consumed and no reset is pending, skip the
+        // XInput poll, math, and mutex publish. On the live→idle edge, clear
+        // the published controller pose once so PoseUpdateThread doesn't keep
+        // applying the last non-zero offset.
+        if (!config.pitch_enable && !config.yaw_enable && !config.pose_reset)
+        {
+            if (!was_idle)
+            {
+                current_pitch = 0.0f;
+                current_yaw_quat = HmdQuaternion_Identity;
+                {
+                    std::lock_guard<std::mutex> lock(controller_pose_mutex_);
+                    controller_rotation_ = HmdQuaternion_Identity;
+                    controller_pos_offset_ = { 0.0, 0.0, 0.0 };
+                }
+                was_idle = true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(8));
+            continue;
+        }
+        was_idle = false;
 
         XINPUT_STATE state;
         ZeroMemory(&state, sizeof(XINPUT_STATE));
@@ -446,7 +1043,7 @@ void MockControllerDeviceDriver::XInputUpdateThread()
         {
             current_pitch = 0.0f;
             current_yaw_quat = HmdQuaternion_Identity;
-            stereo_display_component_->SetReset();
+            ConsumePoseReset();
         }
 
         const float pitch_radians = DEG_TO_RAD(current_pitch);
@@ -577,6 +1174,14 @@ void MockControllerDeviceDriver::PoseUpdateThread()
 
         if (config.use_track_filter)
         {
+            // Reset on the disabled→enabled edge so the filter doesn't carry
+            // stale state (potentially minutes old) into its first FilterPose
+            // call when the OSD toggles use_track_filter on. Without this the
+            // initial samples produce noisy output until the filter resettles.
+            if (!track_filter_was_enabled_)
+            {
+                track_filter_.Reset();
+            }
             double filtered_position[3] = {
                 pose.vecPosition[0],
                 pose.vecPosition[1],
@@ -645,21 +1250,20 @@ vr::DriverPose_t MockControllerDeviceDriver::GetPose()
 void MockControllerDeviceDriver::PollHotkeysThread() {
     struct {
         int shot = 0;
-        int hmd = 0;
         int top = 0;
         int save = 0;
-        int overlay = 0;
+        int menu = 0;
+        int auto_depth = 0;
     } sleep;
 
     const int sleep_time = static_cast<int>(floor(1000.0 / stereo_display_component_->GetConfig().display_frequency));
-    std::string overlay_msg;
-    HWND overlay_hwnd = nullptr;
 
-    InitGDIPlus();
+    auto getOsd = [this]() -> vrto3d::osd::OsdRenderer* {
+        return renderer_ ? renderer_->Osd() : nullptr;
+    };
 
     auto setOverlay = [&](const std::string& msg) {
-        overlay_msg = msg;
-        sleep.overlay = stereo_display_component_->GetConfig().sleep_count_max * 3;
+        if (auto* osd = getOsd()) osd->SetText(msg);
     };
     auto fmt = [&](const std::string& label, float value, int precision = 3) {
         std::ostringstream ss;
@@ -675,39 +1279,79 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
 
     setOverlay("VRto3D: " + stereo_version_number_);
 
+    // Deferred projection re-sync for the depth/convergence hotkeys.
+    // ResetProjection() posts SetDisplayProjectionRaw + a LensDistortionChanged
+    // event that most VR mods answer by rebuilding their projection; firing it
+    // at poll rate while a key autorepeats makes adjustment feel laggy. The
+    // flush at the bottom of the loop resyncs immediately on the first press,
+    // at most every 150ms while held, and once more on release so the final
+    // value always lands.
+    bool resync_pending = false;
+    auto last_resync = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+
     while (is_active_) {
         auto cfg = stereo_display_component_->GetConfig();
 
+        // Ctrl+Home (keyboard) or Start+DPad-Down (gamepad) toggles the OSD
+        // menu. Always polled (independent of disable_hotkeys) so users can
+        // always recover from a runaway config. Start+Back is avoided here
+        // because several VR mods already use that pair as their own pause /
+        // menu chord.
+        DWORD menu_pad = 0;
+        const DWORD menu_chord_mask = XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_DPAD_DOWN;
+        const bool menu_pad_chord =
+            GetXInputButtonState(menu_pad) &&
+            ((menu_pad & menu_chord_mask) == menu_chord_mask);
+        if (((isCtrlDown() && isDown(VK_HOME)) || menu_pad_chord) && sleep.menu == 0) {
+            if (auto* osd = getOsd()) {
+                osd->ToggleMenu();
+                osd->SetAppName(app_name_);
+                osd->SetVersion(stereo_version_number_);
+            }
+            sleep.menu = cfg.sleep_count_max;
+        } else if (sleep.menu > 0) {
+            --sleep.menu;
+        }
+
+        // While the menu is open, suppress the rest of the hotkey poll so
+        // arrow keys / numbers / Enter reach ImGui instead of bumping depth.
+        if (auto* osd = getOsd(); osd && osd->MenuVisible()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+            continue;
+        }
+
         if (!cfg.disable_hotkeys) {
-            // Ctrl+F3 Decrease Depth
+            // Ctrl+F3 Decrease Depth (re-sync projection; hold Shift to skip the sync)
             if (isCtrlDown() && isDown(VK_F3)) {
                 stereo_display_component_->AdjustDepth(-0.001f, true);
-                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
+                if (!isDown(VK_SHIFT)) resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
-            // Ctrl+F4 Increase Depth
+            // Ctrl+F4 Increase Depth (re-sync projection; hold Shift to skip the sync)
             else if (isCtrlDown() && isDown(VK_F4)) {
                 stereo_display_component_->AdjustDepth(0.001f, true);
-                if (isDown(VK_SHIFT)) stereo_display_component_->ResetProjection();
+                if (!isDown(VK_SHIFT)) resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F5 Decrease Convergence
             else if (isCtrlDown() && isDown(VK_F5)) {
-                stereo_display_component_->AdjustConvergence(0.005f, true);
+                stereo_display_component_->AdjustConvergence(0.005f, true, false);
+                resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F6 Increase Convergence
             else if (isCtrlDown() && isDown(VK_F6)) {
-                stereo_display_component_->AdjustConvergence(-0.005f, true);
+                stereo_display_component_->AdjustConvergence(-0.005f, true, false);
+                resync_pending = true;
                 setOverlay(fmtDepthConv());
             }
             // Ctrl+F7 Store settings into game profile
             if (isCtrlDown() && isDown(VK_F7) && sleep.save == 0) {
                 if (!prev_name_.empty()) {
-                    cfg.depth = stereo_display_component_->GetDepth();
-                    cfg.convergence = stereo_display_component_->GetConvergence();
-                    cfg.fov = stereo_display_component_->GetFoV();
-                    JsonManager().SaveProfileToJson(prev_name_ + "_config.json", cfg);
+                    // Re-fetch so any depth/conv adjust earlier this tick is
+                    // reflected in the saved file.
+                    auto save_cfg = stereo_display_component_->GetConfig();
+                    JsonManager().SaveProfileToJson(prev_name_ + "_config.json", save_cfg);
                     BeepSuccess();
                     setOverlay("Saved " + prev_name_ + "_config.json profile");
                 }
@@ -717,18 +1361,8 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 }
                 sleep.save = cfg.sleep_count_max;
             }
-            // Ctrl+F9 Save HMD Position & Yaw
-            if (isCtrlDown() && isDown(VK_F9) && sleep.hmd == 0) {
-                JsonManager().SaveHmdOffsets(cfg);
-                BeepSuccess();
-                setOverlay("Saved HMD Offsets");
-                sleep.hmd = cfg.sleep_count_max;
-            }
-            else if (sleep.hmd > 0) {
-                --sleep.hmd;
-            }
             // Ctrl+F10 Reload settings from Game Profile or (+Shift) Default Profile
-            else if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
+            if (isCtrlDown() && isDown(VK_F10) && sleep.save == 0) {
                 std::string path = "";
                 if (isDown(VK_SHIFT)) {
                     path = DEF_CFG;
@@ -741,6 +1375,12 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
                 if (JsonManager().LoadProfileFromJson(path, cfg)) {
                     stereo_display_component_->LoadSettings(cfg);
                     SetAsync(cfg.async_enable);
+                    auto_focus_.store(cfg.auto_focus);
+                    hide_cursor_.store(cfg.hide_cursor);
+                    lock_cursor_.store(cfg.lock_cursor);
+                    stereo_cursor_.store(cfg.stereo_cursor);
+                    cursor_depth_.store(cfg.cursor_depth);
+                    cursor_size_.store(cfg.cursor_size);
                     LOG() << "Loaded " << path.c_str() << " profile";
                     BeepSuccess();
                     setOverlay("Loaded " + path + " profile");
@@ -754,9 +1394,28 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             else if (sleep.save > 0) {
                 --sleep.save;
             }
+            // Ctrl+F11 Toggle Auto-Depth
+            if (isCtrlDown() && isDown(VK_F11) && sleep.auto_depth == 0) {
+                const bool now = !stereo_display_component_->IsAutoDepthEnabled();
+                stereo_display_component_->SetAutoDepthEnabled(now);
+                setOverlay(now ? "Auto-Depth: ON"
+                               : "Auto-Depth: OFF (manual restored)");
+                sleep.auto_depth = cfg.sleep_count_max;
+            }
+            else if (sleep.auto_depth > 0) {
+                --sleep.auto_depth;
+            }
         }
-        // Ctrl+F8 Toggle Always On Top
-        if (isCtrlDown() && isDown(VK_F8) && sleep.top == 0) {
+        // Ctrl+F8 (keyboard) or Start+DPad-Up (gamepad) Toggle Always On Top.
+        // Always polled (like the menu chord) so a controller-only Steam Deck
+        // user can raise a lowered/buried overlay back on top without a
+        // keyboard — the direct counterpart to Start+DPad-Down opening the menu.
+        DWORD top_pad = 0;
+        const DWORD top_chord_mask = XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_DPAD_UP;
+        const bool top_pad_chord =
+            GetXInputButtonState(top_pad) &&
+            ((top_pad & top_chord_mask) == top_chord_mask);
+        if (((isCtrlDown() && isDown(VK_F8)) || top_pad_chord) && sleep.top == 0) {
             is_on_top_ = !is_on_top_;
             man_on_top_ = is_on_top_.load();
             sleep.top = cfg.sleep_count_max;
@@ -764,149 +1423,31 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
         else if (sleep.top > 0) {
             --sleep.top;
         }
-        // Ctrl+F12 Take Screenshot
+        // Ctrl+F12 Take Screenshot — drains on the next composited frame
+        // inside Dx11Renderer::WaitAndDrawPending.
         if (isCtrlDown() && isDown(VK_F12) && sleep.shot == 0) {
-            take_screenshot_ = true;
+            if (renderer_) {
+                std::string name = !app_name_.empty() ? app_name_
+                                  : !prev_name_.empty() ? prev_name_
+                                  : std::string("vrto3d");
+                renderer_->RequestScreenshot(name);
+            }
             sleep.shot = cfg.sleep_count_max;
         }
         else if (sleep.shot > 0) {
             --sleep.shot;
         }
-        // Ctrl+- Decrease Sensitivity / Shift+Ctrl+- Decrease Filter Deadzone
-        if (isCtrlDown() && isDown(VK_OEM_MINUS)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterRotationDeadzone(-0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot DZ: ", cfg.trk_flt_rot_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterRotation(-0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot Sens: ", cfg.trk_flt_rot_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustSensitivity(-0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
-            }
-        }
-        // Ctrl++ Increase Sensitivity / Shift+Ctrl++ Increase Filter Deadzone
-        else if (isCtrlDown() && isDown(VK_OEM_PLUS)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterRotationDeadzone(0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot DZ: ", cfg.trk_flt_rot_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterRotation(0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Rot Sens: ", cfg.trk_flt_rot_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustSensitivity(0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Ctrl Sensitivity: ", cfg.ctrl_sensitivity, 2));
-            }
-        }
-        // Ctrl+[ Decrease Pitch Radius / Shift+Ctrl+[ Decrease Filter Position Deadzone
-        if (isCtrlDown() && isDown(VK_OEM_4)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterTranslationDeadzone(-0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos DZ: ", cfg.trk_flt_pos_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterTranslation(-0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos Sens: ", cfg.trk_flt_pos_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustRadius(-0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
-            }
-        }
-        // Ctrl+] Increase Pitch Radius / Shift+Ctrl+] Increase Filter Position Deadzone
-        else if (isCtrlDown() && isDown(VK_OEM_6)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterTranslationDeadzone(0.001f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos DZ: ", cfg.trk_flt_pos_dz, 3));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterTranslation(0.01f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Pos Sens: ", cfg.trk_flt_pos_sens, 2));
-                }
-            }
-            else {
-                stereo_display_component_->AdjustRadius(0.01f);
-                cfg = stereo_display_component_->GetConfig();
-                setOverlay(fmt("Pitch Radius: ", cfg.pitch_radius, 2));
-            }
-        }
-
-        // Ctrl+; Decrease Filter Zoom Smoothing / Shift+Ctrl+; Decrease Filter Max Zoom
-        if (isCtrlDown() && isDown(VK_OEM_1)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterMaxZoom(-0.1f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Max Zoom: ", cfg.trk_flt_max_zoom, 2));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterZoomSmoothing(-0.05f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Zoom Smooth: ", cfg.trk_flt_zoom_smooth, 2));
-                }
-            }
-        }
-        // Ctrl+' Increase Filter Zoom Smoothing / Shift+Ctrl+' Increase Filter Max Zoom
-        else if (isCtrlDown() && isDown(VK_OEM_7)) {
-            const bool shift = isDown(VK_SHIFT);
-            if (cfg.use_track_filter) {
-                if (shift) {
-                    stereo_display_component_->AdjustTrackFilterMaxZoom(0.1f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Max Zoom: ", cfg.trk_flt_max_zoom, 2));
-                }
-                else {
-                    stereo_display_component_->AdjustTrackFilterZoomSmoothing(0.05f);
-                    cfg = stereo_display_component_->GetConfig();
-                    setOverlay(fmt("Track Zoom Smooth: ", cfg.trk_flt_zoom_smooth, 2));
-                }
-            }
-        }
-
-        // Check User binds
+        // Check User binds (preset hotkeys configured by the user — load/store)
         auto hotkey_str = stereo_display_component_->CheckUserSettings();
-
-        // Check for Position Adjustment
-        auto pos_str = stereo_display_component_->CheckPositionInput();
-
         if (!hotkey_str.empty()) {
             setOverlay(hotkey_str);
-        }
-        else if (!pos_str.empty()) {
-            setOverlay(pos_str);
         }
 
         // Check for new profile load
         if (app_updated_)
         {
             setOverlay("Loaded " + app_name_ + "_config.json profile");
+            if (auto* osd = getOsd()) osd->SetAppName(app_name_);
             app_updated_ = false;
         }
         // Check for no profile
@@ -916,13 +1457,17 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
             no_profile_ = false;
         }
 
-        // Draw Overlay if applicable
-        if (!overlay_hwnd) {
-            overlay_hwnd = FindWindow(NULL, L"Headset Window");
-        }
-        else if (sleep.overlay > 0) {
-            DrawOverlayText(overlay_hwnd, overlay_msg, cfg.window_height);
-            --sleep.overlay;
+        // Flush a deferred depth/convergence projection re-sync (see the
+        // resync_pending comment above the loop for the batching rules).
+        if (resync_pending) {
+            const bool adjust_held = isCtrlDown() &&
+                (isDown(VK_F3) || isDown(VK_F4) || isDown(VK_F5) || isDown(VK_F6));
+            const auto now = std::chrono::steady_clock::now();
+            if (!adjust_held || now - last_resync >= std::chrono::milliseconds(150)) {
+                stereo_display_component_->ResetProjection();
+                resync_pending = false;
+                last_resync = now;
+            }
         }
 
         // Sleep for ~ 1 frame
@@ -932,131 +1477,27 @@ void MockControllerDeviceDriver::PollHotkeysThread() {
 
 
 //-----------------------------------------------------------------------------
-// Purpose: Keep Headset Window on top if set
+// Purpose: Expose focus/top atomics to the virtual-display presenter.
+//
+// The presenter owns the 3D output window and runs its own focus thread
+// that observes these flags. The hotkey handler + UE3D auto-focus path
+// continue to toggle them here.
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::FocusUpdateThread()
+vrto3d::FocusContext MockControllerDeviceDriver::GetFocusContext()
 {
-    static int sleep_time = 1000;
-    static HWND vr_window = NULL;
-    static HWND top_window = NULL;
-    static HWND game_window = NULL;
-    static LONG ex_style = 0;
-    static DWORD vr_pid = GetCurrentThreadId();
-    static DWORD last_pid = 0;
-    static bool was_on_top = false;
-    static bool was_focused = false;
-    static bool window_bounds_applied = false;
-
-    while (is_active_)
-    {
-        // Get handle for the VR window
-        if (vr_window == NULL) {
-            vr_window = FindWindow(NULL, L"Headset Window");
-            if (vr_window != NULL) {
-                ex_style = GetWindowLong(vr_window, GWL_EXSTYLE);
-            }
-        }
-
-        // Place the Headset Window - Has to be done twice to fix render issues
-        if (vr_window != NULL && !window_bounds_applied) {
-            // Use per-monitor DPI awareness for accurate cross-monitor placement
-            auto prev_dpi_ctx = SetThreadDpiAwarenessContext(
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-
-            auto cfg = stereo_display_component_->GetConfig();
-            ApplyDisplaySelectionToWindowConfig(cfg);
-
-            LOG() << "Applying Headset Window placement to ("
-                << cfg.window_x << "," << cfg.window_y << " "
-                << cfg.window_width << "x" << cfg.window_height << ")";
-
-            // Half-width first pass nudges DWM to commit to the target monitor
-            // but creates an intermediate swapchain size that ReShade latches
-            // onto. Only run it when the target isn't the primary display at
-            // (0,0) — that's when the nudge is actually needed.
-            const bool needs_nudge = cfg.multi_display
-                || cfg.window_x != 0 || cfg.window_y != 0;
-            if (needs_nudge) {
-                SetWindowPos(vr_window, HWND_TOP,
-                            cfg.window_x, cfg.window_y,
-                            cfg.window_width / 2, cfg.window_height,
-                            SWP_NOACTIVATE);
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            }
-            SetWindowPos(vr_window, HWND_TOP,
-                        cfg.window_x, cfg.window_y,
-                        cfg.window_width, cfg.window_height,
-                        SWP_NOACTIVATE);
-
-            // Restore thread DPI context
-            SetThreadDpiAwarenessContext(prev_dpi_ctx);
-
-            window_bounds_applied = true;
-        }
-
-        // Keep VR display always on top for 3D rendering
-        if (is_on_top_ && IsProcessRunning(app_pid_)) {
-            top_window = GetTopWindow(GetDesktopWindow());
-            if (vr_window != NULL && vr_window != top_window) {
-                SetWindowPos(vr_window, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                SetWindowLong(vr_window, GWL_EXSTYLE, ex_style | (WS_EX_LAYERED | WS_EX_TRANSPARENT));
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-                // Recenter VR
-                if (last_pid != app_pid_) {
-                    PostMessage(vr_window, WM_KEYDOWN, 'Z', 0);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    PostMessage(vr_window, WM_KEYUP, 'Z', 0);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                    last_pid = app_pid_;
-                }
-            }
-            was_on_top = true;
-        }
-        // Unfocus and check to see if the game is still running to re-enable focus
-        else if (vr_window != NULL && was_on_top) {
-            SetWindowPos(vr_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-            SetWindowLong(vr_window, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
-            if (man_on_top_)
-            {
-                std::this_thread::sleep_for(std::chrono::seconds(15));
-                is_on_top_ = IsProcessRunning(app_pid_);
-            }
-            was_on_top = is_on_top_;
-            was_focused = false;
-        }
-
-        // Focus the Game Window
-        if (is_on_top_ && !was_focused)
-        {
-            game_window = GetHWNDFromPID(app_pid_);
-            ForceFocus(game_window, vr_pid, app_pid_);
-            was_focused = true;
-        }
-
-        // Take Screenshot
-        if (vr_window != NULL && take_screenshot_) {
-            ForceFocus(vr_window, vr_pid, vr_pid);
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            PostMessage(vr_window, WM_KEYDOWN, 'S', 0);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            PostMessage(vr_window, WM_KEYUP, 'S', 0);
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            ForceFocus(game_window, vr_pid, app_pid_);
-            take_screenshot_ = false;
-            BeepSuccess();
-        }
-
-        // Sleep for 1s
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
-    }
+    vrto3d::FocusContext fc;
+    fc.is_on_top   = &is_on_top_;
+    fc.man_on_top  = &man_on_top_;
+    fc.app_pid     = &app_pid_;
+    fc.auto_focus  = &auto_focus_;
+    return fc;
 }
 
 
 //-----------------------------------------------------------------------------
 // Purpose: Process UE3D/UEVR shared-memory monitor/depth requests
 //-----------------------------------------------------------------------------
-void MockControllerDeviceDriver::AutoDepthThread() {
+void MockControllerDeviceDriver::MonitorModeThread() {
     auto& rx = uevr::receiver();
     static float last_hint_ipd = -1.0f;
 
@@ -1070,7 +1511,7 @@ void MockControllerDeviceDriver::AutoDepthThread() {
             stereo_display_component_->GetConvergence(),
             stereo_display_component_->GetFoV(),
             0.0f,   // fov_adj (unused in monitor mode)
-            config.tab_enable ? 0 : 1,
+            (config.output_mode == OutputMode::TaB) ? 0 : 1,
             !no_profile_.load()
         );
 
@@ -1079,14 +1520,6 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 
         if (mon)
         {
-            if (config.auto_focus && !is_on_top_ && !ue3d_on_top_) {
-                BeepSuccess();
-                std::this_thread::sleep_for(std::chrono::seconds(2));
-                is_on_top_ = true;
-                man_on_top_ = true;
-                ue3d_on_top_ = true;
-            }
-
             // Depth commands from UEVR (Calibrate, VRto3D++/+/-/--)
             uint8_t depth_cmd = rx.get_depth_request();
             if (depth_cmd >= 2 && depth_cmd <= 6) {
@@ -1134,11 +1567,308 @@ void MockControllerDeviceDriver::AutoDepthThread() {
 }
 
 
+#ifdef _WIN32
+namespace {
+
+// System cursor ids (OCR_*) — numeric so we don't need OEMRESOURCE defined
+// before windows.h.
+constexpr DWORD kSystemCursorIds[] = {
+    32512, // OCR_NORMAL
+    32513, // OCR_IBEAM
+    32514, // OCR_WAIT
+    32515, // OCR_CROSS
+    32516, // OCR_UP
+    32642, // OCR_SIZENWSE
+    32643, // OCR_SIZENESW
+    32644, // OCR_SIZEWE
+    32645, // OCR_SIZENS
+    32646, // OCR_SIZEALL
+    32648, // OCR_NO
+    32649, // OCR_HAND
+    32650, // OCR_APPSTARTING
+    32651, // OCR_HELP
+};
+
+// Replace the entire system cursor set with fully transparent cursors.
+// This is the strongest cursor hide available to an external process: it
+// survives the game's WM_SETCURSOR re-assertions because the cursor the
+// game sets IS blank. Undone by RestoreSystemCursors.
+bool BlankSystemCursors() {
+    const int w = GetSystemMetrics(SM_CXCURSOR);
+    const int h = GetSystemMetrics(SM_CYCURSOR);
+    if (w <= 0 || h <= 0) return false;
+    // 1bpp masks, scanlines word-aligned. AND=1 / XOR=0 -> transparent.
+    const size_t mask_bytes = static_cast<size_t>(((w + 15) / 16) * 2) * h;
+    std::vector<BYTE> and_mask(mask_bytes, 0xFF);
+    std::vector<BYTE> xor_mask(mask_bytes, 0x00);
+    bool any = false;
+    for (DWORD id : kSystemCursorIds) {
+        HCURSOR blank = CreateCursor(nullptr, 0, 0, w, h,
+                                     and_mask.data(), xor_mask.data());
+        if (!blank) continue;
+        // SetSystemCursor takes ownership of (and eventually destroys) the
+        // handle on success; on failure it's still ours to free.
+        if (SetSystemCursor(blank, id)) any = true;
+        else DestroyCursor(blank);
+    }
+    return any;
+}
+
+// Reload the user's cursor scheme from the registry, undoing
+// BlankSystemCursors.
+void RestoreSystemCursors() {
+    SystemParametersInfoW(SPI_SETCURSORS, 0, nullptr, 0);
+}
+
+} // namespace
+#endif
+
+//-----------------------------------------------------------------------------
+// Purpose: Apply hide_cursor / lock_cursor / stereo_cursor to the connected
+// game from out-of-process (we live in vrserver.exe, the game is its own
+// process).
+//
+//   Hide (hide_cursor, or stereo_cursor which replaces the pointer): the
+//   strongest cross-process hide Windows allows — blank the entire system
+//   cursor set via SetSystemCursor while the game holds the foreground, so
+//   the cursor stays invisible no matter how often the game's WndProc
+//   re-asserts it. Restored via SPI_SETCURSORS the moment focus leaves the
+//   game (or the toggles turn off / the driver exits). A per-tick
+//   AttachThreadInput + SetCursor(NULL) supplements this for games that set
+//   a custom, non-system class cursor, which SetSystemCursor can't blank.
+//
+//   Lock (lock_cursor): ClipCursor to the focused game window's CLIENT rect
+//   (borders/title bar excluded), re-asserted every ~10ms because Windows
+//   silently drops the clip on every foreground transition. AttachThreadInput
+//   to the game's input queue so the clip isn't rejected as a cross-process
+//   trap.
+//
+//   Stereo cursor: pushes draw state (active/depth/size) into the OSD
+//   renderer, which draws a per-eye arrow at the OS cursor position in place
+//   of the blanked hardware cursor (or flips on ImGui's software cursor
+//   while the OSD menu is open).
+//
+// Focus is judged by PID, not a single cached HWND — any foreground window
+// belonging to the game's process counts, and the clip follows the actual
+// foreground window.
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::CursorControlThread()
+{
+#ifndef _WIN32
+    // Cursor clipping/hiding is not implementable from an external process on
+    // Wayland; X11 support could ride on XGrabPointer later. Idle politely.
+    while (is_active_.load(std::memory_order_relaxed))
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    return;
+#else
+    bool  clip_active   = false;
+    bool  cursors_blank = false;
+    // Net ShowCursor(FALSE) calls we pushed onto the game's input queue to
+    // hide a custom (non-system) class cursor, and the thread they went to.
+    int   shows_forced  = 0;
+    DWORD forced_tid    = 0;
+
+    const auto release_clip = [&] {
+        if (clip_active) {
+            ClipCursor(nullptr);
+            clip_active = false;
+        }
+    };
+    const auto restore_cursors = [&] {
+        if (cursors_blank) {
+            RestoreSystemCursors();
+            cursors_blank = false;
+            LOG() << "CursorControl: system cursors restored";
+        }
+    };
+    // Undo the forced ShowCursor(FALSE) count on the game's queue: attach and
+    // raise the display count back to >= 0, never by more than we pushed. If
+    // the game thread is gone, there's no queue left to fix.
+    const auto restore_show_count = [&] {
+        if (shows_forced > 0) {
+            const DWORD my_tid = GetCurrentThreadId();
+            if (forced_tid && forced_tid != my_tid
+                && AttachThreadInput(my_tid, forced_tid, TRUE)) {
+                int raised = 0;
+                while (shows_forced-- > 0) {
+                    ++raised;
+                    if (ShowCursor(TRUE) >= 0) break;
+                }
+                AttachThreadInput(my_tid, forced_tid, FALSE);
+                LOG() << "CursorControl: game cursor show count restored (+" << raised << ")";
+            }
+        }
+        shows_forced = 0;
+        forced_tid   = 0;
+    };
+
+    while (is_active_.load(std::memory_order_relaxed)) {
+        const bool want_hide   = hide_cursor_.load(std::memory_order_relaxed);
+        const bool want_lock   = lock_cursor_.load(std::memory_order_relaxed);
+        const bool want_stereo = stereo_cursor_.load(std::memory_order_relaxed);
+        // Only act while our VR overlay is actually on top of the game — when
+        // the user toggles topmost off (Ctrl+F8 / OSD) they're back at the
+        // desktop and expect their real cursor / clip back, regardless of
+        // these toggles.
+        const bool on_top    = is_on_top_.load(std::memory_order_relaxed);
+        const bool menu_open = renderer_ && renderer_->Osd()
+                                && renderer_->Osd()->MenuVisible();
+
+        if (!on_top || (!want_hide && !want_lock && !want_stereo)) {
+            release_clip();
+            restore_cursors();
+            restore_show_count();
+            if (renderer_ && renderer_->Osd()) {
+                renderer_->Osd()->SetStereoCursor(false, 0.0f, 32.0f, nullptr);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            continue;
+        }
+
+        const uint32_t pid = app_pid_.load();
+        HWND  fg     = GetForegroundWindow();
+        DWORD fg_pid = 0;
+        const DWORD fg_tid = fg ? GetWindowThreadProcessId(fg, &fg_pid) : 0;
+        const bool game_is_fg = pid != 0 && fg && fg_pid == pid;
+        const bool self_is_fg = fg && fg_pid == GetCurrentProcessId();
+
+        // Stereo cursor draws over the focused game, or over our own OSD
+        // menu (where the renderer switches to ImGui's software cursor).
+        // The game window handle lets the renderer normalize the arrow
+        // against the GAME's client rect so it tracks the in-game cursor 1:1.
+        const bool stereo_active = want_stereo
+            && (game_is_fg || (menu_open && self_is_fg));
+        if (renderer_ && renderer_->Osd()) {
+            renderer_->Osd()->SetStereoCursor(
+                stereo_active,
+                cursor_depth_.load(std::memory_order_relaxed),
+                static_cast<float>(cursor_size_.load(std::memory_order_relaxed)),
+                game_is_fg ? static_cast<void*>(fg) : nullptr);
+        }
+
+        // Hardware-cursor hide. The stereo cursor implies a hide (it IS the
+        // pointer); plain hide_cursor keeps the old suppress-while-menu-open
+        // behavior, since without the stereo cursor there'd be no visible
+        // pointer left to click ImGui widgets with.
+        const bool hw_hide = (game_is_fg && !menu_open && (want_hide || want_stereo))
+                          || (menu_open && self_is_fg && want_stereo);
+        if (hw_hide && !cursors_blank) {
+            cursors_blank = BlankSystemCursors();
+            if (cursors_blank) {
+                LOG() << "CursorControl: system cursors blanked (hide engaged, fg_pid=" << fg_pid << ")";
+            }
+        } else if (!hw_hide) {
+            restore_cursors();
+        }
+
+        if (!game_is_fg || menu_open) {
+            release_clip();
+            restore_show_count();
+            std::this_thread::sleep_for(std::chrono::milliseconds(menu_open ? 33 : 100));
+            continue;
+        }
+
+        // Game has the foreground: attach to its input queue so ClipCursor /
+        // SetCursor share state with the game's thread (Windows otherwise
+        // blocks cursor clipping from non-foreground processes).
+        const DWORD my_tid   = GetCurrentThreadId();
+        const BOOL  attached = (fg_tid && fg_tid != my_tid)
+                                ? AttachThreadInput(my_tid, fg_tid, TRUE)
+                                : FALSE;
+
+        if (want_lock) {
+            RECT rc{};
+            POINT tl{}, br{};
+            if (GetClientRect(fg, &rc)) {
+                tl = { rc.left, rc.top };
+                br = { rc.right, rc.bottom };
+                if (ClientToScreen(fg, &tl) && ClientToScreen(fg, &br)
+                    && br.x > tl.x && br.y > tl.y) {
+                    RECT clip{ tl.x, tl.y, br.x, br.y };
+                    ClipCursor(&clip);
+                    if (!clip_active) {
+                        LOG() << "CursorControl: cursor clipped to game client rect ("
+                              << tl.x << "," << tl.y << ")-(" << br.x << "," << br.y << ")";
+                    }
+                    clip_active = true;
+                }
+            }
+        } else {
+            release_clip();
+        }
+
+        if (want_hide || want_stereo) {
+            // Belt-and-braces for custom class cursors (see header comment).
+            SetCursor(nullptr);
+
+            // Games that draw a custom cursor re-assert it faster than the
+            // SetCursor(NULL) tick and aren't touched by the blanked system
+            // set. Strongest remaining lever: while attached to the game's
+            // input queue, drive its ShowCursor display count negative —
+            // that state lives on the game's queue and persists after we
+            // detach, hiding ANY cursor it sets. Undone (bounded) by
+            // restore_show_count on focus loss / toggle off / exit.
+            if (attached) {
+                CURSORINFO ci{};
+                ci.cbSize = sizeof(ci);
+                if (GetCursorInfo(&ci) && (ci.flags & CURSOR_SHOWING)) {
+                    const int prev_forced = shows_forced;
+                    forced_tid = fg_tid;
+                    // Tracked count is clamped — restore only ever raises
+                    // until the count is back >= 0, so excess tracking is
+                    // pointless; re-forcing itself stays unbounded.
+                    for (int i = 0; i < 8; ++i) {
+                        if (shows_forced < 1024) ++shows_forced;
+                        if (ShowCursor(FALSE) < 0) break;
+                    }
+                    if (prev_forced == 0 && shows_forced > 0) {
+                        LOG() << "CursorControl: forced game cursor display count negative (net "
+                              << shows_forced << ")";
+                    }
+                }
+            }
+        }
+
+        if (attached) {
+            AttachThreadInput(my_tid, fg_tid, FALSE);
+        }
+
+        // Fast re-assert: Windows drops the clip on every foreground
+        // transition and games re-show their cursor at will.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    release_clip();
+    restore_cursors();
+    restore_show_count();
+#endif
+}
+
+
 //-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Steam\config\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status)
 {
+    // Quick same-pid reconnect (e.g. RealVR re-inits VR after FoV/res
+    // change): the disconnect branch dropped focus and armed a 15s grace
+    // timer. Refocus immediately so the user isn't stuck without input
+    // passthrough — but only if focus was actually on before the
+    // disconnect (we don't want to override a user "always-on-top off"
+    // choice). The pending 15s thread will wake later and re-assert,
+    // which is a no-op since flags are already set.
+    if (status == vr::VREvent_ProcessConnected
+        && app_name == app_name_
+        && app_pid == app_pid_
+        && focus_pre_disconnect_.load()
+        && !man_on_top_.load())
+    {
+        is_on_top_  = true;
+        man_on_top_ = true;
+        focus_pre_disconnect_.store(false);
+        return;
+    }
+
     if ((app_name != app_name_ || app_pid != app_pid_) && status == vr::VREvent_ProcessConnected)
     {
         app_name_ = app_name;
@@ -1153,11 +1883,6 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
             LOG() << "Loaded " << app_name.c_str() << " profile";
             BeepSuccess();
             app_updated_ = true;
-            if (config.auto_focus) {
-                std::this_thread::sleep_for(std::chrono::seconds(8));
-                is_on_top_ = true;
-                man_on_top_ = true;
-            }
         }
         else {
             BeepFailure();
@@ -1165,12 +1890,102 @@ void MockControllerDeviceDriver::LoadSettings(const std::string& app_name, uint3
         }
 
         SetAsync(config.async_enable);
+        // Mirror the freshly-loaded profile's auto_focus to the live atomic
+        // observed by presenter focus loops.
+        auto_focus_.store(config.auto_focus);
+        hide_cursor_.store(config.hide_cursor);
+        lock_cursor_.store(config.lock_cursor);
+        stereo_cursor_.store(config.stereo_cursor);
+        cursor_depth_.store(config.cursor_depth);
+        cursor_size_.store(config.cursor_size);
+
+        if (config.auto_focus) {
+            // Run off-thread: this is called from RunFrame, and a 10s sleep
+            // here freezes the driver host's event loop. Snapshot the pid so
+            // a fast disconnect/reconnect doesn't make us focus/recenter for
+            // a different app. Retry the recenter a few times because games
+            // commonly call ResetSeatedZeroPose during their own VR init and
+            // will clobber a single well-timed shot.
+            const uint32_t pid = app_pid_.load();
+            std::thread([this, pid]() {
+                std::this_thread::sleep_for(std::chrono::seconds(8));
+                if (!is_active_) return;
+                if (app_pid_.load() != pid) return;
+                is_on_top_ = true;
+                man_on_top_ = true;
+                // Give the game a moment after focus before kicking the
+                // recenter, so the first attempt lands after the game has
+                // settled into its initial pose rather than mid-init.
+                std::this_thread::sleep_for(std::chrono::seconds(4));
+                if (!is_active_) return;
+                if (app_pid_.load() != pid) return;
+                if (!man_on_top_.load()) return;
+                for (int i = 0; i < 3; ++i) {
+                    const std::string tag = "auto_focus#" + std::to_string(i + 1);
+                    if (vrto3d::TriggerOpenVRRecenter(tag.c_str())) return;
+                    if (i < 2) std::this_thread::sleep_for(std::chrono::seconds(2));
+                    if (!is_active_) return;
+                    if (app_pid_.load() != pid) return;
+                    if (!man_on_top_.load()) return;
+                }
+            }).detach();
+        }
     }
     else if (status == vr::VREvent_ProcessDisconnected)
     {
+        // Capture the user's pre-disconnect focus preference so both the
+        // 15s grace thread and the quick-reconnect path can honor a user
+        // "always-on-top off" choice instead of forcing focus back on.
+        const bool was_focused = man_on_top_.load();
+        focus_pre_disconnect_.store(was_focused);
+
         is_on_top_ = false;
-        ue3d_on_top_ = false;
+        man_on_top_ = false;
+
+        if (!was_focused) return;
+
+        // Some games briefly disconnect from SteamVR (compositor blip,
+        // scene-app handoff) and immediately reconnect with the same exe
+        // still alive. Wait 15s, then re-engage focus if the original
+        // process is still running and no new app has connected since.
+        uint32_t pid = app_pid_.load();
+        std::thread([this, pid]() {
+            std::this_thread::sleep_for(std::chrono::seconds(15));
+            if (!is_active_) return;
+            if (app_pid_.load() == pid && IsProcessRunning(pid)) {
+                is_on_top_ = true;
+                man_on_top_ = true;
+                focus_pre_disconnect_.store(false);
+            }
+        }).detach();
     }
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Consume the pose-reset signal. Zeros the cached OpenTrack
+// attitude/position so stale UDP-derived bias can't bleed into the pose the
+// next time it's consumed (e.g. when use_open_track is toggled back on, or
+// when the user pressed the reset hotkey while OpenTrack was active), then
+// clears the flag and asks SteamVR to take the cleaned HMD pose as the new
+// seated/standing zero. The TriggerOpenVRRecenter dispatch is deferred to a
+// detached thread so PoseUpdateThread has a tick to publish the cleaned pose
+// — otherwise SteamVR's snapshot would bake in the stale bias we just
+// cleared. Single consumption point for both the pose-reset hotkey and the
+// OSD recenter-on-disable toggle paths.
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::ConsumePoseReset()
+{
+    {
+        std::lock_guard<std::mutex> lock(trk_mutex_);
+        open_track_att_ = HmdQuaternion_Identity;
+        open_track_pos_ = { 0.0, 0.0, 0.0 };
+    }
+    stereo_display_component_->SetReset();
+    std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        vrto3d::TriggerOpenVRRecenter("pose_reset");
+    }).detach();
 }
 
 
@@ -1200,6 +2015,7 @@ void MockControllerDeviceDriver::EnterStandby()
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::Deactivate()
 {
+    LOG() << "MockControllerDeviceDriver::Deactivate";
     if ( is_active_.exchange( false ) )
     {
         if (xinput_thread_.joinable()) {
@@ -1211,20 +2027,30 @@ void MockControllerDeviceDriver::Deactivate()
         if (hotkey_thread_.joinable()) {
             hotkey_thread_.join();
         }
-        if (focus_thread_.joinable()) {
-            focus_thread_.join();
-        }
-        if (depth_thread_.joinable()) {
-            depth_thread_.join();
+        if (monitor_thread_.joinable()) {
+            monitor_thread_.join();
         }
         if (track_thread_.joinable()) {
             track_thread_.join();
+        }
+        if (cursor_thread_.joinable()) {
+            cursor_thread_.join();
+        }
+        // Direct-mode component holds a raw Dx11Renderer*; destroy it first
+        // so any in-flight SubmitLayer/Present can no longer reach the
+        // renderer before the renderer is torn down.
+        direct_mode_component_.reset();
+        if (renderer_) {
+            renderer_->Shutdown();
+            renderer_.reset();
         }
     }
 
     // unassign our controller index (we don't want to be calling vrserver anymore after Deactivate() has been called
     device_index_ = vr::k_unTrackedDeviceIndexInvalid;
 }
+
+MockControllerDeviceDriver::~MockControllerDeviceDriver() = default;
 
 
 //-----------------------------------------------------------------------------
@@ -1233,7 +2059,12 @@ void MockControllerDeviceDriver::Deactivate()
 
 StereoDisplayComponent::StereoDisplayComponent( const StereoDisplayDriverConfiguration &config )
     : config_( config ), depth_(config.depth), convergence_(config.convergence), fov_(config.fov)
-{}
+{
+    manual_depth_.store(config.depth);
+    auto_depth_enabled_.store(config.auto_depth_enabled);
+    auto_depth_target_disparity_.store(config.auto_depth_target_disparity);
+    auto_depth_smoothing_.store(config.auto_depth_smoothing);
+}
 
 
 //-----------------------------------------------------------------------------
@@ -1261,68 +2092,23 @@ bool StereoDisplayComponent::IsDisplayRealDisplay() { return false; }
 void StereoDisplayComponent::GetRecommendedRenderTargetSize( uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    *pnWidth = config_.render_width;
-    *pnHeight = config_.render_height;
+    *pnWidth  = static_cast<uint32_t>(config_.render_width);
+    *pnHeight = static_cast<uint32_t>(config_.render_height);
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Render in SbS or TaB Stereo3D
+// Canonical SbS eye viewport. Never called by the compositor in direct mode
+// but kept functional to satisfy the IVRDisplayComponent pure-virtual contract.
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetEyeOutputViewport( vr::EVREye eEye, uint32_t *pnX, uint32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    if (config_.reverse_enable)
-    {
-        eEye = static_cast<vr::EVREye>(!static_cast<bool> (eEye));
-    }
-    // Use Top and Bottom Rendering
-    if (config_.tab_enable)
-    {
-        *pnX = 0;
-        // Each eye will have full width
-        *pnWidth = config_.window_width;
-        // Each eye will have half height
-        *pnHeight = (config_.window_height - config_.framepack_offset) / 2;
-        if (eEye == vr::Eye_Left)
-        {
-            // Left eye viewport on the top half of the window
-            *pnY = 0;
-        }
-        else
-        {
-            // Right eye viewport on the bottom half of the window
-            *pnY = *pnHeight + config_.framepack_offset;
-        }
-    }
-
-    // Use Side by Side Rendering
-    else
-    {
-        // Each eye will have half height for virtual desktop
-        if (config_.vd_fsbs_hack)
-        {
-            *pnY = config_.window_height / 4;
-            *pnHeight = config_.window_height / 2;
-        }
-        // Each eye will have full height
-        else
-        {
-            *pnY = 0;
-            *pnHeight = config_.window_height;
-        }
-        // Each eye will have half width
-        *pnWidth = config_.window_width / 2;
-        if (eEye == vr::Eye_Left)
-        {
-            // Left eye viewport on the left half of the window
-            *pnX = 0;
-        }
-        else
-        {
-            // Right eye viewport on the right half of the window
-            *pnX = config_.window_width / 2;
-        }
-    }
+    const uint32_t eye_w = static_cast<uint32_t>(config_.render_width);
+    const uint32_t eye_h = static_cast<uint32_t>(config_.render_height);
+    *pnWidth  = eye_w;
+    *pnHeight = eye_h;
+    *pnY      = 0;
+    *pnX      = (eEye == vr::Eye_Left) ? 0u : eye_w;
 }
 
 //-----------------------------------------------------------------------------
@@ -1361,7 +2147,9 @@ void StereoDisplayComponent::GetProjectionRaw( vr::EVREye eEye, float *pfLeft, f
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Don't distort any coordinates for Stereo3D
+// IVRDisplayComponent distortion / window-bounds members. Never called by the
+// compositor in direct mode but kept functional to satisfy the interface's
+// pure-virtual contract.
 //-----------------------------------------------------------------------------
 vr::DistortionCoordinates_t StereoDisplayComponent::ComputeDistortion( vr::EVREye eEye, float fU, float fV )
 {
@@ -1377,16 +2165,13 @@ vr::DistortionCoordinates_t StereoDisplayComponent::ComputeDistortion( vr::EVREy
 bool StereoDisplayComponent::ComputeInverseDistortion(vr::HmdVector2_t* pResult, vr::EVREye eEye, uint32_t unChannel, float fU, float fV)
 { return false; }
 
-//-----------------------------------------------------------------------------
-// Purpose: To inform vrcompositor what the window bounds for this virtual HMD are.
-//-----------------------------------------------------------------------------
 void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32_t *pnWidth, uint32_t *pnHeight )
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
     *pnX = 0;
     *pnY = 0;
-    *pnWidth = config_.window_width;
-    *pnHeight = config_.window_height;
+    *pnWidth  = static_cast<uint32_t>(config_.render_width)  * 2u;
+    *pnHeight = static_cast<uint32_t>(config_.render_height);
 }
 
 //-----------------------------------------------------------------------------
@@ -1395,30 +2180,207 @@ void StereoDisplayComponent::GetWindowBounds( int32_t *pnX, int32_t *pnY, uint32
 StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
 {
     std::shared_lock<std::shared_mutex> lock(cfg_mutex_);
-    return config_;
+    StereoDisplayDriverConfiguration cfg = config_;
+    // depth/convergence/fov live in atomics during runtime — config_ only
+    // holds the last JSON-loaded values. Sync them so callers that round-trip
+    // a snapshot through LoadSettings don't clobber live hotkey adjustments.
+    // For depth specifically, report manual_depth_ (the user's intended
+    // ceiling) rather than the live, possibly auto-modulated depth_ — otherwise
+    // any OSD control that round-trips cfg through LoadSettings while
+    // auto-depth is active would bake the auto-attenuated value into the
+    // ceiling and defeat the snap-back on disable.
+    cfg.depth       = manual_depth_.load(std::memory_order_relaxed);
+    cfg.convergence = convergence_.load(std::memory_order_relaxed);
+    cfg.fov         = fov_.load(std::memory_order_relaxed);
+    return cfg;
 }
 
 
 //-----------------------------------------------------------------------------
 // Purpose: To update the Depth value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta)
+void StereoDisplayComponent::ApplyDepth(float new_depth)
 {
+    if (new_depth < 0.0f) new_depth = 0.0f;
     float cur_depth = GetDepth();
-    if (is_delta) {
-        new_depth += cur_depth;
-        new_depth = (new_depth < 0) ? 0 : new_depth;
-    }
     while (!depth_.compare_exchange_weak(cur_depth, new_depth, std::memory_order_relaxed));
     vr::PropertyContainerHandle_t container = vr::VRProperties()->TrackedDeviceToPropertyContainer(device_index_);
     vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, new_depth);
 }
 
 
+void StereoDisplayComponent::AdjustDepth(float new_depth, bool is_delta)
+{
+    if (is_delta) {
+        new_depth += manual_depth_.load(std::memory_order_relaxed);
+        if (new_depth < 0.0f) new_depth = 0.0f;
+    }
+    // Manual edits always update the user's intended ceiling.
+    manual_depth_.store(new_depth, std::memory_order_relaxed);
+
+    if (auto_depth_enabled_.load(std::memory_order_relaxed)) {
+        // Auto on: the auto loop drives the live depth_ down toward the
+        // disparity target. Don't yank the live depth up past the new
+        // ceiling — clamp it from above instead.
+        ApplyDepth((std::min)(GetDepth(), new_depth));
+    } else {
+        ApplyDepth(new_depth);
+    }
+}
+
+
+bool StereoDisplayComponent::IsAutoDepthEnabled() const
+{
+    return auto_depth_enabled_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthEnabled(bool enabled)
+{
+    auto_depth_enabled_.store(enabled, std::memory_order_relaxed);
+    // Reset the input-side disparity filters so the next enable starts fresh
+    // rather than carrying stale samples from a previous session. The median
+    // ring is renderer-thread-owned, so it's cleared there via the flag.
+    auto_depth_disp_ema_.store(-1.0f, std::memory_order_relaxed);
+    auto_depth_filter_reset_.store(true, std::memory_order_relaxed);
+    if (!enabled) {
+        // Snap the live depth back to the user's manual ceiling.
+        ApplyDepth(manual_depth_.load(std::memory_order_relaxed));
+    }
+}
+
+
+float StereoDisplayComponent::GetManualDepth() const
+{
+    return manual_depth_.load(std::memory_order_relaxed);
+}
+
+
+float StereoDisplayComponent::GetAutoDepthTargetDisparity() const
+{
+    return auto_depth_target_disparity_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthTargetDisparity(float frac)
+{
+    if (frac < 0.001f) frac = 0.001f;
+    if (frac > 0.01f)  frac = 0.01f;
+    auto_depth_target_disparity_.store(frac, std::memory_order_relaxed);
+}
+
+
+float StereoDisplayComponent::GetAutoDepthSmoothing() const
+{
+    return auto_depth_smoothing_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthSmoothing(float v)
+{
+    if (v < 0.005f) v = 0.005f;
+    if (v > 0.25f)  v = 0.25f;
+    auto_depth_smoothing_.store(v, std::memory_order_relaxed);
+}
+
+
+bool StereoDisplayComponent::IsAutoDepthLoggingEnabled() const
+{
+    return auto_depth_log_enabled_.load(std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::SetAutoDepthLoggingEnabled(bool enabled)
+{
+    auto_depth_log_enabled_.store(enabled, std::memory_order_relaxed);
+}
+
+
+void StereoDisplayComponent::FeedAutoDepthSample(uint32_t max_disp_px, uint32_t eye_w_px,
+                                                 uint32_t disp_step_px)
+{
+    if (!auto_depth_enabled_.load(std::memory_order_relaxed) || eye_w_px == 0) {
+        return;
+    }
+    if (auto_depth_filter_reset_.exchange(false, std::memory_order_relaxed)) {
+        auto_depth_hist_n_ = 0;
+        auto_depth_hist_i_ = 0;
+    }
+    const float ceiling     = manual_depth_.load(std::memory_order_relaxed);
+    const float target_frac = auto_depth_target_disparity_.load(std::memory_order_relaxed);
+    const float smoothing   = auto_depth_smoothing_.load(std::memory_order_relaxed);
+    const float raw_frac    = static_cast<float>(max_disp_px) / static_cast<float>(eye_w_px);
+
+    // Temporal median prefilter: a single-frame disparity spike (particle,
+    // muzzle flash, camera clip) must not reach the EMA at all — the
+    // asymmetric alpha reacts fast on the rising edge by design, so it
+    // can't defend against outliers on its own.
+    auto_depth_frac_hist_[auto_depth_hist_i_] = raw_frac;
+    auto_depth_hist_i_ = (auto_depth_hist_i_ + 1) % kAutoDepthHist;
+    if (auto_depth_hist_n_ < kAutoDepthHist) ++auto_depth_hist_n_;
+    float sorted[kAutoDepthHist];
+    std::copy(auto_depth_frac_hist_, auto_depth_frac_hist_ + auto_depth_hist_n_, sorted);
+    std::nth_element(sorted, sorted + auto_depth_hist_n_ / 2, sorted + auto_depth_hist_n_);
+    const float med_frac = sorted[auto_depth_hist_n_ / 2];
+
+    // Input-side jitter filter: low-pass the disparity-fraction samples
+    // before they drive the depth target. Uses an asymmetric EMA — fast
+    // on rising disparity (close objects must clamp depth quickly for
+    // comfort) and slow on falling disparity (so a noisy frame that
+    // misses a close object doesn't briefly snap depth back up).
+    constexpr float kAlphaUp   = 0.20f;  // disparity rising  -> moderate
+    constexpr float kAlphaDown = 0.05f;  // disparity falling -> slow ease
+    // Deadband: sized to the analyzer's disparity quantization (~1.5 buckets
+    // covers frame-to-frame bucket jitter), capped at half the target so the
+    // band can never mask a real error — the old fixed 0.005 equaled the
+    // default target and swallowed multiples of it at low target settings.
+    const float step_frac = static_cast<float>(disp_step_px) / static_cast<float>(eye_w_px);
+    const float deadband  = (std::min)(1.5f * step_frac, 0.5f * target_frac);
+
+    float prev_ema = auto_depth_disp_ema_.load(std::memory_order_relaxed);
+    float new_ema;
+    if (prev_ema < 0.0f) {
+        new_ema = med_frac;  // first sample primes the filter
+    } else {
+        const float diff = med_frac - prev_ema;
+        if (std::fabs(diff) < deadband) {
+            new_ema = prev_ema;  // inside deadband — hold steady
+        } else {
+            const float alpha = (diff > 0.0f) ? kAlphaUp : kAlphaDown;
+            new_ema = prev_ema + alpha * diff;
+        }
+    }
+    auto_depth_disp_ema_.store(new_ema, std::memory_order_relaxed);
+
+    // Auto pull-in floor: never attenuate below this fraction of the user's
+    // ceiling — a pathological frame (huge close object) should dim the
+    // stereo, not flatten it. Analog of UEVR-3D's min_convergence_m.
+    constexpr float kMinDepthFrac = 0.15f;
+
+    const float disp_frac = new_ema;
+    float target_depth;
+    if (disp_frac <= target_frac || disp_frac <= 0.0f) {
+        target_depth = ceiling;
+    } else {
+        target_depth = ceiling * (target_frac / disp_frac);
+        if (target_depth > ceiling)                target_depth = ceiling;
+        if (target_depth < kMinDepthFrac * ceiling) target_depth = kMinDepthFrac * ceiling;
+    }
+    const float cur      = GetDepth();
+    const float smoothed = cur + (target_depth - cur) * smoothing;
+    // The lerp never exactly converges, and every ApplyDepth pushes a
+    // SteamVR property write — skip sub-epsilon deltas so a settled loop
+    // stops churning vrserver.
+    if (std::fabs(smoothed - cur) > 1e-6f) {
+        ApplyDepth(smoothed);
+    }
+}
+
+
 //-----------------------------------------------------------------------------
 // Purpose: To update the Convergence value
 //-----------------------------------------------------------------------------
-void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta)
+void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta, bool resync)
 {
     float cur_conv = GetConvergence();
     if (is_delta) {
@@ -1428,7 +2390,9 @@ void StereoDisplayComponent::AdjustConvergence(float new_conv, bool is_delta)
     if (NearlyEqual(cur_conv, new_conv))
         return;
     while (!convergence_.compare_exchange_weak(cur_conv, new_conv, std::memory_order_relaxed));
-    ResetProjection();
+    // resync=false lets the hotkey poll loop batch the projection re-sync
+    // instead of firing it on every autorepeat tick.
+    if (resync) ResetProjection();
 }
 
 
@@ -1552,62 +2516,6 @@ std::string StereoDisplayComponent::CheckUserSettings()
     config_ = config;
 
     return overlay_msg;
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Move HMD origin position with keyboard input
-//-----------------------------------------------------------------------------
-std::string StereoDisplayComponent::CheckPositionInput() {
-    if (!isCtrlDown())
-        return "";
-
-    const float step = 0.01f;
-    auto config = GetConfig();
-
-    if (isDown(VK_HOME)) {
-            config.hmd_y -= step;       // Forward
-    }
-    else if (isDown(VK_END)) {
-            config.hmd_y += step;       // Backward
-    }
-    else if (isDown(VK_DELETE)) {
-        config.hmd_x -= step;       // Left
-    }
-    else if (isDown(VK_NEXT)) {
-        if (isDown(VK_SHIFT)) {
-            config.hmd_height -= step;  // Down
-        }
-        else {
-            config.hmd_x += step;       // Right
-        }
-    }
-    else if (isDown(VK_PRIOR)) {
-        if (isDown(VK_SHIFT)) {
-            config.hmd_height += step;  // Up
-        }
-        else {
-            config.hmd_yaw -= step * 10;     // Yaw CW
-        }
-    }
-    else if (isDown(VK_INSERT)) {
-        config.hmd_yaw += step * 10;     // Yaw CCW
-    }
-    else {
-        return "";
-    }
-
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2);
-    oss << "Pos X:" << config.hmd_x
-        << " Y:" << config.hmd_y
-        << " Z:" << config.hmd_height
-        << " Yaw:" << config.hmd_yaw;
-
-    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
-    config_ = config;
-
-    return oss.str();
 }
 
 
@@ -1736,14 +2644,35 @@ void StereoDisplayComponent::SetReset()
 
 
 //-----------------------------------------------------------------------------
+// Purpose: Toggle Reset on
+//-----------------------------------------------------------------------------
+void StereoDisplayComponent::RequestPoseReset()
+{
+    std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
+    config_.pose_reset = true;
+}
+
+
+//-----------------------------------------------------------------------------
 // Purpose: Load Game Specific Settings from Steam\config\vrto3d\app_name_config.json
 //-----------------------------------------------------------------------------
 void StereoDisplayComponent::LoadSettings(StereoDisplayDriverConfiguration& config)
 {
+    // Apply auto-depth settings BEFORE AdjustDepth so that the new ceiling /
+    // enabled state are observed when AdjustDepth decides whether to clamp.
+    auto_depth_target_disparity_.store(config.auto_depth_target_disparity, std::memory_order_relaxed);
+    auto_depth_smoothing_.store(config.auto_depth_smoothing, std::memory_order_relaxed);
+    // Disable auto temporarily so AdjustDepth applies the JSON depth as the
+    // live value, then restore the desired enabled state.
+    const bool want_auto = config.auto_depth_enabled;
+    auto_depth_enabled_.store(false, std::memory_order_relaxed);
+
     // Apply loaded settings
     AdjustDepth(config.depth, false);
     AdjustConvergence(config.convergence, false);
     AdjustFoV(config.fov);
+
+    auto_depth_enabled_.store(want_auto, std::memory_order_relaxed);
 
     std::unique_lock<std::shared_mutex> lock(cfg_mutex_);
     config_ = config;

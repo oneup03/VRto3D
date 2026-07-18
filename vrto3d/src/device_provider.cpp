@@ -16,13 +16,53 @@
  */
 
 #define WIN32_LEAN_AND_MEAN
-#include <algorithm> 
+#include <algorithm>
+#include <thread>
+#ifdef _WIN32
 #include <Windows.h>
 #include <psapi.h>
 #include <tchar.h>
 
 #include "vrto3dlib/win32_helper.hpp"
 #include "device_provider.h"
+#include "dx11_renderer.h"
+#include "direct_mode_component.h"
+#include "presenter/nvstereo_dx9_presenter.h"
+#else
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "vrto3dlib/linux_helper.hpp"
+#include "device_provider.h"
+#include "vk/vk_renderer.h"
+#include "vk/direct_mode_component_vk.h"
+#endif
+#include "vr_recenter.h"
+
+namespace {
+
+// Sample the PID a few seconds after disconnect — most games take a moment
+// to fully exit after their SteamVR connection drops. If the PID is gone,
+// shut SteamVR down; otherwise the user still has the app running and we
+// leave SteamVR alone.
+void ScheduleAutoExitCheck(uint32_t pid)
+{
+    std::thread([pid]() {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        if (IsProcessRunning(pid)) {
+            LOG() << "auto_exit: pid " << pid
+                  << " still running after 5s, leaving SteamVR alone";
+            return;
+        }
+        LOG() << "auto_exit: pid " << pid
+              << " is gone, shutting down SteamVR";
+        RequestSteamVRShutdown();
+    }).detach();
+}
+
+}  // namespace
 
 //-----------------------------------------------------------------------------
 // Purpose: This is called by vrserver after it receives a pointer back from HmdDriverFactory.
@@ -30,7 +70,32 @@
 //-----------------------------------------------------------------------------
 vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 {
+#ifdef _WIN32
     global_mtx_ = CreateMutex(NULL, TRUE, kVRto3DMutexName);
+
+    // Best-effort process-level DPI elevation. Usually fails because vrserver
+    // already locked its awareness, in which case the per-thread elevation in
+    // LeiaSrPresenter::WindowThreadLoop and the WM_DPICHANGED handler in
+    // PresentWndProc cover us.
+    using SetProcessDpiAwarenessContextFn = BOOL (WINAPI*)(DPI_AWARENESS_CONTEXT);
+    if (HMODULE user32 = GetModuleHandleW(L"user32.dll")) {
+        if (auto set_proc_ctx = reinterpret_cast<SetProcessDpiAwarenessContextFn>(
+                GetProcAddress(user32, "SetProcessDpiAwarenessContext"))) {
+            set_proc_ctx(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        }
+    }
+#else
+    // Single-instance guard: flock'd file in XDG_RUNTIME_DIR (mirrors the
+    // Global\VRto3DDriver named mutex on Windows).
+    {
+        const char* run = getenv("XDG_RUNTIME_DIR");
+        std::string lock_path = std::string(run ? run : "/tmp") + "/" + kVRto3DLockName;
+        int fd = open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600);
+        if (fd >= 0)
+            flock(fd, LOCK_EX | LOCK_NB);  // advisory; keep fd for process lifetime
+        global_mtx_ = (void*)(intptr_t)fd;
+    }
+#endif
 
     // We need to initialise our driver context to make calls to the server.
     // OpenVR provides a macro to do this for us.
@@ -39,12 +104,18 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
     // First, initialize our hmd, which we'll later pass OpenVR a pointer to.
     my_hmd_device_ = std::make_unique< MockControllerDeviceDriver >();
 
+    static const char kSerialNumber[] = "VRto3D-1234";
+
     // TrackedDeviceAdded returning true means we have had our device added to SteamVR.
-    if (!vr::VRServerDriverHost()->TrackedDeviceAdded("VRto3D-1234", vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
+    if (!vr::VRServerDriverHost()->TrackedDeviceAdded(kSerialNumber, vr::TrackedDeviceClass_HMD, my_hmd_device_.get()))
     {
         LOG() << "Failed to create hmd device!";
         return vr::VRInitError_Driver_Unknown;
     }
+
+    // No DisplayRedirect sibling needed in direct mode — game eye textures
+    // arrive via IVRDriverDirectModeComponent::SubmitLayer / Present rather
+    // than IVRVirtualDisplay::Present.
 
     return vr::VRInitError_None;
 }
@@ -81,26 +152,53 @@ void MyDeviceProvider::RunFrame()
     vr::VREvent_t vrEvent;
     while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent)))
     {
-        if ((vrEvent.eventType == vr::VREvent_ProcessConnected ||
+        // Connect-side events are NOT gated by wait_count_. When a mod (e.g.
+        // RealVR) re-inits VR after an FoV/resolution change, the reconnect
+        // event lands inside the post-disconnect cool-off window; dropping it
+        // would leave the renderer stuck in paused_for_disconnect_ with no
+        // further chance to resume.
+        if (vrEvent.eventType == vr::VREvent_ProcessConnected ||
             vrEvent.eventType == vr::VREvent_ActionBindingReloaded ||
             vrEvent.eventType == vr::VREvent_SceneApplicationChanged ||
-            vrEvent.eventType == vr::VREvent_Input_BindingLoadFailed || 
+            vrEvent.eventType == vr::VREvent_Input_BindingLoadFailed ||
             vrEvent.eventType == vr::VREvent_Input_BindingLoadSuccessful ||
-            vrEvent.eventType == vr::VREvent_Input_ActionManifestReloaded) &&
-            wait_count_ == 0)
+            vrEvent.eventType == vr::VREvent_Input_ActionManifestReloaded)
         {
             auto appName = GetProcessName(vrEvent.data.process.pid);
             auto lowerAppName = appName;
             std::transform(lowerAppName.begin(), lowerAppName.end(), lowerAppName.begin(), ::tolower);
             
-            if (Skip_Processes.find(appName) == Skip_Processes.end() &&
-                lowerAppName.find("exe") != std::string::npos)
+#ifdef _WIN32
+            const bool name_is_game = lowerAppName.find("exe") != std::string::npos;
+#else
+            // Native Linux games have no .exe suffix; Proton games keep it.
+            const bool name_is_game = !lowerAppName.empty();
+#endif
+            const bool skipped = Skip_Processes.find(lowerAppName) != Skip_Processes.end();
+            if (!skipped && name_is_game)
             {
                 app_name_ = appName;
                 app_pid_ = vrEvent.data.process.pid;
-                LOG() << "AppName = " << app_name_.c_str();
+                g_current_app_pid.store(app_pid_);
+                LOG() << "AppName = " << app_name_.c_str()
+                      << " (evt=" << (int)vrEvent.eventType
+                      << " pid=" << vrEvent.data.process.pid << ")";
                 my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessConnected);
+                // Resume the renderer (cleared by the prior ProcessDisconnected).
+                if (auto* r = my_hmd_device_->GetRenderer()) r->OnAppConnect();
                 wait_count_ = 500;
+            }
+            else if (vrEvent.eventType == vr::VREvent_ProcessConnected ||
+                     vrEvent.eventType == vr::VREvent_SceneApplicationChanged)
+            {
+                // Not treated as a game connect. Logged so we can see what
+                // becomes the scene app after a real game exits (e.g. SteamVR
+                // Home / environments) — a spurious auto-raise there is the
+                // suspected "stayed on top after quitting the game" cause.
+                LOG() << "connect ignored: name='" << appName.c_str()
+                      << "' pid=" << vrEvent.data.process.pid
+                      << " evt=" << (int)vrEvent.eventType
+                      << " skip=" << skipped << " is_game=" << name_is_game;
             }
         }
         else if ((vrEvent.eventType == vr::VREvent_ProcessDisconnected ||
@@ -109,12 +207,45 @@ void MyDeviceProvider::RunFrame()
                  !app_name_.empty() && vrEvent.data.process.pid == app_pid_ && wait_count_ == 0)
         {
             LOG() << "Unload = " << app_name_.c_str();
+            // Sample auto_exit + pid before LoadSettings / app_pid_ reset.
+            // The actual liveness check + shutdown happens on a delayed
+            // thread (ScheduleAutoExitCheck) so the game has time to fully
+            // terminate after the SteamVR disconnect fires.
+            const bool want_auto_exit =
+                my_hmd_device_->GetStereoComponent() &&
+                my_hmd_device_->GetStereoComponent()->GetConfig().auto_exit;
+            const uint32_t pid_snapshot = app_pid_;
             my_hmd_device_->LoadSettings(app_name_, app_pid_, vr::VREvent_ProcessDisconnected);
+
+            // Drop the departed game's swap-texture handles BEFORE we
+            // continue submitting frames. The compositor doesn't always call
+            // DestroySwapTextureSet on app exit, leaving stale entries in
+            // handle_map_ that the renderer would try to import — and that
+            // import was the trigger for the DEVICE_REMOVED cascade observed
+            // in crash logs. Pause the renderer so it stops trying until the
+            // next ProcessConnected.
+            if (auto* dmc = my_hmd_device_->GetDirectModeComponent()) {
+                dmc->DestroyAllSwapTextureSets(pid_snapshot);
+            }
+            if (auto* r = my_hmd_device_->GetRenderer()) r->OnAppDisconnect();
+
             app_name_ = "";
             app_pid_ = 0;
+            g_current_app_pid.store(0);
             wait_count_ = 500;
+            if (want_auto_exit) {
+                LOG() << "auto_exit: scheduling check for pid " << pid_snapshot;
+                ScheduleAutoExitCheck(pid_snapshot);
+            }
         }
     }
+
+    // VREvent_Quit isn't delivered via the driver-host event stream — it
+    // goes to *client* apps over their IPC pipe. Our TriggerOpenVRRecenter
+    // VR_Init registers us as a Background client, so we have to drain
+    // that client-side queue and ack quit, or vrserver waits 5s for us
+    // and force-kills the process.
+    vrto3d::PumpOpenVRClientEvents();
 }
 
 //-----------------------------------------------------------------------------
@@ -140,12 +271,41 @@ void MyDeviceProvider::LeaveStandby()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::Cleanup()
 {
+#ifdef _WIN32
     if (global_mtx_)
     {
         CloseHandle((HANDLE)global_mtx_);
     }
+#else
+    if ((intptr_t)global_mtx_ >= 0)
+    {
+        close((int)(intptr_t)global_mtx_);
+    }
+#endif
 
     // Our controller devices will have already deactivated. Let's now destroy them.
     my_hmd_device_ = nullptr;
+
+    // Tear down the background OpenVR client session we used for chaperone
+    // recenters. vrserver flags an unclean exit if a VR_Init'd client never
+    // VR_Shutdown's. This is the last hook called before our DLL unloads.
+    vrto3d::ShutdownOpenVRClient();
+
+#ifdef _WIN32
+    // NV3D-Glass exit pattern: when the NVIDIA 3D Vision presenter ran this
+    // session, hard-kill the process now that our own teardown is complete.
+    // A hard display freeze (reboot required) has been observed AFTER a clean
+    // explicit teardown — inside process exit, where nvd3dumx.dll /
+    // nvapi64.dll / d3d9.dll run their DLL_PROCESS_DETACH against the driver
+    // stereo state the FSE teardown just strained. TerminateProcess skips CRT
+    // static destructors and all DLL_PROCESS_DETACH (ExitProcess would not)
+    // and never returns on success. Every other output mode keeps the normal
+    // exit path.
+    if (vrto3d::NvStereoWasActiveThisSession()) {
+        LOG() << "MyDeviceProvider::Cleanup: NV3D session — TerminateProcess "
+                 "to skip NVIDIA DLL_PROCESS_DETACH";
+        TerminateProcess(GetCurrentProcess(), 0);
+    }
+#endif
 }
 
