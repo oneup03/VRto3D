@@ -1,0 +1,66 @@
+name: Deploy Pages
+
+# Builds the Jekyll site (README + changelog + wiki collection, per _config.yml)
+# and deploys it to GitHub Pages.
+#
+# This replaces the legacy "Deploy from a branch" builder, which recursively
+# checked out every submodule with the default GITHUB_TOKEN and failed on the
+# private external/SR-lib submodule (Repository not found). The site excludes
+# external/* anyway, so here we skip the code submodules entirely and pull only
+# the wiki content the site actually needs.
+#
+# REQUIRES: repo Settings -> Pages -> Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; let an in-progress deploy finish rather than
+# cancelling it (avoids leaving Pages half-published).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (no code submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Fetch wiki content
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

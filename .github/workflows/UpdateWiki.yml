@@ -10,9 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: true  # Ensures submodules are checked out
+          # Skip code submodules: the private external/SR-lib can't be cloned
+          # with the default GITHUB_TOKEN and would fail checkout. Only the
+          # wiki submodule is needed here; it's init'd explicitly below.
+          submodules: false
 
       - name: Configure Git Identity
         run: |
@@ -21,7 +24,7 @@ jobs:
 
       - name: Update Wiki Submodule
         run: |
-          git submodule update --remote wiki || true
+          git submodule update --init --remote wiki || true
           cd wiki
           git fetch origin
           git merge origin/master --allow-unrelated-histories || true
