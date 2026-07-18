@@ -245,7 +245,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - The easiest way to edit settings is the in-game OSD menu (`Ctrl + Home`); changes take effect immediately and the footer's `Save Default Cfg` / `Save Game Cfg` buttons persist them
 - For manual edits, modify `Steam\config\vrto3d\default_config.json` - some changes require a SteamVR restart (display index, output mode, render size, OpenTrack port)
 - Fields with a `"+"` next to them are saved to a game's profile when you press `Ctrl + F7` (or use the OSD `Save Game Cfg` footer button), and can be reloaded from the game's profile (`Ctrl + F10`) or `default_config.json` (`Ctrl + Shift + F10`)
-- Reference <a href="https://github.com/oneup03/VRto3D/blob/main/external/VRto3DLib/include/vrto3dlib/key_names.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> strings for hotkey fields
+- Reference <a href="https://github.com/oneup03/VRto3DLib/blob/main/src/key_names.cpp" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> strings for hotkey fields
 - Reference [Profile Creation Steps](#profile-creation-via-osd) for creating a game-specific profile
 
 | Field Name                    | Type    | Description                                                                                       | Default Value  |
@@ -363,7 +363,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - Optional XInput right-stick HMD Pitch / Yaw emulation can be turned on for games or mods that need it - configure it from the OSD `Tracking` tab (`Ctrl + Home` -> `XInput (Xbox) Controller`)
     - Tick `Pitch (right stick)` and / or `Yaw (right stick)` to map them
     - `Sensitivity`, `Stick Deadzone`, and `Pitch Radius` (curves the view along a semicircle - useful in 3rd-person games) all live in the same panel
-    - `Toggle Key` (default `VK_NUMPAD8`) toggles pitch/yaw on/off in-game; the `Mode` combo next to it switches between `toggle` and `hold` behavior. `Reset Key` (default `VK_NUMPAD7`) recenters. Both bindings accept any keyboard/mouse key or XInput button/chord - click `Set` to capture a single key/button or `Combo` to capture an XInput chord, or type a string from <a href="https://github.com/oneup03/VRto3D/blob/main/external/VRto3DLib/include/vrto3dlib/key_names.h" target="_blank" rel="noopener noreferrer">key_names.h</a> directly
+    - `Toggle Key` (default `VK_NUMPAD8`) toggles pitch/yaw on/off in-game; the `Mode` combo next to it switches between `toggle` and `hold` behavior. `Reset Key` (default `VK_NUMPAD7`) recenters. Both bindings accept any keyboard/mouse key or XInput button/chord - click `Set` to capture a single key/button or `Combo` to capture an XInput chord, or type a string from <a href="https://github.com/oneup03/VRto3DLib/blob/main/src/key_names.cpp" target="_blank" rel="noopener noreferrer">key_names.h</a> directly
 - OpenTrack 6DoF / 3DoF support is available over UDP loopback - tick `Enable OpenTrack` on the OSD `Tracking` tab (`OpenTrack` panel) and set the UDP port to match your sender (default `4242`; port changes need a SteamVR restart)
     - Works alongside XInput Pitch/Yaw emulation and the HMD offsets
     - SR Displays are supported natively (no bridge required) - enable OpenTrack with `output_mode: "LeiaSR"` and tune the One-Euro filter / sensitivities / clamps in the OSD `Tracking` tab's `LeiaSR Head Tracking` panel
@@ -378,7 +378,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - Each row maps a Load key to a `(Depth, Convergence, FoV)` preset. Only `toggle` mode supports multi-preset cycles - `switch` and `hold` rows are trimmed to the first value on edit and on profile load
     - Click `Set` to capture a single key, mouse button, or XInput button
     - Click `Combo` to capture an XInput chord (e.g. `XINPUT_GAMEPAD_LEFT_SHOULDER+XINPUT_GAMEPAD_RIGHT_SHOULDER`); the chord commits when you release everything
-    - You can also type any <a href="https://github.com/oneup03/VRto3D/blob/main/external/VRto3DLib/include/vrto3dlib/key_names.h" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> string into the Load field directly
+    - You can also type any <a href="https://github.com/oneup03/VRto3DLib/blob/main/src/key_names.cpp" target="_blank" rel="noopener noreferrer">Virtual-Key Code</a> string into the Load field directly
 - Choose the load behavior under `Mode`:
     - `switch` - jump to the preset and stay there
     - `toggle` - bounce between the preset and the previous setting every 1.5s
