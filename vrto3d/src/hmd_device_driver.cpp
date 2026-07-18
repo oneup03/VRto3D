@@ -2192,6 +2192,13 @@ StereoDisplayDriverConfiguration StereoDisplayComponent::GetConfig()
     cfg.depth       = manual_depth_.load(std::memory_order_relaxed);
     cfg.convergence = convergence_.load(std::memory_order_relaxed);
     cfg.fov         = fov_.load(std::memory_order_relaxed);
+    // Auto-depth settings are also runtime-mutable via atomics (OSD checkbox /
+    // sliders, Ctrl+F11) and never write back to config_. Sync them for the
+    // same reason as depth/convergence/fov above — otherwise a save persists,
+    // and any ApplyConfig round-trip restores, the stale last-loaded values.
+    cfg.auto_depth_enabled          = auto_depth_enabled_.load(std::memory_order_relaxed);
+    cfg.auto_depth_target_disparity = auto_depth_target_disparity_.load(std::memory_order_relaxed);
+    cfg.auto_depth_smoothing        = auto_depth_smoothing_.load(std::memory_order_relaxed);
     return cfg;
 }
 
