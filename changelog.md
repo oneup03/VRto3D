@@ -1,5 +1,76 @@
 # Changelog
 
+## V5.0.0 (V5.0.0) - 2026-07-18T00:31:19Z
+
+# VRto3D — Direct Mode Release
+
+The big one: VRto3D now renders and presents stereo 3D **natively/in direct mode**, instead of relying on ReShade + external tools. This unlocks a full menu of output formats, an in-3D settings UI, auto-depth, proper screenshots, and native **Linux support**.
+
+## 🎬 Native 3D output modes
+All modes are produced directly by the driver (no ReShade required):
+- **Side-by-Side** and **Top-and-Bottom**
+- **Row Interlaced** / **Column Interlaced**
+- **Checkerboard**
+- **All Anaglyph flavors** (Red/Cyan, Green/Magenta, Blue/Amber, + Dubois/deghosted/half-color variants)
+- **Dual Display / Dual Display Flip** — for dual-projector or dual-monitor setups
+- **Frame-Packed** modes — switches the display into a frame-packed HDMI mode
+- **LeiaSR** — autostereoscopic weaving with tracking built in (Midlife Crisis / Eff's tracking incorporated — **no separate app needed**)
+- **NvidiaDX9** — 3D Vision output, rebuilt on top of the new **NV3D-Lib**
+- **WibbleWobble** — frame-sequential output (installer fetches the required WibbleWobble beta automatically)
+- **VirtualDesktop** mode (replaces the old `vd_fsbs_hack`)
+- **Mono** mode
+
+## 🐧 Linux support (new)
+- Full Linux port with **Wayland and X11** presenters and a **Vulkan** rendering path
+- **evdev**-based input and OSD on Linux
+- Frame-packed modeline wiring on X11; WibbleWobble streaming to `wwserver`
+- Linux install script + CI build workflow
+- Not extensively tested
+
+## 🖥️ On-Screen Display (OSD)
+- **ImGUI-based in-headset menu** to edit **every** VRto3D setting — no more hand-editing config files (**Ctrl+Home** or **Start + D-Pad Down**)
+- **Gamepad navigation** for the OSD
+- **Download the latest game profiles** directly from the OSD
+- **Display-correction shader**: a final-pass color correction applied to the composited image — per-channel **Lift / Gamma / Gain** plus an adjustable contrast curve — to tame ghosting/crosstalk and match brightness on displays that need it
+- Buttons to take a screenshot, open the profile/screenshot folders, and reset to factory defaults
+- **Stereo cursor**: optional per-eye software cursor drawn at adjustable **depth and size**, plus **hide-cursor** and **lock/confine-cursor** options — all saved per profile
+- **Auto Exit SteamVR**: optionally shut SteamVR down automatically when the game closes
+
+## 🔎 Auto-Depth
+- **Auto-Depth** feature that works in any game (behaves like auto-convergence, depth-buffer driven)
+- Comfort-target and smoothing controls, plus optional sample logging for tuning
+
+## 🎯 Head tracking
+- **LeiaSR built-in head tracking** — sensitivity, deadzone, per-axis limits, One-Euro filter smoothing, and the track mode (Yaw/Pitch up to Full 6DOF) are all tunable, so no separate tracking app is required
+- **OpenTrack tuning** — position deadzone, zoom smoothing, and max-zoom controls for XInput/OpenTrack head tracking; you can also disable the built-in SR tracking to feed the OpenTrack port from an external source (OpenTrack, VertoXR, …)
+
+## 📸 Screenshots
+- Captures a **normal** and a **cross-view** image each time
+- Trigger from the OSD (**Misc → Take Screenshot**) or the **Ctrl+F12** hotkey
+- Fixed black/blank screenshots
+
+## ⌨️ Hotkeys & profiles
+- Reworked user hotkeys; **"Toggle" mode now supports multiple presets**
+- **Start + D-Pad Up** now mirrors the **Ctrl + F8** focus hotkey
+- Hotkey changes apply live without a restart
+- **All shipped game profiles migrated to portable key names** (cross-platform)
+
+## 📦 Installer
+- New Windows installer (Inno Setup): picks release / pre-release / local build, detects SteamVR, optional cleanup of legacy ReShade and third-party drivers, optional WibbleWobble + LeiaSR setup
+
+## 🛠️ Fixes & polish
+- Overhauled focus / always-on-top handling (unified `ComputeWantOnTop` focus policy; fixes overlay stuck-on-top after game exit; consistent auto-focus)
+- Numerous DX9 stability, color, and freeze fixes
+- Fixed screen tearing, multi-layer sizing, UEVR rendering/stutter, RealVR reconnect, recenter reliability, DPI-scaling bug
+- sRGB present chain fixes for correct (non-dark) output
+
+
+## What's Changed
+* v5.0.0 - Move to Direct Presentation with Native 3D Output Modes by @oneup03 in https://github.com/oneup03/VRto3D/pull/26
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V4.1.0...V5.0.0
+
+
 ## V4.1.0 (V4.1.0) - 2026-04-24T01:00:10Z
 
 - Fix display_index initialization issues
