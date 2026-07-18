@@ -60,7 +60,7 @@ jobs:
         md-to-pdf changelog.md
 
         # Convert README.pdf to JPGs
-        magick -density 300 README.pdf README-%d.jpg
+        magick -density 300 README.pdf -background white -alpha remove -alpha off README-%d.jpg
         Get-ChildItem README-*.jpg |
           Sort-Object { [int]($_.BaseName -replace 'README-','') } |
           ForEach-Object {
@@ -72,7 +72,7 @@ jobs:
         magick $readmeFiles -append -quality 90 README_combined.jpg
 
         # Convert changelog.pdf to JPGs
-        magick -density 300 changelog.pdf changelog-%d.jpg
+        magick -density 300 changelog.pdf -background white -alpha remove -alpha off changelog-%d.jpg
         Get-ChildItem changelog-*.jpg |
           Sort-Object { [int]($_.BaseName -replace 'changelog-','') } |
           ForEach-Object {
