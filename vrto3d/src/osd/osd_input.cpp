@@ -229,6 +229,12 @@ void OsdInput::FeedImGui(ImGuiIO& io, const OsdSurface& surface) {
                     // Fold right half back so clicks on either eye-half
                     // land on the same OSD coordinate.
                     u = (u >= 0.5f) ? (u - 0.5f) * 2.0f : u * 2.0f;
+                } else if (surface.layout == StereoLayout::VirtualDesktopSbs) {
+                    // Same horizontal SbS fold, but the pair is also packed
+                    // into the center vertical band [0.25, 0.75) with black
+                    // bars top/bottom — undo that vertical squish too.
+                    u = (u >= 0.5f) ? (u - 0.5f) * 2.0f : u * 2.0f;
+                    v = (v - 0.25f) * 2.0f;
                 } else if (surface.layout == StereoLayout::VerticalTab) {
                     v = (v >= 0.5f) ? (v - 0.5f) * 2.0f : v * 2.0f;
                 }

@@ -428,10 +428,11 @@ struct OsdRenderer::Impl {
     StereoLayout SurfaceLayout() const {
         switch (active_output_mode) {
             case OutputMode::SbS:
-            case OutputMode::VirtualDesktop:
             case OutputMode::DualDisplay:
             case OutputMode::DualDisplayFlip:
                 return StereoLayout::HorizontalSbs;
+            case OutputMode::VirtualDesktop:
+                return StereoLayout::VirtualDesktopSbs;
             case OutputMode::TaB:
             case OutputMode::FramePacked720p60:
             case OutputMode::FramePacked1080p24:
@@ -484,6 +485,14 @@ struct OsdRenderer::Impl {
         switch (SurfaceLayout()) {
             case StereoLayout::HorizontalSbs:
                 u = (u >= 0.5f) ? (u - 0.5f) * 2.0f : u * 2.0f;
+                break;
+            case StereoLayout::VirtualDesktopSbs:
+                // SbS pair lives in the center band [0.25, 0.75); undo the
+                // vertical squish, then fold the horizontal SbS halves. A
+                // cursor in the black bars maps to the nearest edge row.
+                u = (u >= 0.5f) ? (u - 0.5f) * 2.0f : u * 2.0f;
+                v = (v - 0.25f) * 2.0f;
+                if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f;
                 break;
             case StereoLayout::VerticalTab:
                 v = (v >= 0.5f) ? (v - 0.5f) * 2.0f : v * 2.0f;

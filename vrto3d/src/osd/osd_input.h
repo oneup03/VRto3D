@@ -32,7 +32,11 @@ enum class StereoLayout {
                  // RowInterlaced, ColInterlaced, Checkerboard, NvStereoDx9):
                  // OSD appears once on screen — simple normalize-and-scale.
     HorizontalSbs, // window is 2*eye_w × eye_h, OSD appears in both halves
-                   // (SbS, VirtualDesktop, DualDisplay, DualDisplayFlip).
+                   // (SbS, DualDisplay, DualDisplayFlip).
+    VirtualDesktopSbs, // window is 2*eye_w × 2*eye_h; the SbS pair is packed
+                   // into the center vertical band (rows [0.25, 0.75)) with
+                   // black bars top/bottom. Cursor needs the horizontal SbS
+                   // fold AND an undo of the vertical squish.
     VerticalTab,   // window is eye_w × 2*eye_h (or +gap), OSD appears in
                    // top + bottom (TaB, FramePacked*).
 };
