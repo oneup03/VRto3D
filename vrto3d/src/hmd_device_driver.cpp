@@ -496,6 +496,11 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             renderer_.reset();
         } else {
             direct_mode_component_ = std::make_unique<StereoDirectMode>(renderer_.get());
+            // Arm the no-frame watchdog now that direct mode can receive
+            // frames. Covers the presenters that can't start hidden
+            // (NvidiaDX9 FSE, WibbleWobble) and cleans up the lingering
+            // background SteamVR for the ones that can.
+            watchdog_thread_ = std::thread(&MockControllerDeviceDriver::NoFrameWatchdogThread, this);
             // Wire OSD callbacks. The OsdRenderer is lazy-initialized on the
             // window thread when the first frame arrives.
             vrto3d::osd::MenuCallbacks cb;
@@ -2022,6 +2027,39 @@ void MockControllerDeviceDriver::EnterStandby()
 //-----------------------------------------------------------------------------
 // Purpose: Shutdown process
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// Purpose: Kill a SteamVR session that never produced a frame. Games with a
+// faulty bundled OpenXR/OpenVR plugin start SteamVR at launch, connect a
+// half-open session, and never render — vrcompositor then submits nothing at
+// all (not even its void backdrop, which an idle SteamVR otherwise delivers
+// within seconds of compositor start). After kTimeoutSeconds with a zero
+// frame count, shut SteamVR down (vrmonitor + vrserver only — the game
+// process is left alone).
+//-----------------------------------------------------------------------------
+void MockControllerDeviceDriver::NoFrameWatchdogThread()
+{
+    constexpr int kTimeoutSeconds = 30;
+    constexpr int kPollMs         = 250;
+    for (int elapsed_ms = 0; elapsed_ms < kTimeoutSeconds * 1000; elapsed_ms += kPollMs) {
+        if (!is_active_.load(std::memory_order_relaxed)) return;
+        if (renderer_ && renderer_->FrameCounter() > 0) {
+            LOG() << "no_frame_watchdog: disarmed - first compositor frame after ~"
+                  << elapsed_ms << "ms";
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(kPollMs));
+    }
+    if (!is_active_.load(std::memory_order_relaxed)) return;
+    LOG() << "no_frame_watchdog: no compositor frames " << kTimeoutSeconds
+          << "s after activation - broken VR session (faulty game VR plugin?), "
+             "shutting down SteamVR";
+    // Detached: RequestSteamVRShutdown blocks on taskkill polling, and this
+    // driver lives inside the vrserver it is killing — Deactivate must be
+    // able to join this thread promptly (mirrors the WM_CLOSE path).
+    std::thread([] { RequestSteamVRShutdown(); }).detach();
+}
+
+
 void MockControllerDeviceDriver::Deactivate()
 {
     LOG() << "MockControllerDeviceDriver::Deactivate";
@@ -2044,6 +2082,9 @@ void MockControllerDeviceDriver::Deactivate()
         }
         if (cursor_thread_.joinable()) {
             cursor_thread_.join();
+        }
+        if (watchdog_thread_.joinable()) {
+            watchdog_thread_.join();
         }
         // Direct-mode component holds a raw Dx11Renderer*; destroy it first
         // so any in-flight SubmitLayer/Present can no longer reach the

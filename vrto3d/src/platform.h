@@ -96,6 +96,10 @@ public:
     // Drain the OS message/event queue; must be called from the thread that created the window.
     virtual void PollEvents() = 0;
 
+    // Make a start_hidden window visible (without stealing activation). Must be
+    // called from the thread that created the window. No-op if already visible.
+    virtual void Show() = 0;
+
     // Set topmost / z-order. No-op if already in desired state.
     virtual void BringToTop() = 0;
     virtual void ReleaseTopmost() = 0;
@@ -107,9 +111,14 @@ public:
     virtual bool ShouldClose() const = 0;
 };
 
+// start_hidden creates the window without WS_VISIBLE so nothing appears on the
+// desktop until PresentWindow::Show() — used to keep the output window invisible
+// until the compositor delivers a real frame (apps with faulty OpenXR/OpenVR
+// plugins start SteamVR but never render, and must not black out the display).
 std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
                                                    const MonitorInfo* secondary_for_multi_display,
-                                                   const char* title);
+                                                   const char* title,
+                                                   bool start_hidden = false);
 
 // Pin the calling thread to Per-Monitor V2 DPI awareness for its lifetime so
 // any window it creates is V2-aware regardless of vrserver.exe's process-level

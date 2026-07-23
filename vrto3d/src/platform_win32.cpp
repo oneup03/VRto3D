@@ -319,6 +319,12 @@ public:
         }
     }
 
+    void Show() override
+    {
+        if (IsWindowVisible(hwnd_)) return;
+        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+    }
+
     void BringToTop() override
     {
         // Always re-assert: even if we believe we're topmost, other apps can
@@ -365,7 +371,8 @@ private:
 
 std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
                                                    const MonitorInfo* secondary_for_multi_display,
-                                                   const char* title)
+                                                   const char* title,
+                                                   bool start_hidden)
 {
     EnsureClass();
 
@@ -389,7 +396,7 @@ std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
 
     HWND hwnd = CreateWindowExW(WS_EX_APPWINDOW,
                                  kWndClassName, wtitle.c_str(),
-                                 WS_POPUP | WS_VISIBLE,
+                                 WS_POPUP | (start_hidden ? 0 : WS_VISIBLE),
                                  x, y, static_cast<int>(w), static_cast<int>(h),
                                  nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (!hwnd) {
@@ -400,9 +407,12 @@ std::unique_ptr<PresentWindow> CreatePresentWindow(const MonitorInfo& primary,
     // HWND_TOPMOST via BringToTop() when the focus flags request it
     // (Ctrl+F8 toggle, auto_focus on tracked-app launch, UE3D IPC).
     // WS_EX_APPWINDOW keeps us in the alt-tab list.
-    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    if (!start_hidden) {
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    }
     LOG() << "Win32: present window created hwnd=" << hwnd
-          << " rect=(" << x << "," << y << " " << w << "x" << h << ")";
+          << " rect=(" << x << "," << y << " " << w << "x" << h << ")"
+          << (start_hidden ? " hidden until first frame" : "");
     return std::make_unique<Win32PresentWindow>(hwnd, w, h);
 }
 

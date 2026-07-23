@@ -101,6 +101,11 @@ private:
     std::atomic<bool>                             window_stop_{false};
     std::atomic<bool>                             window_ready_{false};
     std::atomic<bool>                             window_failed_{false};
+    // False while the window is start_hidden waiting for the first composited
+    // frame (apps with faulty VR plugins start SteamVR but never render — the
+    // window must not appear for those). FocusThreadLoop idles until this is
+    // set so BringToTop can't un-hide the window early.
+    std::atomic<bool>                             window_shown_{false};
 };
 
 }  // namespace vrto3d

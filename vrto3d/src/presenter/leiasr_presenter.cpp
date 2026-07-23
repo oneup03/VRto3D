@@ -436,6 +436,7 @@ bool LeiaSrPresenter::Init(Dx11Renderer& renderer,
     window_stop_.store(false);
     window_ready_.store(false);
     window_failed_.store(false);
+    window_shown_.store(false);
     window_thread_ = std::thread(&LeiaSrPresenter::WindowThreadLoop, this, &renderer,
                                   primary, secondary);
 
@@ -464,10 +465,15 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 {
     platform::EnablePerMonitorV2DpiAwareness();
 
+    // Start hidden until the compositor delivers a real frame. Games that ship
+    // a faulty OpenXR/OpenVR plugin start SteamVR (which activates this driver)
+    // but never submit anything — without the gate we'd park a fullscreen black
+    // window over the desktop for the whole session.
     window_ = platform::CreatePresentWindow(
         primary,
         (secondary.width > 0 ? &secondary : nullptr),
-        "VRto3D-LeiaSR");
+        "VRto3D-LeiaSR",
+        /*start_hidden=*/true);
     if (!window_) {
         LOG() << "LeiaSrPresenter: CreatePresentWindow failed";
         window_failed_.store(true);
@@ -587,7 +593,17 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         if (frame_latency_wait_) {
             WaitForSingleObjectEx(frame_latency_wait_, 100, TRUE);
         }
-        renderer->WaitAndDrawPending(33);
+        const bool drew = renderer->WaitAndDrawPending(33);
+
+        // First real composited frame: reveal the start_hidden window.
+        // WaitAndDrawPending only returns true once out_sbs_ exists, i.e. the
+        // compositor has delivered at least one direct-mode frame.
+        if (drew && !window_shown_.load(std::memory_order_relaxed)) {
+            window_->Show();
+            window_shown_.store(true, std::memory_order_release);
+            LOG() << "LeiaSrPresenter: first composited frame - window shown";
+        }
+
         if (window_) window_->PollEvents();
     }
 
@@ -718,6 +734,15 @@ void LeiaSrPresenter::FocusThreadLoop()
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
+
+        // Window still start_hidden (no composited frame yet): stay idle.
+        // BringToTop un-hides the window, so asserting z-order here would
+        // defeat the hidden-until-first-frame gate. This also keeps the SR
+        // lens hint disabled (2D) until real content is on screen.
+        if (!window_shown_.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(50ms);
+            continue;
+        }
 
         // LeiaSR runs on a single SR display — no multi-display nudge.
 

@@ -514,6 +514,7 @@ bool WindowPresenter::Init(Dx11Renderer& renderer,
     window_stop_.store(false);
     window_ready_.store(false);
     window_failed_.store(false);
+    window_shown_.store(false);
     window_thread_ = std::thread(&WindowPresenter::WindowThreadLoop, this, &renderer,
                                   primary, secondary);
 
@@ -549,10 +550,22 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 {
     platform::EnablePerMonitorV2DpiAwareness();
 
+    // Start hidden until the compositor delivers a real frame. Games that ship
+    // a faulty OpenXR/OpenVR plugin start SteamVR (which activates this driver)
+    // but never submit anything — without the gate we'd park a fullscreen black
+    // window over the desktop for the whole session. Frame-packed modes are the
+    // exception: they can be run standalone (no tracked app), rely on being
+    // visible at startup for the Alt+F4 → modeset-revert path, and have already
+    // switched the display timing by this point anyway.
+    const bool is_framepack  = IsFramePackedMode(mode_);
+    const bool start_hidden  = !is_framepack;
+    window_shown_.store(!start_hidden);
+
     window_ = platform::CreatePresentWindow(
         primary,
         (secondary.width > 0 ? &secondary : nullptr),
-        "VRto3D");
+        "VRto3D",
+        start_hidden);
     if (!window_) {
         LOG() << "WindowThreadLoop: CreatePresentWindow failed";
         window_failed_.store(true);
@@ -585,7 +598,6 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
     // tears the modeset down via timing_helper_.Revert()). Other modes
     // are typically driven by an app that needs the foreground, so we
     // only do this for the framepack case.
-    const bool is_framepack = IsFramePackedMode(mode_);
     const uint32_t startup_pid = focus_.app_pid ? focus_.app_pid->load() : 0;
     if (is_framepack && startup_pid == 0) {
         HWND self_hwnd = static_cast<HWND>(window_->NativeHandle());
@@ -610,7 +622,16 @@ void WindowPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         if (frame_latency_wait_) {
             WaitForSingleObjectEx(frame_latency_wait_, 100, TRUE);
         }
-        renderer->WaitAndDrawPending(33);
+        const bool drew = renderer->WaitAndDrawPending(33);
+
+        // First real composited frame: reveal the start_hidden window.
+        // WaitAndDrawPending only returns true once out_sbs_ exists, i.e. the
+        // compositor has delivered at least one direct-mode frame.
+        if (drew && !window_shown_.load(std::memory_order_relaxed)) {
+            window_->Show();
+            window_shown_.store(true, std::memory_order_release);
+            LOG() << "WindowPresenter: first composited frame - window shown";
+        }
 
         // Pump window messages so the window stays responsive even if the
         // compositor stops submitting frames.
@@ -793,6 +814,14 @@ void WindowPresenter::FocusThreadLoop()
 
     while (!focus_stop_.load(std::memory_order_relaxed)) {
         if (!window_) break;
+
+        // Window still start_hidden (no composited frame yet): stay idle.
+        // BringToTop un-hides the window, so asserting z-order here would
+        // defeat the hidden-until-first-frame gate.
+        if (!window_shown_.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(50ms);
+            continue;
+        }
 
         // Note: do NOT pump messages here — the window's message queue must
         // be serviced from its creating thread (WindowThreadLoop).

@@ -189,6 +189,13 @@ public:
     // into the OSD renderer each tick.
     void CursorControlThread();
 
+    // Shuts SteamVR down if the compositor never delivers a single direct-mode
+    // frame within the arming window. Catches broken launches — typically a
+    // flat game with a faulty bundled OpenXR/OpenVR plugin that starts SteamVR
+    // and then never renders. An idle SteamVR submits its void backdrop within
+    // seconds of compositor start, so healthy sessions always disarm this.
+    void NoFrameWatchdogThread();
+
     void LoadSettings(const std::string& app_name, uint32_t app_pid, vr::EVREventType status);
     void SetAsync(bool enable);
 
@@ -262,6 +269,7 @@ private:
     std::thread monitor_thread_;
     std::thread track_thread_;
     std::thread cursor_thread_;
+    std::thread watchdog_thread_;
 
     vr::HmdQuaternion_t open_track_att_;
     std::array<double, 3> open_track_pos_;
