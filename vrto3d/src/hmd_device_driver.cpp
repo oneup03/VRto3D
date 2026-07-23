@@ -235,31 +235,40 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
         platform::MonitorInfo primary{}, secondary{};
         // JSON-supplied display_frequency overrides auto-detection. 0 (the
         // default) means "ask the monitor".
+        //
+        // Frame-sequential modes (NVIDIA 3D Vision, WibbleWobble lightfield)
+        // alternate L/R eyes at the panel's refresh rate, so the actual
+        // per-eye / stereo-pair rate is panel_rate / 2. Producing SBS pairs
+        // faster than that just wastes GPU bandwidth (every other pair gets
+        // dropped) and adds latency through the consumer's frame queue.
+        //
+        // The halving applies ONLY to the auto-detected panel rate. An
+        // explicitly configured display_frequency is already the per-eye rate
+        // (see README) — this is exactly the value the OSD "Save Default Cfg"
+        // writes back, so halving it again on every relaunch would repeatedly
+        // decay it (120 -> 60 -> 30 ...). Reload paths (reload_default_profile)
+        // likewise never halve, so the stored value must be the per-eye rate.
+        const bool frame_sequential =
+            cfg.output_mode == OutputMode::NvidiaDX9
+         || cfg.output_mode == OutputMode::WibbleWobble;
         if (cfg.display_frequency <= 0.0f) {
             if (platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary)) {
                 cfg.display_frequency = platform::QueryRefreshHz(primary, 60.0f);
             } else {
                 cfg.display_frequency = 60.0f;
             }
+            if (frame_sequential && cfg.display_frequency > 1.0f) {
+                const float panel_hz = cfg.display_frequency;
+                cfg.display_frequency = panel_hz * 0.5f;
+                LOG() << "Display: frame-sequential mode — halving auto-detected "
+                         "panel refresh to per-eye rate (" << panel_hz
+                      << "Hz panel -> " << cfg.display_frequency
+                      << "Hz stereo-pair rate)";
+            }
         } else {
-            // Still resolve the monitor so the log line reports the target.
+            // Explicit value is already the per-eye rate; resolve the monitor
+            // only so the log line below can report the target.
             platform::ResolveTargetMonitors(cfg.display_index, false, primary, secondary);
-        }
-
-        // Frame-sequential modes (NVIDIA 3D Vision, WibbleWobble lightfield)
-        // alternate L/R eyes at the panel's refresh rate, so the actual
-        // stereo-pair rate is panel_rate / 2. Producing SBS pairs faster than
-        // that just wastes GPU bandwidth (every other pair gets dropped) and
-        // adds latency through the consumer's frame queue.
-        const bool frame_sequential =
-            cfg.output_mode == OutputMode::NvidiaDX9
-         || cfg.output_mode == OutputMode::WibbleWobble;
-        if (frame_sequential && cfg.display_frequency > 1.0f) {
-            const float panel_hz = cfg.display_frequency;
-            cfg.display_frequency = panel_hz * 0.5f;
-            LOG() << "Display: frame-sequential mode — halving reported "
-                     "display freq to compositor (" << panel_hz << "Hz panel -> "
-                  << cfg.display_frequency << "Hz stereo-pair rate)";
         }
 
         cfg.display_latency   = (cfg.display_frequency > 1.0f)

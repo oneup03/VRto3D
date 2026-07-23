@@ -978,8 +978,17 @@ void OsdMenu::Impl::DrawSystemTab() {
 
         if (ImGui::InputInt("Render Width",  &cfg.render_width))  dirty = true;
         if (ImGui::InputInt("Render Height", &cfg.render_height)) dirty = true;
-        if (ImGui::InputFloat("Display Frequency", &cfg.display_frequency, 0.0f, 0.0f, "%.2f")) dirty = true;
-        ImGui::SameLine(); ImGui::TextDisabled("(0.0 = use current)");
+        if (ImGui::InputFloat("Display Frequency (per-eye Hz)", &cfg.display_frequency, 0.0f, 0.0f, "%.2f")) dirty = true;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Per-eye refresh rate in Hz (0.0 = auto-detect from the target monitor).\n"
+                "\n"
+                "Frame-sequential modes (NvidiaDX9, WibbleWobble) alternate eyes,\n"
+                "so the per-eye rate is HALF the panel rate. On a 120Hz panel\n"
+                "enter 60, not 120 (auto-detect halves it for you).\n"
+                "This is why SteamVR reports 60Hz for a 120Hz 3D Vision panel.");
+        }
+        ImGui::SameLine(); ImGui::TextDisabled("(0.0 = auto)");
         if (ImGui::DragFloat("Aspect Ratio", &cfg.aspect_ratio, 0.001f, 0.5f, 4.0f, "%.3f")) dirty = true;
     }
 
