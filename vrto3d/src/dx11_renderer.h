@@ -269,6 +269,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D11VertexShader>      composite_vs_;
     Microsoft::WRL::ComPtr<ID3D11PixelShader>       composite_ps_;
     Microsoft::WRL::ComPtr<ID3D11SamplerState>      composite_sampler_;
+    // Per-blit constants: vertical mirror (for apps that submit v-flipped
+    // bounds) and whether the sampler decoded sRGB and therefore needs the
+    // curve re-applied on write.
+    Microsoft::WRL::ComPtr<ID3D11Buffer>            composite_cb_;
     Microsoft::WRL::ComPtr<ID3D11BlendState>        composite_blend_;         // straight-alpha (layers 1+)
     Microsoft::WRL::ComPtr<ID3D11BlendState>        composite_blend_opaque_;  // replace (layer 0 fallback)
     Microsoft::WRL::ComPtr<ID3D11RasterizerState>   composite_raster_;

@@ -91,9 +91,25 @@ float3 linear_to_srgb(float3 c) {
     float3 mask = step(0.0031308f, c);
     return lerp(lo, hi, mask);
 }
+cbuffer CompositeCb : register(b0) {
+    // 1 = mirror vertically while sampling. OpenGL applications submit their
+    // eye textures with the bounds inverted (GL's texture origin is
+    // bottom-left, D3D's is top-left); CopySubresourceRegion cannot mirror, so
+    // those submissions are routed through this shader instead.
+    float flip_v;
+    // 1 = re-apply the sRGB curve. Only correct when the SRV format is an
+    // _SRGB variant, i.e. when the sampler decoded to linear on read. On a
+    // plain UNORM source nothing decoded, so encoding here would brighten the
+    // image.
+    float srgb_encode;
+    float2 _composite_pad;
+};
 float4 main(VsOut i) : SV_Target {
-    float4 c = layer_tex.Sample(layer_smp, i.uv);
-    c.rgb = linear_to_srgb(c.rgb);
+    float2 uv = float2(i.uv.x, lerp(i.uv.y, 1.0f - i.uv.y, flip_v));
+    float4 c = layer_tex.Sample(layer_smp, uv);
+    if (srgb_encode > 0.5f) {
+        c.rgb = linear_to_srgb(c.rgb);
+    }
     return c;
 }
 )hlsl";
@@ -263,6 +279,13 @@ bool Dx11Renderer::Init(LUID adapter_luid,
         sd.AddressW       = D3D11_TEXTURE_ADDRESS_CLAMP;
         sd.MaxLOD         = D3D11_FLOAT32_MAX;
         if (FAILED(device_->CreateSamplerState(&sd, &composite_sampler_))) break;
+
+        D3D11_BUFFER_DESC cbd{};
+        cbd.ByteWidth      = 16; // float flip_v, float srgb_encode, float2 pad
+        cbd.Usage          = D3D11_USAGE_DYNAMIC;
+        cbd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+        cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        if (FAILED(device_->CreateBuffer(&cbd, nullptr, &composite_cb_))) break;
 
         // Straight-alpha blend (SRC_ALPHA / INV_SRC_ALPHA). Matches ALVR's
         // convention for OpenVR direct-mode overlay layers. DirectModeComponent
@@ -749,17 +772,25 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     // FFR/supersample) and submit bounds < (0,0,1,1) to mark the valid
     // portion; copying the whole texture would compress the valid portion
     // into the top-left of out_sbs_ (picture-in-picture).
+    // A vertically mirrored submission (vMin > vMax) is how OpenGL applications
+    // express GL's bottom-left texture origin - Vivecraft and other GL titles
+    // do it, and the result used to be displayed upside down because
+    // CopySubresourceRegion cannot mirror and the bounds were simply dropped.
+    // Normalize the rect here and report the mirror separately; the caller
+    // routes those eyes through the shader, which samples with v inverted.
+    // A horizontal mirror (uMin > uMax) is still not supported - nothing
+    // observed submits one - so it keeps falling through to the full texture.
     auto sub_rect = [](const vr::VRTextureBounds_t& b, UINT tex_w, UINT tex_h,
-                       UINT& sx, UINT& sy, UINT& sw, UINT& sh) -> bool {
-        // V-flip / U-flip bounds (vMin > vMax etc.) would require shader
-        // sampling to mirror, which CopySubresourceRegion can't do. Detect
-        // and fall through to "full texture" below.
-        if (!(b.uMax > b.uMin) || !(b.vMax > b.vMin)) return false;
+                       UINT& sx, UINT& sy, UINT& sw, UINT& sh, bool& flip_v) -> bool {
+        flip_v = b.vMin > b.vMax;
+        const float v_lo = flip_v ? b.vMax : b.vMin;
+        const float v_hi = flip_v ? b.vMin : b.vMax;
+        if (!(b.uMax > b.uMin) || !(v_hi > v_lo)) return false;
         const float du = b.uMax - b.uMin;
-        const float dv = b.vMax - b.vMin;
+        const float dv = v_hi - v_lo;
         if (du <= 0.f || du > 1.f || dv <= 0.f || dv > 1.f) return false;
         sx = static_cast<UINT>(b.uMin * tex_w + 0.5f);
-        sy = static_cast<UINT>(b.vMin * tex_h + 0.5f);
+        sy = static_cast<UINT>(v_lo * tex_h + 0.5f);
         sw = static_cast<UINT>(du * tex_w + 0.5f);
         sh = static_cast<UINT>(dv * tex_h + 0.5f);
         if (sw == 0 || sh == 0)             return false;
@@ -769,8 +800,9 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
 
     UINT lsx = 0, lsy = 0, lsw = eye_desc.Width,  lsh = eye_desc.Height;
     UINT rsx = 0, rsy = 0, rsw = right_desc.Width, rsh = right_desc.Height;
-    const bool left_sub  = sub_rect(layers[0].bounds_left,  eye_desc.Width,  eye_desc.Height,  lsx, lsy, lsw, lsh);
-    const bool right_sub = sub_rect(layers[0].bounds_right, right_desc.Width, right_desc.Height, rsx, rsy, rsw, rsh);
+    bool flip_left = false, flip_right = false;
+    const bool left_sub  = sub_rect(layers[0].bounds_left,  eye_desc.Width,  eye_desc.Height,  lsx, lsy, lsw, lsh, flip_left);
+    const bool right_sub = sub_rect(layers[0].bounds_right, right_desc.Width, right_desc.Height, rsx, rsy, rsw, rsh, flip_right);
     if (!left_sub) {
         lsx = lsy = 0; lsw = eye_desc.Width;  lsh = eye_desc.Height;
     }
@@ -885,7 +917,23 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
         sbs_format_ != strip_srgb(right_desc.Format) ||
         (output_mode_ == OutputMode::NvidiaDX9 && nv_panel_w_ && nv_panel_h_);
 
-    if (!fmt_mismatch) {
+    // A mirrored eye has to go through the shader - CopySubresourceRegion is a
+    // byte copy. Both eyes are routed together even when only one is mirrored,
+    // so the pair gets identical filtering and colour handling.
+    const bool needs_mirror = flip_left || flip_right;
+
+    if (needs_mirror) {
+        static bool s_mirror_logged = false;
+
+        if (!s_mirror_logged) {
+            s_mirror_logged = true;
+            LOG() << "Dx11Renderer: v-flipped submission (L=" << (flip_left ? 1 : 0)
+                  << " R=" << (flip_right ? 1 : 0)
+                  << ") - typical of OpenGL titles; compositing through the mirroring shader path";
+        }
+    }
+
+    if (!fmt_mismatch && !needs_mirror) {
         // Layer 0 — base scene, byte-pass-through via CopySubresourceRegion.
         // Source rect honors the submitted bounds (when applicable) so an
         // oversized eye texture with bounds=(0,0,<1,<1) doesn't degenerate
@@ -907,7 +955,7 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
     //   - The per-eye source format doesn't match out_sbs_ (NvidiaDX9 BGRA
     //     forcing + RGBA source) — layer 0 also routes through here with the
     //     opaque blend state.
-    const bool need_shader = (layer_count > 1) || fmt_mismatch;
+    const bool need_shader = (layer_count > 1) || fmt_mismatch || needs_mirror;
     if (need_shader && composite_pipeline_ready_ && out_sbs_rtv_) {
         ID3D11RenderTargetView* rtv = out_sbs_rtv_.Get();
         const float blend_factor[4] = { 1, 1, 1, 1 };
@@ -928,8 +976,33 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
         const UINT half_w = eff_eye_w;
         const UINT full_h = eff_eye_h;
 
-        auto blit_half = [&](ID3D11Texture2D* tex, UINT viewport_x) {
+        auto blit_half = [&](ID3D11Texture2D* tex, UINT viewport_x, bool mirror_v = false) {
             if (!tex) return;
+
+            // The sampler only decodes to linear when the view format is an
+            // _SRGB variant; re-applying the curve on a plain UNORM source
+            // would brighten it. Previously the shader encoded unconditionally,
+            // which was invisible while only sRGB sources reached it.
+            D3D11_TEXTURE2D_DESC blit_desc{};
+            tex->GetDesc(&blit_desc);
+            const bool is_srgb = blit_desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+                              || blit_desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB
+                              || blit_desc.Format == DXGI_FORMAT_B8G8R8X8_UNORM_SRGB;
+
+            if (composite_cb_) {
+                D3D11_MAPPED_SUBRESOURCE mapped{};
+                if (SUCCEEDED(context_->Map(composite_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+                    auto* c = static_cast<float*>(mapped.pData);
+                    c[0] = mirror_v ? 1.0f : 0.0f;
+                    c[1] = is_srgb ? 1.0f : 0.0f;
+                    c[2] = 0.0f;
+                    c[3] = 0.0f;
+                    context_->Unmap(composite_cb_.Get(), 0);
+                }
+                ID3D11Buffer* cbs[] = { composite_cb_.Get() };
+                context_->PSSetConstantBuffers(0, 1, cbs);
+            }
+
             ID3D11ShaderResourceView* srv_raw = nullptr;
             auto it = composite_srv_cache_.find(tex);
             if (it != composite_srv_cache_.end()) {
@@ -964,12 +1037,15 @@ void Dx11Renderer::OnDirectModeFrame(const DirectModeLayerPair* layers,
             context_->PSSetShaderResources(0, 1, null_srv);
         };
 
-        // Layer 0 fallback (opaque replace) — only when format mismatch
-        // skipped the CopySubresourceRegion path.
-        if (fmt_mismatch) {
+        // Layer 0 fallback (opaque replace) — when a format mismatch or a
+        // mirrored submission skipped the CopySubresourceRegion path. Note the
+        // sub-rect is not applied here (this path samples the full texture, as
+        // it always has); a game submitting BOTH a shrinking sub-rect and a
+        // mirror would show its padding.
+        if (fmt_mismatch || needs_mirror) {
             context_->OMSetBlendState(composite_blend_opaque_.Get(), blend_factor, 0xFFFFFFFF);
-            blit_half(left,  0);
-            blit_half(right, half_w);
+            blit_half(left,  0,      flip_left);
+            blit_half(right, half_w, flip_right);
         }
 
         // Layers 1+ — alpha-blended overlay.
@@ -1210,6 +1286,7 @@ void Dx11Renderer::Shutdown()
     composite_vs_.Reset();
     composite_ps_.Reset();
     composite_sampler_.Reset();
+    composite_cb_.Reset();
     composite_blend_.Reset();
     composite_raster_.Reset();
     composite_depth_.Reset();
