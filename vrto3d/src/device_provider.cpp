@@ -149,6 +149,27 @@ void MyDeviceProvider::RunFrame()
         wait_count_--;
     }
 
+    // Faulted-session exit watch (see device_provider.h). Poll on a wall-clock
+    // interval rather than a RunFrame tick count so the cadence doesn't drift
+    // with vrserver's loop rate.
+    if (faulted_exit_pid_ != 0)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= faulted_next_check_)
+        {
+            faulted_next_check_ = now + std::chrono::seconds(2);
+            if (!IsProcessRunning(faulted_exit_pid_))
+            {
+                LOG() << "faulted_exit: game pid " << faulted_exit_pid_
+                      << " has exited - shutting down the orphaned SteamVR session";
+                faulted_exit_pid_ = 0;
+                // Detached: RequestSteamVRShutdown blocks on taskkill polling
+                // and we're inside the vrserver being shut down.
+                std::thread([] { RequestSteamVRShutdown(); }).detach();
+            }
+        }
+    }
+
     vr::VREvent_t vrEvent;
     while (vr::VRServerDriverHost()->PollNextEvent(&vrEvent, sizeof(vrEvent)))
     {
@@ -233,7 +254,23 @@ void MyDeviceProvider::RunFrame()
             app_pid_ = 0;
             g_current_app_pid.store(0);
             wait_count_ = 500;
-            if (want_auto_exit) {
+
+            // A session the no-frame watchdog declared broken forces auto_exit
+            // on regardless of config — it never produced a frame, so there is
+            // nothing for the leftover vrserver to do. It gets the polling
+            // watch instead of ScheduleAutoExitCheck's single sample because a
+            // faulted game usually drops its VR connection long before the
+            // process itself exits. Waiting for the process to actually go is
+            // what keeps this game-safe: by the time we shut SteamVR down there
+            // is no client left for its VREvent_Quit broadcast to take out.
+            if (my_hmd_device_->IsOutputFaulted()) {
+                LOG() << "faulted_exit: session never produced a frame; will shut "
+                         "SteamVR down once pid " << pid_snapshot << " exits";
+                faulted_exit_pid_   = pid_snapshot;
+                faulted_next_check_ = std::chrono::steady_clock::now()
+                                    + std::chrono::seconds(2);
+            }
+            else if (want_auto_exit) {
                 LOG() << "auto_exit: scheduling check for pid " << pid_snapshot;
                 ScheduleAutoExitCheck(pid_snapshot);
             }

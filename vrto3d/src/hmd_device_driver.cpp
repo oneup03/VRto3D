@@ -2028,13 +2028,26 @@ void MockControllerDeviceDriver::EnterStandby()
 // Purpose: Shutdown process
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
-// Purpose: Kill a SteamVR session that never produced a frame. Games with a
-// faulty bundled OpenXR/OpenVR plugin start SteamVR at launch, connect a
+// Purpose: Clean up after a SteamVR session that never produced a frame. Games
+// with a faulty bundled OpenXR/OpenVR plugin start SteamVR at launch, connect a
 // half-open session, and never render — vrcompositor then submits nothing at
 // all (not even its void backdrop, which an idle SteamVR otherwise delivers
-// within seconds of compositor start). After kTimeoutSeconds with a zero
-// frame count, shut SteamVR down (vrmonitor + vrserver only — the game
-// process is left alone).
+// within seconds of compositor start).
+//
+// This must NOT shut SteamVR down while a game is attached. Terminating
+// vrserver makes SteamVR broadcast VREvent_Quit to every connected client, and
+// the game exits along with it — which is exactly the "mysterious game exit"
+// the earlier version of this watchdog caused. The game is running perfectly
+// well in flat 2D; only its VR plugin is broken, and that's not ours to kill.
+//
+// So: tear down our own output instead, and only when there is something to
+// tear down. The Window / LeiaSR presenters already start hidden and are
+// invisible in this state (see CreatePresentWindow start_hidden), so leaving
+// them armed costs nothing and keeps the session usable if a real VR app
+// connects later. The intrusive presenters can't hide — NvidiaDX9 holds a
+// fullscreen-exclusive D3D9Ex device, WibbleWobble drives an external app's
+// window, and frame-packed modes have switched the display timing — so for
+// those we release the output and let the desktop come back.
 //-----------------------------------------------------------------------------
 void MockControllerDeviceDriver::NoFrameWatchdogThread()
 {
@@ -2050,13 +2063,65 @@ void MockControllerDeviceDriver::NoFrameWatchdogThread()
         std::this_thread::sleep_for(std::chrono::milliseconds(kPollMs));
     }
     if (!is_active_.load(std::memory_order_relaxed)) return;
+
+    // Mark the session broken regardless of which presenter we're on. The
+    // device provider reads this (IsOutputFaulted) and forces auto_exit for
+    // this session, so the orphaned vrserver goes away once the game does —
+    // waiting for the game to exit first is what keeps this game-safe.
+    no_frame_faulted_.store(true, std::memory_order_release);
+
+    const OutputMode mode = stereo_display_component_
+                          ? stereo_display_component_->GetConfig().output_mode
+                          : OutputMode::SbS;
+    const bool holds_display = mode == OutputMode::NvidiaDX9
+                            || mode == OutputMode::WibbleWobble
+                            || IsFramePackedMode(mode);
+
     LOG() << "no_frame_watchdog: no compositor frames " << kTimeoutSeconds
-          << "s after activation - broken VR session (faulty game VR plugin?), "
-             "shutting down SteamVR";
-    // Detached: RequestSteamVRShutdown blocks on taskkill polling, and this
-    // driver lives inside the vrserver it is killing — Deactivate must be
-    // able to join this thread promptly (mirrors the WM_CLOSE path).
-    std::thread([] { RequestSteamVRShutdown(); }).detach();
+          << "s after activation - broken VR session (faulty game VR plugin?)";
+
+    if (holds_display) {
+        // Renderer teardown is the whole cleanup: it stops the vsync ticker,
+        // joins the presenter's window thread and runs presenter Shutdown
+        // (which drops the FSE device / external-window hookup and reverts any
+        // display timing), then releases the D3D device. The direct-mode
+        // component stays alive — vrserver holds a raw pointer to it from
+        // GetComponent — but every entry point bails out once
+        // renderer_->Device() is null, so nothing spams the torn-down
+        // renderer. Deactivate joins this thread before resetting renderer_,
+        // and Shutdown is idempotent, so the later Deactivate-time Shutdown is
+        // a no-op.
+        if (renderer_) renderer_->Shutdown();
+        LOG() << "no_frame_watchdog: released our display output; the game is "
+                 "untouched. Restart SteamVR to re-enable 3D output.";
+    } else {
+        LOG() << "no_frame_watchdog: output window is still hidden, nothing on "
+                 "screen to clean up";
+    }
+
+    // Retiring the orphaned vrserver: normally the device provider's faulted
+    // exit watch does it, once the attached game actually exits. But if
+    // nothing is attached right now — a faulty plugin that already dropped its
+    // session, leaving the game running flat — no further disconnect event is
+    // coming, so that watch would never be armed and vrserver would linger for
+    // the rest of the session. Shut down here instead. Safe: with no client
+    // attached there is nothing for SteamVR's VREvent_Quit broadcast to take
+    // down, which is what made the old unconditional shutdown kill games.
+    const uint32_t attached = g_current_app_pid.load();
+    if (attached == 0 || !IsProcessRunning(attached)) {
+        LOG() << "faulted_exit: no app attached - shutting down the orphaned "
+                 "SteamVR session now";
+        std::thread([] { RequestSteamVRShutdown(); }).detach();
+    }
+}
+
+
+bool MockControllerDeviceDriver::IsOutputFaulted() const
+{
+    if (!no_frame_faulted_.load(std::memory_order_acquire)) return false;
+    // A frame arriving after the watchdog fired means the session recovered
+    // (e.g. a working VR app connected into it) — no longer faulted.
+    return !renderer_ || renderer_->FrameCounter() == 0;
 }
 
 

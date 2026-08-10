@@ -219,6 +219,16 @@ public:
     StereoRenderer*   GetRenderer()            { return renderer_.get(); }
     StereoDirectMode* GetDirectModeComponent() { return direct_mode_component_.get(); }
 
+    // True once NoFrameWatchdogThread has declared this session broken (no
+    // compositor frame within its arming window) AND no frame has arrived
+    // since. The device provider uses this to force auto_exit behavior for
+    // the faulted session regardless of the user's auto_exit setting: a
+    // session that never produced a frame has no reason to keep vrserver
+    // alive once the game leaves. Self-correcting — if a real VR app connects
+    // into the same session and renders, the frame count moves off zero and
+    // this reports false again, so normal auto_exit config is respected.
+    bool IsOutputFaulted() const;
+
 private:
     std::unique_ptr< StereoDisplayComponent > stereo_display_component_;
 
@@ -254,6 +264,8 @@ private:
     std::atomic< float > cursor_depth_{ 0.0f };
     std::atomic< int > cursor_size_{ 32 };
     std::atomic< bool > launch_script_executed_;
+    // Latched by NoFrameWatchdogThread when it fires. See IsOutputFaulted().
+    std::atomic< bool > no_frame_faulted_{ false };
 
     std::mutex pose_mutex_;
     vr::DriverPose_t curr_pose_;

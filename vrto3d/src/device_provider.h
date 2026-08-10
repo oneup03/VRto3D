@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <chrono>
 #include <string>
 
 #include "hmd_device_driver.h"
@@ -44,4 +45,15 @@ private:
     std::string app_name_;
     uint32_t app_pid_ = 0;
     uint32_t wait_count_ = 0;
+
+    // Faulted-session exit watch. Set to the departed game's pid when a
+    // session that never produced a frame disconnects; RunFrame then polls
+    // until that process is really gone and shuts SteamVR down. Unlike
+    // ScheduleAutoExitCheck's single delayed sample, this keeps checking —
+    // a game whose VR plugin faulted routinely drops its SteamVR connection
+    // while the game itself runs on flat for hours, and one sample would
+    // strand vrserver for the rest of that session. Polled from RunFrame
+    // rather than a detached thread so it dies with the driver.
+    uint32_t faulted_exit_pid_ = 0;
+    std::chrono::steady_clock::time_point faulted_next_check_{};
 };
