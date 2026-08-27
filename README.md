@@ -90,8 +90,9 @@ Find your display type and use the listed Output Mode(s):
 
 - **Output Mode:** `LeiaSR` (SR Display Weaver)
 - Install Samsung Odyssey 3D Hub or Acer TrueGame first
-- Check the `Fix LeiaSR library loading (requires restart)` option in the VRto3D installer
-  - Or Manually: Open Windows Run with `Win + R`, Paste this command: `cmd /k setx PATH "C:\Program Files\LeiaSR\Platform\bin;%PATH%"` Exit the terminal and reboot
+- Check the `Fix LeiaSR library loading (restart Steam to apply)` option in the VRto3D installer
+  - Or Manually: press `Win + R`, run `rundll32 sysdm.cpl,EditEnvironmentVariables`, and under **User variables** edit `Path` to add a new entry: `C:\Program Files\LeiaSR\Platform\bin`. Restart Steam afterwards
+  - Do **not** use `setx PATH "...;%PATH%"` for this - inside a command prompt `%PATH%` is the machine PATH and your user PATH merged together, so setx copies every system entry into your user PATH, and setx silently truncates anything past 1024 characters. That combination corrupts your PATH
 - 6DoF head tracking is built in - just enable Open Track in the OSD `Tracking` tab. Tune the LeiaSR head-tracking and track filter sliders on the same tab
 - **Linux:** not available (compiled out) - there is no Linux SR SDK in-tree
 

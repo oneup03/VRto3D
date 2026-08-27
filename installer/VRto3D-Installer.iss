@@ -33,6 +33,9 @@ Compression=lzma2
 ArchiveExtraction=full
 ShowLanguageDialog=no
 CloseApplications=no
+; Setup broadcasts WM_SETTINGCHANGE when this is set, so the LeiaSR PATH
+; entry reaches newly started processes without a reboot.
+ChangesEnvironment=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -45,7 +48,7 @@ Name: "install\local";        Description: "Local VRto3D.zip (next to installer)
 Name: "cleanreshade";         Description: "Remove legacy ReShade from SteamVR\bin\win64";                    GroupDescription: "Cleanup (recommended):"
 Name: "cleandrivers";         Description: "Remove third-party SteamVR drivers and reset steamvr.vrsettings"; GroupDescription: "Cleanup (recommended):"
 Name: "wibblewobble";         Description: "Install WibbleWobble for Frame Sequential 3D";                    GroupDescription: "Optional:"; Flags: unchecked
-Name: "addleiasrpath";        Description: "Fix LeiaSR library loading (requires restart)";                  GroupDescription: "Optional:"; Flags: unchecked
+Name: "addleiasrpath";        Description: "Fix LeiaSR library loading (restart Steam to apply)";           GroupDescription: "Optional:"; Flags: unchecked; Check: LeiaSRIsInstalled
 Name: "launchsteamvr";        Description: "Launch SteamVR when finished";                                    GroupDescription: "Finish:"
 
 [Code]
@@ -816,25 +819,98 @@ begin
     LogLine('Register.bat exited with code ' + IntToStr(ResultCode));
 end;
 
+function LeiaSRBinDir: String;
+begin
+  Result := RemoveBackslashUnlessRoot(
+              ExpandConstant('{commonpf}\LeiaSR\Platform\bin'));
+end;
+
+{ Gates the addleiasrpath task: no point offering a PATH fix for a runtime
+  that isn't installed. }
+function LeiaSRIsInstalled: Boolean;
+begin
+  Result := DirExists(LeiaSRBinDir);
+end;
+
+{ True when Dir appears as a whole ';'-delimited entry in a PATH-style list.
+  Substring matching is not enough: 'C:\Foo\bin' must not match 'C:\Foo\bin2'. }
+function PathListContains(const PathValue, Dir: String): Boolean;
+var
+  Hay, Needle: String;
+begin
+  Hay := ';' + LowerCase(PathValue) + ';';
+  StringChangeEx(Hay, '\;', ';', True);   { entries stored with a trailing '\' }
+  StringChangeEx(Hay, '; ', ';', True);   { entries stored with a leading space }
+  Needle := ';' + LowerCase(RemoveBackslashUnlessRoot(Dir)) + ';';
+  Result := Pos(Needle, Hay) > 0;
+end;
+
 procedure TaskAddLeiaSRPath;
 var
-  LeiaPath, CurrentPath: String;
-  ResultCode: Integer;
+  LeiaPath, UserPath, NewPath: String;
 begin
-  LeiaPath := 'C:\Program Files\LeiaSR\Platform\bin';
-  CurrentPath := GetEnv('PATH');
-  if Pos(LowerCase(LeiaPath), LowerCase(CurrentPath)) > 0 then
+  LeiaPath := LeiaSRBinDir;
+
+  if not DirExists(LeiaPath) then
+  begin
+    LogLine('TaskAddLeiaSRPath: ' + LeiaPath + ' not found (LeiaSR not installed), skipping.');
+    Exit;
+  end;
+
+  { Skip if the folder is already reachable, whether it got there via the
+    machine PATH or the user PATH -- the process PATH is the union of both. }
+  if PathListContains(GetEnv('PATH'), LeiaPath) then
   begin
     LogLine('TaskAddLeiaSRPath: ' + LeiaPath + ' already on PATH, skipping.');
     Exit;
   end;
-  LogLine('TaskAddLeiaSRPath: prepending ' + LeiaPath + ' to user PATH (reboot required)');
-  if not Exec(ExpandConstant('{cmd}'),
-              '/C setx PATH "' + LeiaPath + ';%PATH%"',
-              '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    LogLine('setx exec failed')
+
+  { Read the *user* PATH straight out of the registry, unexpanded.
+    Never build the new value from %PATH% / GetEnv('PATH'): in this process
+    that is the machine PATH and the user PATH merged, so writing it back to
+    HKCU duplicates every machine entry into the user PATH. This task used to
+    run 'setx PATH "<dir>;%PATH%"', which compounded that three ways -- setx
+    silently truncates at 1024 characters (corrupting a long PATH mid-entry),
+    it rewrites the value as REG_SZ so %SystemRoot%-style entries stop
+    expanding, and the merge itself pushes the value past that limit. A direct
+    REG_EXPAND_SZ write has none of those failure modes. }
+  UserPath := '';
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', UserPath) then
+    UserPath := '';
+
+  { Appended, not prepended: Platform\bin ships its own msvcp140 / vcruntime140
+    / opencv copies, and putting those ahead of the system directories for every
+    process that resolves a DLL through PATH is asking for trouble. }
+  if UserPath = '' then
+    NewPath := LeiaPath
+  else if Copy(UserPath, Length(UserPath), 1) = ';' then
+    NewPath := UserPath + LeiaPath
   else
-    LogLine('setx exited with code ' + IntToStr(ResultCode));
+    NewPath := UserPath + ';' + LeiaPath;
+
+  if Length(NewPath) > 32000 then
+  begin
+    LogLine('TaskAddLeiaSRPath: user PATH would be ' + IntToStr(Length(NewPath)) +
+            ' chars -- too long to extend safely, leaving it alone.');
+    MsgBox(
+      'Your user PATH is too long to extend safely, so it was left unchanged.' #13#10 #13#10 +
+      'If LeiaSR output fails to load, add this folder to your PATH manually:' #13#10 +
+      LeiaPath,
+      mbError, MB_OK);
+    Exit;
+  end;
+
+  if RegWriteExpandStringValue(HKCU, 'Environment', 'Path', NewPath) then
+    LogLine('TaskAddLeiaSRPath: appended ' + LeiaPath + ' to the user PATH')
+  else
+  begin
+    LogLine('TaskAddLeiaSRPath: failed to write the user PATH');
+    MsgBox(
+      'Failed to update your user PATH.' #13#10 #13#10 +
+      'If LeiaSR output fails to load, add this folder to your PATH manually:' #13#10 +
+      LeiaPath,
+      mbError, MB_OK);
+  end;
 end;
 
 procedure TaskLaunchSteamVR;
@@ -1022,8 +1098,8 @@ begin
     S := S + NewLine;
   end;
   if WizardIsTaskSelected('addleiasrpath') then
-    S := S + 'Fix LeiaSR library loading (requires restart):' + NewLine +
-         Space + 'Add C:\Program Files\LeiaSR\Platform\bin to user PATH' + NewLine + NewLine;
+    S := S + 'Fix LeiaSR library loading (restart Steam to apply):' + NewLine +
+         Space + 'Append ' + LeiaSRBinDir + ' to user PATH' + NewLine + NewLine;
   if WizardIsTaskSelected('launchsteamvr') then
     S := S + 'Launch SteamVR after install completes' + NewLine;
   Result := S;
