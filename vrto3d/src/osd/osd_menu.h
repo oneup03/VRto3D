@@ -21,6 +21,8 @@
 #include <memory>
 #include <string>
 
+#include "vrto3dlib/stereo_config.h"
+
 class StereoDisplayComponent;
 
 namespace vrto3d::osd {
@@ -55,6 +57,11 @@ struct MenuCallbacks {
     // as the new seated/standing zero. Surfaced as the Recenter button at
     // the top of the Tracking tab.
     std::function<void()> recenter_pose;
+    // The user picked a new output mode in the System tab. Lets the driver
+    // run the side effects of that CHOICE — persistent machine state that has
+    // to be in place before the next start, which is when the new mode
+    // actually takes effect. The menu stays out of what those are.
+    std::function<void(OutputMode)> set_output_mode;
     // Toggle "always on top" (mirrors Ctrl+F8).
     std::function<void()> toggle_always_on_top;
     // True iff the headset window is currently always-on-top.

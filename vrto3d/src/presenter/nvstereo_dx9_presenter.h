@@ -18,6 +18,7 @@
 
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <thread>
@@ -72,8 +73,10 @@ bool NvStereoWasActiveThisSession();
 //     EVENT query on the host immediate context (caller's thread), so it must
 //     be serialized against the compositor — and it returns in microseconds
 //     because the actual D3D9 present happens on the lib's worker.
-//   - Present() is therefore a no-op: pacing comes from WaitAndDrawPending's
-//     composite_cv_ wait, and the lib worker owns PresentEx/vsync.
+//   - Present() is therefore a no-op. Pacing is the library's
+//     GetPresentCompletedEvent(), waited on at the top of RenderLoop in the
+//     same slot where WindowPresenter / LeiaSrPresenter wait on their DXGI
+//     frame-latency waitable object; the lib worker owns PresentEx/vsync.
 //   - The lib's Present() HRESULT reflects the PREVIOUS frame (async worker),
 //     so failure is judged by a 40-frame streak, not a single result.
 //   - On host-observed device removal we call NotifyDeviceLost() BEFORE
@@ -98,6 +101,9 @@ public:
 
 private:
     void RenderLoop();
+    // Drain the library's present counters onto the driver log. Render
+    // thread only — GetPresentStats resets on read.
+    void LogPresentStats();
     void FocusThreadLoop();
     // Joinable replacement for the old detached game-focus watcher.
     void StartForceFocusWatcher(uint32_t pid);
@@ -127,6 +133,18 @@ private:
     UINT                 ring_h_   = 0;
     DXGI_FORMAT          ring_fmt_ = DXGI_FORMAT_UNKNOWN;
     ID3D11Texture2D*     last_tex_ = nullptr;  // identity cache for SetInputTexture
+
+    // Display clock: the library's manual-reset "present worker idle" event,
+    // this mode's equivalent of the DXGI frame-latency waitable object that
+    // WindowPresenter / LeiaSrPresenter pace on. Owned by the library and
+    // closed by its Delete(), so the render thread must be joined before
+    // Shutdown tears the interface down (it is). Null if the library
+    // couldn't create it — RenderLoop then falls back to compositor-only
+    // pacing.
+    HANDLE   present_done_      = nullptr;
+    DWORD    last_stats_tick_   = 0;
+    uint64_t total_accepted_    = 0;
+    uint64_t total_dropped_     = 0;
 
     int frames_since_dev_check_ = 0;
     int present_fail_streak_    = 0;

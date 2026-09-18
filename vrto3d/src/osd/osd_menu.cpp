@@ -974,6 +974,11 @@ void OsdMenu::Impl::DrawSystemTab() {
                           static_cast<int>(mode_labels.size()))) {
             cfg.output_mode = mode_vals[mode_sel];
             dirty = true;
+            // Arm the new mode's persistent side effects now, not at next
+            // startup: the change needs a restart to take effect, and some of
+            // that state (the NVIDIA Fast Sync driver profile) is only sampled
+            // when the process starts, so it has to be written before then.
+            if (callbacks.set_output_mode) callbacks.set_output_mode(cfg.output_mode);
         }
 
         if (ImGui::InputInt("Render Width",  &cfg.render_width))  dirty = true;

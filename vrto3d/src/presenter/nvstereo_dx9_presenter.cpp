@@ -64,6 +64,20 @@ void Nv3dLogSink(NV3D::LogLevel level, const wchar_t* msg, void* /*user*/)
     LOG() << "[NV3D]" << lvl << " " << s;
 }
 
+const char* FastSyncName(NV3D::FastSyncResult r)
+{
+    switch (r) {
+        case NV3D::FastSyncResult::Applied:       return "applied(next launch)";
+        case NV3D::FastSyncResult::AlreadyActive: return "already-active";
+        case NV3D::FastSyncResult::Removed:       return "removed";
+        case NV3D::FastSyncResult::NotPresent:    return "not-present";
+        case NV3D::FastSyncResult::Unavailable:   return "unavailable";
+        case NV3D::FastSyncResult::Conflict:      return "conflict";
+        case NV3D::FastSyncResult::Failed:        return "failed";
+    }
+    return "?";
+}
+
 std::wstring Utf8ToWide(const char* s)
 {
     if (!s || !*s) return {};
@@ -124,6 +138,28 @@ bool NvStereoDx9Presenter::Init(Dx11Renderer& renderer,
     p.host_hwnd               = nullptr;   // library-owned FSE click-through popup
     p.enable_suppressor       = true;      // nvd3dumx OSD/rating/hotkey detours
     p.activation_retry_budget = 60;
+    // Fast Sync pairing. This is the only output path with a fullscreen-
+    // EXCLUSIVE device, so DWM is bypassed and nothing else is left to show the
+    // newest completed frame at each vblank — the job Fast Sync does. Asking
+    // for VsyncOff is what lets it engage at all: it only acts on applications
+    // that are not already vsync-limited.
+    //
+    // The two halves must go on together or not at all. VsyncOff without a LIVE
+    // Fast Sync profile is just unthrottled tearing, and on a frame-sequential
+    // panel a tear splits two stereo PAIRS across the screen rather than two
+    // frames — plus the driver is demuxing eyes out of a signature row it scans
+    // in the presented surface, which a torn surface invalidates.
+    //
+    // The driver samples profiles at process start, so the session that FIRST
+    // writes the profile does not have Fast Sync yet: that one stays on VsyncOn
+    // and only reports Applied. The next launch sees AlreadyActive — Fast Sync
+    // live in this process — and that is the session that goes unthrottled.
+    // Conflict / Unavailable / Failed all keep us on VsyncOn, which is the
+    // pre-existing behaviour.
+    const NV3D::FastSyncResult fs = NV3D::SetFastSyncProfile(true, nullptr);
+    const bool fastsync_live = (fs == NV3D::FastSyncResult::AlreadyActive);
+    p.present_interval        = fastsync_live ? NV3D::PresentInterval::VsyncOff
+                                              : NV3D::PresentInterval::VsyncOn;
     // Own-PID trick (from NV3D-Glass): IsProcessRunning(self) is always true,
     // so the library's tracked mode reduces to "visible while SetVisible(true)"
     // and our FocusThreadLoop stays authoritative. At the pinned lib commit,
@@ -135,7 +171,9 @@ bool NvStereoDx9Presenter::Init(Dx11Renderer& renderer,
 
     LOG() << "NvStereoDx9Presenter::Init: creating NV3D interface on "
           << primary.device_name << " " << primary.width << "x" << primary.height
-          << " lightboost_db=" << (p.nvtimings_json_path ? "resource" : "embedded");
+          << " lightboost_db=" << (p.nvtimings_json_path ? "resource" : "embedded")
+          << " fastsync=" << FastSyncName(fs)
+          << " present_interval=" << (fastsync_live ? "VsyncOff" : "VsyncOn");
 
     // Blocks through window creation, FSE CreateDeviceEx, LightBoost modeset
     // and stereo bring-up — can take seconds (parity with the old in-tree
@@ -148,6 +186,15 @@ bool NvStereoDx9Presenter::Init(Dx11Renderer& renderer,
         return false;
     }
     g_nv3d_was_active.store(true, std::memory_order_release);
+
+    // Display clock for RenderLoop. Null is tolerated (the library logs why);
+    // we then fall back to compositor-only pacing.
+    present_done_ = iface_->GetPresentCompletedEvent();
+    if (!present_done_) {
+        LOG() << "NvStereoDx9Presenter: no present-completed event — "
+                 "falling back to compositor-only pacing";
+    }
+    last_stats_tick_ = GetTickCount();
 
     render_stop_.store(false);
     render_thread_ = std::thread(&NvStereoDx9Presenter::RenderLoop, this);
@@ -168,9 +215,36 @@ void NvStereoDx9Presenter::RenderLoop()
     // It returns false before the renderer finishes initializing and after
     // device death — sleep briefly then so the loop can't spin hot.
     while (!render_stop_.load(std::memory_order_relaxed)) {
+        // Display clock. The library's PresentEx blocks on the panel's vblank,
+        // so "the present worker went idle" is this mode's equivalent of the
+        // DXGI frame-latency waitable object that WindowPresenter and
+        // LeiaSrPresenter pace on — and it belongs in the same slot in the
+        // loop, ahead of the compositor wait.
+        //
+        // Without it we paced on the compositor's submit signal alone and
+        // over-submitted: AsyncPresenter::Submit waits up to its 8ms timeout
+        // for a busy worker and then DROPS the frame, so every excess frame
+        // cost a full-res CopyResource plus up to 8ms of stall — and that
+        // stall is taken inside RecordComposite, which runs under
+        // context_mutex_, so it backs straight up into the compositor
+        // thread's next OnDirectModeFrame. Waiting here instead means Submit
+        // always finds the worker idle: one submitted frame per completed
+        // present, nothing dropped inside Submit, and the staging copy
+        // landing as late as possible before the present that consumes it.
+        //
+        // 100ms cap (matching the other presenters) so a wedged or idle
+        // worker can't stall the loop, and alertable so Shutdown wakes us
+        // promptly. The handle is library-owned and closed by Delete(), which
+        // Shutdown only reaches after joining this thread.
+        if (present_done_) {
+            WaitForSingleObjectEx(present_done_, 100, TRUE);
+        }
+
         if (!renderer_->WaitAndDrawPending(33)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+
+        LogPresentStats();
         // Service this thread's message queue every iteration. The OSD's
         // WH_MOUSE_LL mouse hook is installed from THIS thread (OsdRenderer::
         // RenderFrame → OsdInput::SetMouseHookActive runs inside our
@@ -185,6 +259,30 @@ void NvStereoDx9Presenter::RenderLoop()
             DispatchMessageW(&msg);
         }
     }
+}
+
+
+void NvStereoDx9Presenter::LogPresentStats()
+{
+    if (!iface_) return;
+    const DWORD now = GetTickCount();
+    if (now - last_stats_tick_ < 5000) return;
+    last_stats_tick_ = now;
+
+    NV3D::PresentStats s{};
+    iface_->GetPresentStats(&s);
+    total_accepted_ += s.submits_accepted;
+    total_dropped_  += s.submits_dropped;
+
+    // Steady state is drop-free once the present-completed event paces us, so
+    // a non-zero count is the signal worth spending log lines on: something is
+    // submitting outside our pacing, or the worker is overrunning its slot.
+    if (s.submits_dropped == 0) return;
+    LOG() << "NvStereoDx9Presenter: present stats (5s) accepted="
+          << s.submits_accepted << " dropped=" << s.submits_dropped
+          << " completed=" << s.presents_done
+          << " present_ms avg=" << s.present_ms_avg
+          << " max=" << s.present_ms_max;
 }
 
 
@@ -472,6 +570,19 @@ void NvStereoDx9Presenter::Shutdown()
 
     render_stop_.store(true);
     if (render_thread_.joinable()) render_thread_.join();
+
+    // Final drain, now that the render thread (the only other caller) is gone.
+    // A non-zero lifetime drop count means our pacing was not actually holding
+    // the submit path to one frame in flight.
+    if (iface_) {
+        NV3D::PresentStats s{};
+        iface_->GetPresentStats(&s);
+        total_accepted_ += s.submits_accepted;
+        total_dropped_  += s.submits_dropped;
+        LOG() << "NvStereoDx9Presenter: present totals accepted=" << total_accepted_
+              << " dropped=" << total_dropped_;
+    }
+    present_done_ = nullptr;   // library-owned; Delete() closes it
 
     if (iface_) {
         if (dead_.load(std::memory_order_acquire)) {

@@ -21,12 +21,31 @@
 #include "nvstereo_dx9_presenter.h"
 #include "wibblewobble_presenter.h"
 
+#include <NV3D.hpp>
+
 #include "vrto3dlib/debug_log.hpp"
 
 namespace vrto3d {
 
 std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode)
 {
+    // Fast Sync is wanted by exactly one output path. NvidiaDX9 is the only
+    // presenter that runs a fullscreen-EXCLUSIVE device, so it is the only one
+    // where DWM is bypassed and something else has to show the newest completed
+    // frame at each vblank; every other mode is a DWM-composited FLIP_DISCARD
+    // window that already gets that from DWM and would gain nothing.
+    //
+    // The profile is persistent driver state that outlives the process (by
+    // design — the driver samples profiles at process start), so switching to
+    // any other mode has to actively take it back down. Changing output mode
+    // already requires a restart, which makes this the natural place: it runs
+    // once per session with the selected mode, before any presenter Init.
+    // NvStereoDx9Presenter::Init owns the enable side, because it also needs
+    // the result to decide whether it may ask for unthrottled presents.
+    if (mode != OutputMode::NvidiaDX9) {
+        NV3D::SetFastSyncProfile(false, nullptr);
+    }
+
     switch (mode) {
         case OutputMode::SbS:
         case OutputMode::TaB:
@@ -61,6 +80,21 @@ std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode)
             return std::make_unique<WibbleWobblePresenter>();
     }
     return std::make_unique<WindowPresenter>();
+}
+
+
+void ApplyOutputModeSideEffects(OutputMode mode)
+{
+    // Fast Sync, armed at selection time rather than at first use. The driver
+    // samples profiles when a process starts, so a profile written while
+    // vrserver is already running does not apply to it — writing it here, when
+    // the user picks the mode, means the restart they have to do anyway is the
+    // one that brings it up. Without this the profile would only be written on
+    // the first NvidiaDX9 run and not take effect until the second.
+    const NV3D::FastSyncResult r =
+        NV3D::SetFastSyncProfile(mode == OutputMode::NvidiaDX9, nullptr);
+    LOG() << "ApplyOutputModeSideEffects: " << OutputModeToString(mode)
+          << " fastsync=" << static_cast<int>(r);
 }
 
 }  // namespace vrto3d
