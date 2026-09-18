@@ -16,6 +16,7 @@
  */
 
 #include "output_presenter.h"
+#include "output_mode_effects.h"
 #include "window_presenter.h"
 #include "leiasr_presenter.h"
 #include "nvstereo_dx9_presenter.h"

@@ -68,19 +68,4 @@ public:
 
 std::unique_ptr<IOutputPresenter> MakePresenter(OutputMode mode);
 
-// Side effects of SELECTING an output mode, as distinct from instantiating its
-// presenter: persistent machine state that has to already be in place when the
-// process NEXT starts, and so cannot wait for a presenter to exist.
-//
-// Call this the moment the user picks a mode in the OSD (changing output mode
-// needs a restart anyway, so that restart is exactly what arms it). Safe to
-// call on any GPU vendor and from any thread.
-//
-// Deliberately NOT called by MakePresenter: at startup the enable direction
-// would write the very state the NvidiaDX9 presenter inspects to decide whether
-// its Fast Sync profile is LIVE in this process, and a just-written profile is
-// not. MakePresenter therefore only ever takes the profile DOWN. See the
-// comment there.
-void ApplyOutputModeSideEffects(OutputMode mode);
-
 }  // namespace vrto3d

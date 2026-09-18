@@ -30,7 +30,7 @@
 #include "vrto3dlib/json_manager.h"
 #include "osd/osd_renderer.h"
 #include "osd/osd_menu.h"
-#include "presenter/output_presenter.h"
+#include "presenter/output_mode_effects.h"
 #include "vr_recenter.h"
 
 #ifdef _WIN32

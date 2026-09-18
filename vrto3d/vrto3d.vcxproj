@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -264,6 +264,7 @@
     <ClInclude Include="src\vr_recenter.h" />
     <ClInclude Include="src\platform.h" />
     <ClInclude Include="src\presenter\output_presenter.h" />
+    <ClInclude Include="src\presenter\output_mode_effects.h" />
     <ClInclude Include="src\presenter\window_presenter.h" />
     <ClInclude Include="src\presenter\leiasr_presenter.h" />
     <ClInclude Include="src\presenter\nvstereo_dx9_presenter.h" />
