@@ -78,6 +78,11 @@ struct MenuCallbacks {
     // OSD menu closes — while the menu was open the VR window held focus,
     // and the user expects keystrokes to land back in the game.
     std::function<void()> request_game_focus;
+    // Persisted open/closed state of the menu. `load_menu_visible` seeds the
+    // menu when it is created (unset = start closed); `save_menu_visible` is
+    // called on every open/close, from whichever thread caused it.
+    std::function<bool()>     load_menu_visible;
+    std::function<void(bool)> save_menu_visible;
     // Kick off a download of the latest vrto3d_profiles.zip from GitHub
     // releases and extract into the config folder. Reports progress via toast.
     std::function<void()> download_latest_profiles;

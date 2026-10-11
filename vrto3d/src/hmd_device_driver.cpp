@@ -53,6 +53,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
 #include <vector>
 
 #ifdef _WIN32
@@ -113,6 +116,41 @@ static inline void SwitchToXinpuGetStateEx() {}
 
 // Load settings from default.vrsettings
 static const char *stereo_main_settings_section = "driver_vrto3d";
+
+// OSD menu open/closed state, kept in <driver>/resources/osd_state.json so it
+// survives SteamVR restarts. Resolved through IVRResources so it follows
+// wherever SteamVR loaded the driver from. A missing file (fresh install)
+// means "open", so new users see the menu without knowing the hotkey.
+static std::filesystem::path OsdStatePath()
+{
+    char buf[1024] = {};
+    vr::VRResources()->GetResourceFullPath("{vrto3d}/driver.vrresources", "", buf, sizeof(buf));
+    if (buf[0] == '\0') return {};
+    return std::filesystem::u8path(buf).parent_path() / "osd_state.json";
+}
+
+static bool LoadMenuVisible(const std::filesystem::path& path)
+{
+    if (path.empty()) return true;
+    std::ifstream f(path);
+    if (!f) return true;
+    const nlohmann::json j = nlohmann::json::parse(f, nullptr, false);
+    if (j.is_object() && j.contains("menu_visible") && j["menu_visible"].is_boolean())
+        return j["menu_visible"].get<bool>();
+    return true;
+}
+
+static void SaveMenuVisible(const std::filesystem::path& path, bool visible)
+{
+    if (path.empty()) return;
+    // Called from both the hotkey thread (Ctrl+Home) and the OSD render
+    // thread (window close button).
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    std::ofstream f(path, std::ios::trunc);
+    f << nlohmann::json{ { "menu_visible", visible } }.dump(4) << "\n";
+    if (!f) LOG() << "Could not save OSD menu state to " << path.u8string().c_str();
+}
 
 constexpr float kMinDeltaTimeSeconds = 1e-5f;
 constexpr float kSmallAngleEpsilon = 1e-5f;
@@ -642,6 +680,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
                 man_on_top_ = is_on_top_.load();
             };
             cb.always_on_top = [this]() { return man_on_top_.load(); };
+            const std::filesystem::path osd_state = OsdStatePath();
+            cb.load_menu_visible = [osd_state]() { return LoadMenuVisible(osd_state); };
+            cb.save_menu_visible = [osd_state](bool visible) { SaveMenuVisible(osd_state, visible); };
             cb.request_game_focus = [this]() {
                 uint32_t pid = app_pid_.load();
                 LOG() << "request_game_focus fired pid=" << pid;

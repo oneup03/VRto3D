@@ -47,6 +47,9 @@ struct OsdMenu::Impl {
     bool                               monitors_refreshed = false;
     void RefreshMonitors();
 
+    // Every visibility change funnels through here so it gets persisted.
+    void SetVisible(bool v);
+
     void DrawStereoTab();
     void DrawUserHotkeysTab(OsdInput& input);
     void DrawTrackingTab(OsdInput& input);
@@ -79,19 +82,20 @@ OsdMenu::OsdMenu(StereoDisplayComponent* component, MenuCallbacks callbacks)
     : impl_(std::make_unique<Impl>()) {
     impl_->component = component;
     impl_->callbacks = std::move(callbacks);
+    if (impl_->callbacks.load_menu_visible)
+        impl_->visible.store(impl_->callbacks.load_menu_visible());
 }
 
 OsdMenu::~OsdMenu() = default;
 
-void OsdMenu::SetVisible(bool visible) {
-    impl_->visible.store(visible);
-    if (visible) impl_->monitors_refreshed = false;
+void OsdMenu::Impl::SetVisible(bool v) {
+    const bool was = visible.exchange(v);
+    if (v) monitors_refreshed = false;
+    if (was != v && callbacks.save_menu_visible) callbacks.save_menu_visible(v);
 }
-void OsdMenu::Toggle() {
-    bool now = !impl_->visible.load();
-    impl_->visible.store(now);
-    if (now) impl_->monitors_refreshed = false;
-}
+
+void OsdMenu::SetVisible(bool visible) { impl_->SetVisible(visible); }
+void OsdMenu::Toggle()                 { impl_->SetVisible(!impl_->visible.load()); }
 bool OsdMenu::Visible() const          { return impl_->visible.load(); }
 
 void OsdMenu::SetVersion(std::string v)  { impl_->version  = std::move(v); }
@@ -123,15 +127,18 @@ void OsdMenu::BuildUI(OsdInput& input) {
     const float init_y = (std::max)(0.0f, (disp.y - init_h) * 0.5f);
     ImGui::SetNextWindowPos(ImVec2(init_x, init_y), ImGuiCond_FirstUseEver);
 
-    const std::string title = "VRto3D " + s.version + "###vrto3d_menu";
+    // The menu now opens on first launch, so the title bar is where new users
+    // learn how to bring it back after closing it.
+    const std::string title = "VRto3D " + s.version +
+        " (Ctrl+Home/Start+D-Down to toggle)###vrto3d_menu";
     ImGuiWindowFlags wflags = ImGuiWindowFlags_NoCollapse;
     bool open = true;
     if (!ImGui::Begin(title.c_str(), &open, wflags)) {
         ImGui::End();
-        if (!open) s.visible.store(false);
+        if (!open) s.SetVisible(false);
         return;
     }
-    if (!open) s.visible.store(false);
+    if (!open) s.SetVisible(false);
 
     s.DrawTitleChrome();
 
