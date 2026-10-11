@@ -4,12 +4,13 @@ A Windows installer (Inno Setup) that automates VRto3D installation, optional Wi
 
 ## What it does
 
-The installer wizard offers five tasks:
+The installer wizard offers these tasks:
 
 - **Install / update VRto3D driver** (default on) — downloads `vrto3d.zip` from the latest GitHub release and copies the `vrto3d` folder into SteamVR's `drivers/` directory. Falls back to a `vrto3d.zip` placed next to the installer .exe if the download fails.
 - **Install WibbleWobble for Frame Sequential 3D** (default off) — downloads `WibbleWobbleBeta7.zip`, lets the user pick a parent folder, extracts the `WibbleWobble` folder there, and runs `WibbleWobble\WibbleWobbleClient\Register.bat` elevated. Also removes the legacy `<SteamVR>\drivers\WibbleWobbleVR` driver, which conflicts with VRto3D's built-in WibbleWobble presenter.
 - **Remove legacy ReShade from `SteamVR\bin\win64`** (default on) — deletes only files identified as ReShade artifacts (DLL hooks containing the `ReShade` signature, plus `ReShade.ini`/`.log`/`reshade-shaders\`/`reshade-presets\`/`reshade-cache\` and `3DToElse.fx`). SteamVR's own files are not touched.
-- **Remove third-party SteamVR drivers and reset `steamvr.vrsettings`** (default on) — deletes any folder under `<SteamVR>\drivers\` that isn't on the Valve allowlist (`gamepad`, `htc`, `indexcontroller`, `indexhmd`, `lighthouse`, `null`, `oculus`, `oculus_legacy`, `prism`, `tundra_labs`, `vrlink`, `vrto3d`) and deletes `<Steam>\config\steamvr.vrsettings`.
+- **Remove third-party SteamVR drivers and reset `steamvr.vrsettings`** (default on) — deletes any folder under `<SteamVR>\drivers\` that isn't on the Valve allowlist (`gamepad`, `htc`, `indexcontroller`, `indexhmd`, `lighthouse`, `null`, `oculus`, `oculus_legacy`, `prism`, `tundra_labs`, `vrlink`, `vrto3d`) and resets `<Steam>\config\steamvr.vrsettings` by moving it to `<Steam>\config\steamvr_cfg_mgr\Before VRto3D install <date time>.vrsettings`. That backup shows up as a profile in the SteamVR Config Manager (see below), which can restore it. If the move fails, the file is left untouched.
+- **Install SteamVR Config Manager** (default on), with an optional **desktop shortcut** (default on). Copies `steamvr_cfg_mgr.exe`, which is bundled in the installer, to `Program Files\VRto3D`. That's outside the SteamVR driver folder, so it keeps working while VRto3D is disabled. It switches the active SteamVR driver and saves or restores named copies of `steamvr.vrsettings`.
 - **Launch SteamVR when finished** (default on) — starts SteamVR via `steam://run/250820` from the Finish page.
 
 ## How SteamVR is located

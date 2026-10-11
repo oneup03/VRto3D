@@ -46,10 +46,21 @@ Name: "install\release";      Description: "Latest official release";           
 Name: "install\prerelease";   Description: "Latest pre-release";                                               Flags: exclusive unchecked
 Name: "install\local";        Description: "Local VRto3D.zip (next to installer)";                             Flags: exclusive unchecked
 Name: "cleanreshade";         Description: "Remove legacy ReShade from SteamVR\bin\win64";                    GroupDescription: "Cleanup (recommended):"
-Name: "cleandrivers";         Description: "Remove third-party SteamVR drivers and reset steamvr.vrsettings"; GroupDescription: "Cleanup (recommended):"
+Name: "cleandrivers";         Description: "Remove third-party SteamVR drivers and reset steamvr.vrsettings (backed up)"; GroupDescription: "Cleanup (recommended):"
+Name: "cfgmgr";               Description: "Install SteamVR Config Manager (switch drivers, back up / restore SteamVR settings)"; GroupDescription: "Optional:"
+Name: "cfgmgr\desktopicon";   Description: "Create a desktop shortcut"
 Name: "wibblewobble";         Description: "Install WibbleWobble for Frame Sequential 3D";                    GroupDescription: "Optional:"; Flags: unchecked
 Name: "addleiasrpath";        Description: "Fix LeiaSR library loading (restart Steam to apply)";           GroupDescription: "Optional:"; Flags: unchecked; Check: LeiaSRIsInstalled
 Name: "launchsteamvr";        Description: "Launch SteamVR when finished";                                    GroupDescription: "Finish:"
+
+; Built into output\steamvr_cfg_mgr by the solution before iscc runs (see
+; Build.yml). Installed outside the SteamVR driver folder so it keeps working
+; while VRto3D is disabled or removed.
+[Files]
+Source: "..\output\steamvr_cfg_mgr\steamvr_cfg_mgr.exe"; DestDir: "{app}"; Flags: ignoreversion; Tasks: cfgmgr
+
+[Icons]
+Name: "{autodesktop}\SteamVR Config Manager"; Filename: "{app}\steamvr_cfg_mgr.exe"; WorkingDir: "{app}"; Tasks: cfgmgr\desktopicon
 
 [Code]
 var
@@ -663,6 +674,26 @@ begin
     DeleteFolderRecursive(PathCombine(Bin64, Folders[I]));
 end;
 
+{ Reset steamvr.vrsettings by MOVING it into the SteamVR Config Manager's
+  profile folder (<Steam>\config\steamvr_cfg_mgr) instead of deleting it, so
+  the user's dashboard/resolution/base-station/tracker settings can be put
+  back with steamvr_cfg_mgr.exe. If the move fails the file is left alone —
+  losing someone's settings is worse than skipping the reset. }
+procedure BackupAndResetVrSettings(const VrSettings: String);
+var
+  BackupDir, BackupPath: String;
+begin
+  if not FileExists(VrSettings) then Exit;
+  BackupDir := PathCombine(SteamPath, 'config\steamvr_cfg_mgr');
+  ForceDirectories(BackupDir);
+  BackupPath := PathCombine(BackupDir,
+    'Before VRto3D install ' + GetDateTimeString('yyyy/mm/dd hhnnss', '-', ':') + '.vrsettings');
+  if RenameFile(VrSettings, BackupPath) then
+    LogLine('Moved ' + VrSettings + ' to ' + BackupPath)
+  else
+    LogLine('Failed to back up ' + VrSettings + ' to ' + BackupPath + '; leaving it in place');
+end;
+
 procedure TaskCleanDrivers;
 var
   DriversRoot, VrSettings, ItemPath, NameLower: String;
@@ -723,7 +754,7 @@ begin
   if SteamPath <> '' then
   begin
     VrSettings := PathCombine(SteamPath, 'config\steamvr.vrsettings');
-    DeleteFileLogged(VrSettings);
+    BackupAndResetVrSettings(VrSettings);
   end;
 end;
 
@@ -1094,7 +1125,16 @@ begin
          Space + SteamVRPath + '\drivers' + NewLine +
          Space + '(default Valve drivers and vrto3d are kept)' + NewLine;
     if SteamPath <> '' then
-      S := S + Space + 'Also delete: ' + SteamPath + '\config\steamvr.vrsettings' + NewLine;
+      S := S + Space + 'Also reset: ' + SteamPath + '\config\steamvr.vrsettings' + NewLine +
+           Space + '(moved to ' + SteamPath + '\config\steamvr_cfg_mgr, restorable with SteamVR Config Manager)' + NewLine;
+    S := S + NewLine;
+  end;
+  if WizardIsTaskSelected('cfgmgr') then
+  begin
+    S := S + 'Install SteamVR Config Manager:' + NewLine +
+         Space + ExpandConstant('{app}') + '\steamvr_cfg_mgr.exe' + NewLine;
+    if WizardIsTaskSelected('cfgmgr\desktopicon') then
+      S := S + Space + '(with desktop shortcut)' + NewLine;
     S := S + NewLine;
   end;
   if WizardIsTaskSelected('addleiasrpath') then

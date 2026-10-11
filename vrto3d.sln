@@ -13,6 +13,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "util_vrmath", "utils\vrmath
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VRto3DLib.v143", "external\VRto3DLib\VRto3DLib.v143.vcxproj", "{404CB76A-B1A8-456E-B805-BB3F9696947A}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "steamvr_cfg_mgr", "steamvr_cfg_mgr\steamvr_cfg_mgr.vcxproj", "{CFA03B70-0652-4DC1-860E-5F982A57EA85}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -45,6 +47,12 @@ Global
 		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Release|x64.Build.0 = Release|x64
 		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Release|x86.ActiveCfg = Release|Win32
 		{404CB76A-B1A8-456E-B805-BB3F9696947A}.Release|x86.Build.0 = Release|Win32
+		{CFA03B70-0652-4DC1-860E-5F982A57EA85}.Debug|x64.ActiveCfg = Debug|x64
+		{CFA03B70-0652-4DC1-860E-5F982A57EA85}.Debug|x64.Build.0 = Debug|x64
+		{CFA03B70-0652-4DC1-860E-5F982A57EA85}.Debug|x86.ActiveCfg = Debug|x64
+		{CFA03B70-0652-4DC1-860E-5F982A57EA85}.Release|x64.ActiveCfg = Release|x64
+		{CFA03B70-0652-4DC1-860E-5F982A57EA85}.Release|x64.Build.0 = Release|x64
+		{CFA03B70-0652-4DC1-860E-5F982A57EA85}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

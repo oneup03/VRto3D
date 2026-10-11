@@ -93,6 +93,9 @@ jobs:
     - name: Zip vrto3d_profiles folder
       run: Compress-Archive -Path vrto3d_profiles/* -DestinationPath vrto3d_profiles.zip
 
+    - name: Zip SteamVR Config Manager
+      run: Compress-Archive -Path output/steamvr_cfg_mgr/steamvr_cfg_mgr.exe -DestinationPath steamvr_cfg_mgr.zip
+
     - name: Install Inno Setup
       run: choco install innosetup --yes --no-progress
       shell: pwsh
@@ -113,6 +116,12 @@ jobs:
         name: "VRto3D-Installer-${{env.CommitHashShort}}"
         path: installer/Output/VRto3D-Installer.exe
 
+    - name: Upload SteamVR Config Manager artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: "steamvr_cfg_mgr-${{env.CommitHashShort}}"
+        path: steamvr_cfg_mgr.zip
+
     - name: Download Linux tarball
       uses: actions/download-artifact@v4
       with:
@@ -129,6 +138,7 @@ jobs:
           output/${{github.event.repository.name}}.zip
           vrto3d-linux64.tar.gz
           vrto3d_profiles.zip
+          steamvr_cfg_mgr.zip
           installer/Output/VRto3D-Installer.exe
           README_combined.jpg
           changelog_combined.jpg

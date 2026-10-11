@@ -177,7 +177,7 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 ## Installation
 
 - Install <a href="https://store.steampowered.com/app/250820/SteamVR/" target="_blank" rel="noopener noreferrer">SteamVR</a>
-- **Recommended**: Download [`VRto3D-Installer.exe`](https://github.com/oneup03/VRto3D/releases/download/latest/VRto3D-Installer.exe) from the latest release and run it. The installer auto-detects your Steam library, installs/updates the VRto3D driver, and offers optional cleanup of legacy ReShade and third-party SteamVR drivers. It can also install WibbleWobble and launch SteamVR for you.
+- **Recommended**: Download [`VRto3D-Installer.exe`](https://github.com/oneup03/VRto3D/releases/download/latest/VRto3D-Installer.exe) from the latest release and run it. The installer auto-detects your Steam library, installs/updates the VRto3D driver, and offers optional cleanup of legacy ReShade and third-party SteamVR drivers. Its cleanup resets `steamvr.vrsettings` but keeps your old one as a backup you can restore. It can also install the [SteamVR Config Manager](#switching-between-vrto3d-and-a-vr-headset) (with an optional desktop shortcut) and WibbleWobble, and launch SteamVR for you.
     - **Manual alternative**: Download the [latest VRto3D release](https://github.com/oneup03/VRto3D/releases/latest/download/vrto3d.zip) and copy the `vrto3d` folder from inside the VRto3D.zip to your `Steam\steamapps\common\SteamVR\drivers` folder
 - Launch SteamVR once to generate `default_config.json` and you should see a 1080p SbS `VRto3D` window upscaled to fullscreen
 - The OSD menu opens on first launch (afterwards `Ctrl + Home` toggles it, and it remembers whether you left it open or closed). Use its `System` tab to pick `Display Index`, `Output Mode`, and render resolution for your display - see the [Output Modes](#compatible-3d-displays--output-modes) table for which mode to choose
@@ -198,6 +198,14 @@ User-defined preset hotkeys (configured under [User Presets](#user-presets-via-o
 - To quit, exit the game and try to `Alt + Tab` out
     - If the 3D window remains in the foreground, press `Ctrl + F8` to toggle the foregrounding off, and then `Alt + Tab` out
 
+
+#### Switching between VRto3D and a VR headset
+SteamVR keeps one global settings file (`Steam\config\steamvr.vrsettings`) for every driver, so settings for VRto3D and for a real headset can get in each other's way. The **SteamVR Config Manager** handles this. Install it with the installer's optional task (which can also add a desktop shortcut), or download [`steamvr_cfg_mgr.zip`](https://github.com/oneup03/VRto3D/releases/download/latest/steamvr_cfg_mgr.zip) and run `steamvr_cfg_mgr.exe` from anywhere:
+- Pick the forced HMD driver and turn individual SteamVR drivers on or off, without hand-editing JSON
+- Save the whole `steamvr.vrsettings` as a named profile (e.g. `VRto3D` and `Index`) and restore whichever one you want before starting SteamVR
+- Clear SteamVR safe mode, or reset `steamvr.vrsettings` to SteamVR's defaults
+- Every change takes an automatic backup first, and nothing can be changed while SteamVR is running (SteamVR rewrites the file when it exits)
+- The installer's settings reset moves your old file into the manager as a `Before VRto3D install ...` profile, so you can restore it
 
 ## Linux
 
@@ -408,7 +416,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 ## Troubleshooting
 - If SteamVR appears on the wrong display, set `display_index` to the correct display enumeration order (or pick it from the OSD `System` tab) and restart SteamVR
 - If SteamVR crashes and disables add-ons, you will need to re-enable VRto3D in the SteamVR Status window
-- The first thing to try is deleting your `Steam\config\steamvr.vrsettings` and `Steam\config\vrto3d\default_config.json`
+- The first thing to try is resetting your `Steam\config\steamvr.vrsettings` (the [SteamVR Config Manager](#switching-between-vrto3d-and-a-vr-headset) can do this and keeps a backup) and deleting `Steam\config\vrto3d\default_config.json`
 - If you have used other SteamVR drivers that also create a virtual HMD, you will need to disable and/or uninstall them
     - Run SteamVR
     - On the SteamVR Status window, go to `Menu -> Settings`
