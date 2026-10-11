@@ -117,7 +117,7 @@ public:
     void SetOsdHeadsetHwnd(void* hwnd);
 
     // Request that the next composited stereo frame be saved to disk as two
-    // PNG images under <Steam>\steamapps\common\SteamVR\screenshots:
+    // 90%-quality JPEG images under <Steam>\steamapps\common\SteamVR\screenshots:
     // one as-is (parallel-view) and one with eyes swapped (cross-view). The
     // capture happens on the window thread inside WaitAndDrawPending, after
     // the SBS copy completes but before the OSD is composited in.

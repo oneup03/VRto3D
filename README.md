@@ -168,7 +168,7 @@ Most adjustments now happen in the [On-Screen Menu](#user-presets-via-osd) — o
 - Reload the running game's `Game.exe_config.json` with `Ctrl + F10`, or reload `default_config.json` with `Ctrl + Shift + F10` - a beep indicates success
 - Toggle Auto-Depth on / off with `Ctrl + F11`
 - Toggle locking the SteamVR Headset Window to the foreground (and focusing the game window) with `Ctrl + F8`
-- Take a SbS (and Crossview) Screenshot with `Ctrl + F12`
+- Take a SbS (and Crossview) Screenshot with `Ctrl + F12` - saved as 90% quality JPGs in `Steam\steamapps\common\SteamVR\screenshots` (the OSD has a button to open that folder)
 - All of the above (except `Ctrl + Home`) can be disabled with `disable_hotkeys` if they conflict with another 3D mod - the OSD menu remains accessible
 
 User-defined preset hotkeys (configured under [User Presets](#user-presets-via-osd)) work alongside the built-in keys above.
@@ -426,7 +426,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - `vrto3d.txt` log: `<steam>/logs/vrto3d.txt` (plus stderr in vrserver.txt)
 - No hotkeys → check `groups` includes `input`; the OSD shows a warning toast
 - No output window → check `WAYLAND_DISPLAY`/`DISPLAY` reach vrserver (launch SteamVR from a desktop session, not a raw console)
-- Screenshots land in `<steam>/steamapps/common/SteamVR/screenshots`
+- Screenshots land in `<steam>/steamapps/common/SteamVR/screenshots` as 90% quality JPGs
 
 
 ## Building

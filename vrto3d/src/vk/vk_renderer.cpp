@@ -556,10 +556,11 @@ void VkRenderer::FinishScreenshot()
         memcpy(out, row + (size_t)eye_w * 4, (size_t)eye_w * 4);
         memcpy(out + (size_t)eye_w * 4, row, (size_t)eye_w * 4);
     }
-    const std::string para = (dir / (app + "_" + std::to_string(stamp) + "_parallel.png")).string();
-    const std::string crss = (dir / (app + "_" + std::to_string(stamp) + "_cross.png")).string();
-    stbi_write_png(para.c_str(), (int)w, (int)h, 4, src, (int)(w * 4));
-    stbi_write_png(crss.c_str(), (int)w, (int)h, 4, cross.data(), (int)(w * 4));
+    // 90%-quality JPEG (alpha dropped), matching the Windows screenshots.
+    const std::string para = (dir / (app + "_" + std::to_string(stamp) + "_parallel.jpg")).string();
+    const std::string crss = (dir / (app + "_" + std::to_string(stamp) + "_cross.jpg")).string();
+    stbi_write_jpg(para.c_str(), (int)w, (int)h, 4, src, 90);
+    stbi_write_jpg(crss.c_str(), (int)w, (int)h, 4, cross.data(), 90);
     vkUnmapMemory(ctx_.device, shot_memory_);
     LOG() << "vk_renderer: screenshot saved " << para;
 }

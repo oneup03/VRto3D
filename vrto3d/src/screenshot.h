@@ -41,9 +41,12 @@ struct SaveResult {
 // smaller axis only. Pass 0 to skip scaling.
 //
 // Two files are written next to each other:
-//   <app_name>_NNNN.png           (parallel-view, as-is)
-//   <app_name>_NNNN_crossview.png (eyes swapped)
-// NNNN starts at 0001 and increments until both filenames are free, so
+//   <app_name>_NNNN.jpg           (parallel-view, as-is)
+//   <app_name>_NNNN_crossview.jpg (eyes swapped)
+// Both are 90%-quality JPEG: small enough to drag-drop into forums/GitHub
+// (PNGs ran ~1.4MB each) with no visible loss for cross/parallel viewing.
+// NNNN starts at 0001 and increments until no file with that index exists
+// (.jpg or legacy .png), so numbering continues past older PNG shots and
 // existing screenshots are never overwritten.
 SaveResult SaveStereoPair(const std::string& app_name,
                           uint32_t            sbs_width,

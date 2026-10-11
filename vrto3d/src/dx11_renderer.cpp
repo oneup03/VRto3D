@@ -1387,7 +1387,7 @@ void Dx11Renderer::CaptureScreenshot(const std::string& app_name)
     has_pending_shot_               = true;
 
     // Toast is set once by the background encode thread when it completes —
-    // see DrainPendingShot, which hands the "Screenshot: <name>_NNNN.png"
+    // see DrainPendingShot, which hands the "Screenshot: <name>_NNNN.jpg"
     // text to the window thread for OsdRenderer::SetText.
 }
 
@@ -1473,7 +1473,7 @@ void Dx11Renderer::DrainPendingShot()
         char msg[256];
         if (r.ok) {
             _snprintf_s(msg, _TRUNCATE,
-                        "Screenshot: %s_%04d.png",
+                        "Screenshot: %s_%04d.jpg",
                         app_name.empty() ? "vrto3d" : app_name.c_str(), r.index);
         } else {
             _snprintf_s(msg, _TRUNCATE, "Screenshot failed (see log)");

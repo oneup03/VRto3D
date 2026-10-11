@@ -149,11 +149,16 @@ bool ScaleSbsToBgra(IWICImagingFactory* factory,
     return true;
 }
 
-bool EncodePngToFile(IWICImagingFactory* factory,
-                     const std::wstring& path,
-                     UINT width, UINT height,
-                     const GUID& src_format,
-                     const BYTE* data, UINT row_pitch) {
+// JPEG quality for saved screenshots (WIC "ImageQuality", 0..1).
+constexpr float kJpegQuality = 0.9f;
+
+// JPEG has no alpha: WIC's encoder negotiates 32bppBGRA down to 24bppBGR via
+// SetPixelFormat, which routes through the format-converter branch below.
+bool EncodeJpegToFile(IWICImagingFactory* factory,
+                      const std::wstring& path,
+                      UINT width, UINT height,
+                      const GUID& src_format,
+                      const BYTE* data, UINT row_pitch) {
     Microsoft::WRL::ComPtr<IWICStream> stream;
     if (FAILED(factory->CreateStream(&stream))) return false;
     HRESULT hr = stream->InitializeFromFilename(path.c_str(), GENERIC_WRITE);
@@ -163,12 +168,23 @@ bool EncodePngToFile(IWICImagingFactory* factory,
     }
 
     Microsoft::WRL::ComPtr<IWICBitmapEncoder> encoder;
-    if (FAILED(factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder))) return false;
+    if (FAILED(factory->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder))) return false;
     if (FAILED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache))) return false;
 
     Microsoft::WRL::ComPtr<IWICBitmapFrameEncode> frame;
     Microsoft::WRL::ComPtr<IPropertyBag2> options;
     if (FAILED(encoder->CreateNewFrame(&frame, &options))) return false;
+    {
+        PROPBAG2 opt = {};
+        opt.pstrName = const_cast<LPOLESTR>(L"ImageQuality");
+        VARIANT v;
+        VariantInit(&v);
+        v.vt     = VT_R4;
+        v.fltVal = kJpegQuality;
+        if (FAILED(hr = options->Write(1, &opt, &v))) {
+            LOG() << "Screenshot: set JPEG quality hr=0x" << std::hex << hr;
+        }
+    }
     if (FAILED(frame->Initialize(options.Get()))) return false;
     if (FAILED(frame->SetSize(width, height))) return false;
 
@@ -199,20 +215,26 @@ bool EncodePngToFile(IWICImagingFactory* factory,
     return SUCCEEDED(encoder->Commit());
 }
 
-// Pick the lowest 4-digit index N such that neither
-// "<base>_NNNN.png" nor "<base>_NNNN_crossview.png" exists in `dir`.
+// Pick the lowest 4-digit index N such that no "<base>_NNNN[_crossview]"
+// file exists in `dir` as either .jpg or a legacy .png — numbering carries on
+// past screenshots taken before the switch to JPEG.
 int FindNextScreenshotIndex(const std::wstring& dir, const std::wstring& base) {
+    static const wchar_t* const kSuffixes[] = {
+        L"_%04d.jpg", L"_%04d_crossview.jpg",
+        L"_%04d.png", L"_%04d_crossview.png",
+    };
     for (int i = 1; i < 10000; ++i) {
-        wchar_t suf[16];
-        swprintf_s(suf, L"_%04d.png", i);
-        std::wstring p1 = dir + L"\\" + base + suf;
-        wchar_t xv_suf[32];
-        swprintf_s(xv_suf, L"_%04d_crossview.png", i);
-        std::wstring p2 = dir + L"\\" + base + xv_suf;
-        if (GetFileAttributesW(p1.c_str()) == INVALID_FILE_ATTRIBUTES &&
-            GetFileAttributesW(p2.c_str()) == INVALID_FILE_ATTRIBUTES) {
-            return i;
+        bool taken = false;
+        for (const wchar_t* fmt : kSuffixes) {
+            wchar_t suf[32];
+            swprintf_s(suf, fmt, i);
+            std::wstring p = dir + L"\\" + base + suf;
+            if (GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES) {
+                taken = true;
+                break;
+            }
         }
+        if (!taken) return i;
     }
     return -1;
 }
@@ -282,9 +304,9 @@ SaveResult SaveStereoPair(const std::string& app_name,
 
     // Normal (parallel-view).
     wchar_t suf[16];
-    swprintf_s(suf, L"_%04d.png", idx);
+    swprintf_s(suf, L"_%04d.jpg", idx);
     std::wstring p_normal = wdir + L"\\" + base + suf;
-    bool ok1 = EncodePngToFile(factory.Get(), p_normal, out_w, out_h,
+    bool ok1 = EncodeJpegToFile(factory.Get(), p_normal, out_w, out_h,
                                GUID_WICPixelFormat32bppBGRA,
                                bgra_buf.data(), out_pitch);
 
@@ -297,9 +319,9 @@ SaveResult SaveStereoPair(const std::string& app_name,
         memcpy(dst_row + half_bytes, src_row,              half_bytes);
     }
     wchar_t xv_suf[32];
-    swprintf_s(xv_suf, L"_%04d_crossview.png", idx);
+    swprintf_s(xv_suf, L"_%04d_crossview.jpg", idx);
     std::wstring p_cross = wdir + L"\\" + base + xv_suf;
-    bool ok2 = EncodePngToFile(factory.Get(), p_cross, out_w, out_h,
+    bool ok2 = EncodeJpegToFile(factory.Get(), p_cross, out_w, out_h,
                                GUID_WICPixelFormat32bppBGRA,
                                swapped.data(), out_pitch);
 
