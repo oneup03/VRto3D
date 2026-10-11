@@ -98,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -132,7 +132,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -166,7 +166,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>
@@ -200,7 +200,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers;..\external\SR-lib;..\external\SR-lib\SR-SDK-1.34.10\x64\include;..\external\SR-lib\SR-SDK-1.34.10\x64\third_party\OpenCV\include;..\external\nvapi;..\external\adl_sdk\include;..\external\imgui;..\external\imgui\backends;..\external\NV3D-Lib\NV3DLib\include;..\utils\vrmath</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
     </ClCompile>

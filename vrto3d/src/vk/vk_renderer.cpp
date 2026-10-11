@@ -50,8 +50,9 @@ struct RepackPush {
     float   gamma[4];
     float   gain[4];
     float   curve_offsets[4];
+    float   ghost[4];   // x=contrast y=lift
 };
-static_assert(sizeof(RepackPush) <= 128, "push constant limit");
+static_assert(sizeof(RepackPush) == 112, "must match the push-constant block in repack.frag");
 
 VkImageMemoryBarrier ImageBarrier(VkImage image, VkAccessFlags src_access,
                                   VkAccessFlags dst_access, VkImageLayout old_layout,
@@ -456,6 +457,8 @@ void VkRenderer::RecordFrame(VkCommandBuffer cmd, const EyeLayer& left, const Ey
     push.curve_offsets[0] = cfg.shader_curve_off_low;
     push.curve_offsets[1] = cfg.shader_curve_off_high;
     push.curve_offsets[2] = cfg.shader_curve_off_both;
+    push.ghost[0] = cfg.shader_ghost_contrast;
+    push.ghost[1] = cfg.shader_ghost_lift;
     vkCmdPushConstants(cmd, repack_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
     vkCmdDraw(cmd, 3, 1, 0, 0);
     vkCmdEndRenderPass(cmd);

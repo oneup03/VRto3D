@@ -31,7 +31,7 @@
 // 45 px for the 1080p variants — mirrors FramePackTimingSpec::gap_pixels,
 // which is what the Windows presenter feeds as `framepack_offset`).
 //
-// C++ mirror of the push-constant block (std430 layout, 96 bytes total):
+// C++ mirror of the push-constant block (std430 layout, 112 bytes total):
 //
 //     struct RepackPushConstants {          // offset
 //         int32_t out_size[2];              //   0  swapchain extent (w, h)
@@ -44,8 +44,9 @@
 //         float   gamma[4];                 //  48  rgb + pad
 //         float   gain[4];                  //  64  rgb + pad
 //         float   curve_offsets[4];         //  80  x=off_low y=off_high z=off_both w=unused
-//     };                                    //  96 bytes (<= 128 push-constant min-spec)
-//     static_assert(sizeof(RepackPushConstants) == 96);
+//         float   ghost[4];                 //  96  x=contrast (1=off) y=lift (0=off) zw=unused
+//     };                                    // 112 bytes (<= 128 push-constant min-spec)
+//     static_assert(sizeof(RepackPushConstants) == 112);
 
 layout(set = 0, binding = 0) uniform sampler2D sbs;
 
@@ -63,6 +64,7 @@ layout(push_constant) uniform Pc {
     vec4  gamma_;             // rgb + pad
     vec4  gain;               // rgb + pad
     vec4  curve_offsets;      // x=off_low y=off_high z=off_both w=unused
+    vec4  ghost;              // x=contrast (1=off) y=lift (0=off) zw=unused
 } pc;
 
 // OutputMode enum values — keep in sync with vrto3dlib/stereo_config.h.
@@ -120,6 +122,18 @@ vec3 ApplyCorrection(vec3 col) {
     col = clamp(col, 0.0, 1.0);
     col *= pc.gain.rgb;
     col = pow(abs(col), 1.0 / pc.gamma_.rgb);
+
+    // Ghost reduction, last so it compresses what actually reaches the
+    // display. Linear light via a plain 2.2 power, the space a display's own
+    // crosstalk cancellation works in. Skipped at the no-op defaults.
+    float contrast = pc.ghost.x;
+    float lift     = pc.ghost.y;
+    if (contrast != 1.0 || lift != 0.0) {
+        vec3 lin = pow(clamp(col, 0.0, 1.0), vec3(2.2));
+        lin = (lin - 0.5) * contrast + 0.5;
+        lin = lin * (1.0 - lift) + lift;
+        col = pow(clamp(lin, 0.0, 1.0), vec3(1.0 / 2.2));
+    }
 
     return clamp(col, 0.0, 1.0);
 }

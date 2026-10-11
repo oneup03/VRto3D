@@ -146,6 +146,9 @@ cbuffer Params : register(b0) {
     float  off_low;
     float  off_high;
     float  off_both;
+    float  ghost_contrast; // 1.0 = off
+    float  ghost_lift;     // 0.0 = off
+    float2 pad;
 };
 struct VsOut {
     float4 pos : SV_Position;
@@ -166,12 +169,22 @@ float4 main(VsOut i) : SV_Target {
     col *= gain.rgb;
     col = pow(abs(col), 1.0 / gamma.rgb);
 
+    // Ghost reduction, last so it compresses what actually reaches the
+    // display. Linear light via a plain 2.2 power, the space a display's own
+    // crosstalk cancellation works in. Skipped at the no-op defaults.
+    if (ghost_contrast != 1.0 || ghost_lift != 0.0) {
+        float3 lin = pow(saturate(col), 2.2);
+        lin = (lin - 0.5) * ghost_contrast + 0.5;
+        lin = lin * (1.0 - ghost_lift) + ghost_lift;
+        col = pow(saturate(lin), 1.0 / 2.2);
+    }
+
     return float4(saturate(col), 1.0);
 }
 )hlsl";
 
 // Constant buffer pushed to the shader each frame. 16-byte aligned to match
-// the cbuffer layout (float4 + float4 + float4 + 4*float = 64 bytes).
+// the cbuffer layout (3*float4 + 4*float + 2*float + float2 pad = 80 bytes).
 struct AdjustCB {
     float lift[4];
     float gamma[4];
@@ -180,8 +193,11 @@ struct AdjustCB {
     float off_low;
     float off_high;
     float off_both;
+    float ghost_contrast;
+    float ghost_lift;
+    float pad[2];
 };
-static_assert(sizeof(AdjustCB) == 64, "AdjustCB must stay 16-byte-aligned");
+static_assert(sizeof(AdjustCB) == 80, "AdjustCB must stay 16-byte-aligned");
 
 
 bool CompileShaderBlob(const char* src, const char* entry, const char* profile,
@@ -676,6 +692,8 @@ void Dx11Renderer::ApplyDisplayCorrection()
         cb.off_low  = cfg.shader_curve_off_low;
         cb.off_high = cfg.shader_curve_off_high;
         cb.off_both = cfg.shader_curve_off_both;
+        cb.ghost_contrast = cfg.shader_ghost_contrast;
+        cb.ghost_lift     = cfg.shader_ghost_lift;
         std::memcpy(m.pData, &cb, sizeof(cb));
     }
     context_->Unmap(adj_cb_.Get(), 0);

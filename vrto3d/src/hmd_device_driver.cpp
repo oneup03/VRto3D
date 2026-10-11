@@ -42,6 +42,7 @@
 #include "vrto3dlib/app_id_mgr.h"
 #ifdef _WIN32
 #include "vrto3dlib/win32_helper.hpp"
+#include "presenter/leiasr_presenter.h"   // LeiaSrCrosstalkControlsAvailable
 #else
 #include "vrto3dlib/linux_helper.hpp"
 #endif
@@ -683,6 +684,9 @@ vr::EVRInitError MockControllerDeviceDriver::Activate( uint32_t unObjectId )
             const std::filesystem::path osd_state = OsdStatePath();
             cb.load_menu_visible = [osd_state]() { return LoadMenuVisible(osd_state); };
             cb.save_menu_visible = [osd_state](bool visible) { SaveMenuVisible(osd_state, visible); };
+#ifdef _WIN32
+            cb.leiasr_crosstalk_available = []() { return LeiaSrCrosstalkControlsAvailable(); };
+#endif
             cb.request_game_focus = [this]() {
                 uint32_t pid = app_pid_.load();
                 LOG() << "request_game_focus fired pid=" << pid;
