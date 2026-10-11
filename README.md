@@ -285,6 +285,11 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 | `shader_curve_offset_low` +   | `float` | S-Curve low-color offset (`-1..1`)                                                                | `0.0`          |
 | `shader_curve_offset_high` +  | `float` | S-Curve high-color offset (`-1..1`)                                                               | `0.0`          |
 | `shader_curve_offset_both` +  | `float` | S-Curve both-color blend-point offset (`-1..1`)                                                   | `0.0`          |
+| `shader_ghost_contrast` +     | `float` | Ghost Reduction contrast: squeezes the image toward mid-grey (`0.5..1.0`; `1.0` = off)            | `1.0`          |
+| `shader_ghost_lift` +         | `float` | Ghost Reduction black lift: raises the black floor (`0..0.15`; `0.0` = off)                       | `0.0`          |
+| `sr_crosstalk_mode` +         | `string`| LeiaSR only: the display's own crosstalk cancellation - `default` (the panel's choice), `off`, `static`, or `dynamic` | `"default"` |
+| `sr_crosstalk_strength` +     | `float` | LeiaSR only: cancellation strength as a multiple of the panel's own (`0..3`; `1.0` = as shipped) | `1.0`          |
+| `sr_weaver_contrast` +        | `float` | LeiaSR only: the SR weaver's own contrast as a multiple of the panel's (`0.5..1.0`)               | `1.0`          |
 | `disable_hotkeys`             | `bool`  | Disable the global hotkeys (Depth/Convergence/profile/save) to avoid conflict with other 3D mods. `Ctrl + Home` and `Start + D-Pad Down` (OSD toggles) are unaffected | `false` |
 | `dash_enable`                 | `bool`  | Enable or disable SteamVR Dashboard and Home                                                      | `false`        |
 | `auto_focus`                  | `bool`  | Enable or disable automatic focusing/bringing VRto3D to foreground                                | `true`         |
@@ -344,19 +349,17 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - Works with every output mode that produces a side-by-side internal frame (SbS, TaB, Interlaced, Checkerboard, Anaglyph, Mono, LeiaSR, NvidiaDX9, WibbleWobble, etc.)
 - **Controls** on the `Shader` tab:
     - `Enable Display Correction Shader` - master on/off (defaults off, no perf cost when off)
+    - **Ghost Reduction** - start here. `Contrast` and `Black Lift` act on the whole image equally, so they reduce ghosting without adding any difference between the eyes
+        - On LeiaSR displays, three controls for the display's own crosstalk cancellation come first (shown only when the SR runtime offers them). These are the display's own settings, so they apply even with the correction shader disabled
+            - `SR Crosstalk Mode` - `Display Default`, `Off`, `Static` (a fixed correction) or `Dynamic` (follows your eye position)
+            - `SR Anti-Crosstalk` (`0..300%`, default `100%` = the display's own strength) - higher cancels more ghosting but clips more in dark areas, so pair it with `Black Lift`; lower clips less. Try `130%` first
+            - `SR Contrast` (`50..100%`, default `100%` = the display's own) - the SR weaver's own contrast. Lowering it squeezes the image much like `Contrast` below. Try `97%` first
+        - `Contrast` (`0.5..1.0`, default `1.0` = off) squeezes the image toward mid-grey so each eye leaks less into the other. Try `0.95` first and lower it only if edges still ghost - it costs contrast across the whole image
+        - `Black Lift` (`0..0.15`, default `0.0` = off) raises the black floor. It only helps on displays that cancel crosstalk themselves, such as LeiaSR: their correction pushes dark pixels below black, and the clipped part is what you see as a ghost. Try `0.02`-`0.05`; blacks turn grey quickly above that
     - **Lift / Gamma / Gain** - per-channel RGB controls (`0..2`, default `1.0`): `RGB Lift` raises/lowers shadows, `RGB Gamma` adjusts midtone gamma, `RGB Gain` scales highlights
     - **S-Curve** - extended contrast curve. `Curve` (range `0.33..3.0`, default `1.0` = pass-through); below `1.0` *reduces* midtone contrast (the crosstalk-fix direction), above `1.0` *increases* it. `Curve Offset (Low / High / Both)` fine-tune the curve's low-end, high-end, and overall blend point (`-1..1`, default `0`)
     - `Reset to Defaults` - snap everything back to pass-through
-- **Example starting point** for a LeiaSR 3D monitor with heavy crosstalk (Acer/Samsung 27"):
-
-    | Control | Value |
-    |---|---|
-    | `Enable Display Correction Shader` | on |
-    | `RGB Gamma` | `0.6, 0.6, 0.6` |
-    | `Curve` | `0.33` |
-    | `Curve Offset (Both)` | `-1.0` |
-
-- This combination strongly reduces midtone contrast (where most crosstalk is visible) while compressing the overall range. From there, tune `Curve` upward toward `1.0` until you find the smallest correction that hides the crosstalk in your worst-case scene - every step toward `1.0` recovers contrast
+- **Starting point** for a LeiaSR display: set `SR Anti-Crosstalk` to `130%` and `SR Contrast` to `97%`, then adjust Black Lift` to `0.03`. If dark areas still ghost, add a little more `Black Lift` to give the stronger cancellation room below black
 - Save with `Save Game Cfg` (per-game) or `Save Default Cfg` (global) in the OSD footer to persist the settings
 
 #### Controls

@@ -34,6 +34,10 @@
 // dependency contained.
 namespace SR { class SRContext; class IDX11Weaver1; class SwitchableLensHint; class HeadPoseTracker; }
 
+// True while a LeiaSR weaver is running whose SR runtime offers the
+// anti-crosstalk controls. Read by the OSD to decide what to show.
+bool LeiaSrCrosstalkControlsAvailable();
+
 namespace vrto3d {
 
 // Internal head-pose listener + UDP sender (defined in .cpp). Forward-declared
@@ -83,6 +87,20 @@ private:
 
     SR::SRContext*          sr_context_  = nullptr;
     SR::IDX11Weaver1*       sr_weaver_   = nullptr;
+
+    // The weaver's own anti-crosstalk settings (SR.hpp "Anti-crosstalk
+    // controls"). Defaults are read once per weaver; the last applied values
+    // are kept so the SR API is only called when the config changes.
+    bool        crosstalk_defaults_known_ = false;
+    int         crosstalk_default_mode_   = 2;
+    float       crosstalk_default_static_ = 0.0f;
+    float       crosstalk_default_dynamic_ = 0.0f;
+    float       crosstalk_default_contrast_ = 1.0f;
+    bool        crosstalk_applied_        = false;
+    int         crosstalk_last_mode_      = -1;
+    float       crosstalk_last_strength_  = 1.0f;
+    float       crosstalk_last_contrast_  = 1.0f;
+    void        ApplyCrosstalkSettings();
     SR::SwitchableLensHint* lens_hint_   = nullptr;
     bool                    sr_initialized_ = false;
 

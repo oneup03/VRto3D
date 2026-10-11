@@ -82,6 +82,9 @@ struct MenuCallbacks {
     // menu when it is created (unset = start closed); `save_menu_visible` is
     // called on every open/close, from whichever thread caused it.
     std::function<bool()>     load_menu_visible;
+    // True while LeiaSR is weaving on a runtime that offers its anti-crosstalk
+    // controls. Unset (Linux) = never.
+    std::function<bool()>     leiasr_crosstalk_available;
     std::function<void(bool)> save_menu_visible;
     // Kick off a download of the latest vrto3d_profiles.zip from GitHub
     // releases and extract into the config folder. Reports progress via toast.

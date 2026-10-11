@@ -45,6 +45,25 @@
 #include "sr/sense/display/switchablehint.h"
 #include "sr/sense/headtracker/headposetracker.h"
 #include "sr/sense/core/inputstream.h"
+#include "SR.hpp"   // SR-lib: anti-crosstalk controls on a raw SDK weaver
+
+namespace {
+std::atomic<bool> g_crosstalk_controls_available{false};
+
+SimulatedReality::SRCrosstalkMode ParseCrosstalkMode(const std::string& s)
+{
+    using M = SimulatedReality::SRCrosstalkMode;
+    if (s == "off")     return M::Off;
+    if (s == "static")  return M::Static;
+    if (s == "dynamic") return M::Dynamic;
+    return M::Default;
+}
+}  // namespace
+
+bool LeiaSrCrosstalkControlsAvailable()
+{
+    return g_crosstalk_controls_available.load(std::memory_order_relaxed);
+}
 
 using Microsoft::WRL::ComPtr;
 
@@ -546,6 +565,15 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
         sr_weaver_->setLatencyInFrames(1);
         sr_weaver_->setContext(renderer->Context());
 
+        // Anti-crosstalk settings belong to this weaver: read its defaults
+        // afresh and re-apply the configured values on the next frame.
+        crosstalk_defaults_known_ = false;
+        crosstalk_applied_        = false;
+        g_crosstalk_controls_available.store(
+            SimulatedReality::SRQueryWeaverSettings(sr_weaver_) != nullptr);
+        if (!g_crosstalk_controls_available.load())
+            LOG() << "LeiaSrPresenter: SR runtime does not offer anti-crosstalk controls";
+
         // Always register the SR head tracker as a Sense before initialize().
         // The use_open_track flag is checked at consumption time (see
         // HeadTrackingThreadLoop) so the OSD can toggle it live without
@@ -618,6 +646,7 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 
     // Tear down SR resources on this thread (they were created here).
     if (sr_weaver_) {
+        g_crosstalk_controls_available.store(false);
         sr_weaver_->destroy();
         sr_weaver_ = nullptr;
     }
@@ -641,9 +670,59 @@ void LeiaSrPresenter::WindowThreadLoop(Dx11Renderer* renderer,
 }
 
 
+// Push the configured anti-crosstalk settings to the weaver. Runs on the render
+// thread before weave(); only calls into SR when the values change. These are
+// the display's own settings, not part of our correction pass, so they apply
+// whether or not the display-correction shader is enabled.
+void LeiaSrPresenter::ApplyCrosstalkSettings()
+{
+    SR::IWeaverSettings1* settings = SimulatedReality::SRQueryWeaverSettings(sr_weaver_);
+    if (!settings) return;
+
+    SimulatedReality::SRCrosstalkDefaults defaults;
+    if (!crosstalk_defaults_known_) {
+        if (!SimulatedReality::SRReadCrosstalkDefaults(settings, defaults)) return;
+        crosstalk_defaults_known_   = true;
+        crosstalk_default_mode_     = defaults.mode;
+        crosstalk_default_static_   = defaults.staticFactor;
+        crosstalk_default_dynamic_  = defaults.dynamicFactor;
+        crosstalk_default_contrast_ = defaults.contrast;
+        LOG() << "LeiaSrPresenter: anti-crosstalk controls available (panel mode="
+              << defaults.mode << " static=" << defaults.staticFactor
+              << " dynamic=" << defaults.dynamicFactor
+              << " contrast=" << defaults.contrast << ")";
+    }
+    defaults.known         = true;
+    defaults.mode          = crosstalk_default_mode_;
+    defaults.staticFactor  = crosstalk_default_static_;
+    defaults.dynamicFactor = crosstalk_default_dynamic_;
+    defaults.contrast      = crosstalk_default_contrast_;
+
+    const auto  cfg      = renderer_->Component()->GetConfig();
+    const auto  mode     = ParseCrosstalkMode(cfg.sr_crosstalk_mode);
+    // Same limits as the OSD sliders, for hand-edited profiles.
+    const float strength = (std::clamp)(cfg.sr_crosstalk_strength, 0.0f, 3.0f);
+    const float contrast = (std::clamp)(cfg.sr_weaver_contrast, 0.5f, 1.0f);
+
+    if (crosstalk_applied_ && static_cast<int>(mode) == crosstalk_last_mode_
+        && strength == crosstalk_last_strength_ && contrast == crosstalk_last_contrast_) {
+        return;
+    }
+    if (SimulatedReality::SRApplyCrosstalk(settings, defaults, mode, strength, contrast)) {
+        crosstalk_applied_       = true;
+        crosstalk_last_mode_     = static_cast<int>(mode);
+        crosstalk_last_strength_ = strength;
+        crosstalk_last_contrast_ = contrast;
+        LOG() << "LeiaSrPresenter: anti-crosstalk mode=" << static_cast<int>(mode)
+              << " strength=" << strength << " contrast=" << contrast;
+    }
+}
+
 void LeiaSrPresenter::RecordComposite(ID3D11Texture2D* sbs_input)
 {
     if (!swapchain_ || !sbs_input || !sr_weaver_ || !renderer_) return;
+
+    if (renderer_->Component()) ApplyCrosstalkSettings();
 
     ID3D11Device*        dev = renderer_->Device();
     ID3D11DeviceContext* ctx = renderer_->Context();

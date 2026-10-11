@@ -869,6 +869,74 @@ void OsdMenu::Impl::DrawShaderTab() {
                        "(e.g. passive row-interlaced monitors). Sacrifices "
                        "brightness and contrast — disable when not needed.");
 
+    // Ghost reduction first: two global levers that act directly on the
+    // difference between the eyes, so they are the place to start before
+    // reaching for the colour-grading controls below.
+    if (ImGui::CollapsingHeader("Ghost Reduction",
+                                 ImGuiTreeNodeFlags_DefaultOpen)) {
+        // LeiaSR's own crosstalk cancellation comes first: the sliders below
+        // relieve the clipping that cancellation causes. These are the
+        // display's settings, so they apply even with the shader disabled.
+        if (cfg.output_mode == OutputMode::LeiaSR) {
+            const bool available = callbacks.leiasr_crosstalk_available
+                                && callbacks.leiasr_crosstalk_available();
+            if (!available) {
+                ImGui::TextDisabled("LeiaSR crosstalk controls: not offered by this SR runtime");
+            } else {
+                static const char* kModes[]   = { "Display Default", "Off", "Static", "Dynamic" };
+                static const char* kModeIds[] = { "default", "off", "static", "dynamic" };
+                int mode_idx = 0;
+                for (int i = 0; i < 4; ++i)
+                    if (cfg.sr_crosstalk_mode == kModeIds[i]) mode_idx = i;
+                if (ImGui::Combo("SR Crosstalk Mode", &mode_idx, kModes, 4)) {
+                    cfg.sr_crosstalk_mode = kModeIds[mode_idx];
+                    dirty = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("How the display cancels crosstalk itself.\n"
+                                      "Dynamic follows your eye position; Static is a fixed\n"
+                                      "correction. Display Default is the panel's own choice.\n"
+                                      "The SR settings apply even with the shader disabled.");
+                }
+                float strength_pct = cfg.sr_crosstalk_strength * 100.0f;
+                if (ImGui::SliderFloat("SR Anti-Crosstalk", &strength_pct, 0.0f, 300.0f, "%.0f%%")) {
+                    cfg.sr_crosstalk_strength = strength_pct / 100.0f;
+                    dirty = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("100%% = the display's own strength. Try 130%% first.\n"
+                                      "Higher cancels more ghosting but clips more in dark\n"
+                                      "areas - pair it with Black Lift. Lower clips less.");
+                }
+                float contrast_pct = cfg.sr_weaver_contrast * 100.0f;
+                if (ImGui::SliderFloat("SR Contrast", &contrast_pct, 50.0f, 100.0f, "%.0f%%")) {
+                    cfg.sr_weaver_contrast = contrast_pct / 100.0f;
+                    dirty = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("The SR weaver's own contrast: lowering it squeezes the\n"
+                                      "image much like Contrast below. 100%% = the display's\n"
+                                      "own. Try 97%% first.");
+                }
+            }
+            ImGui::Separator();
+        }
+        if (ImGui::SliderFloat("Contrast", &cfg.shader_ghost_contrast, 0.5f, 1.0f, "%.3f")) dirty = true;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("1.0 = off.\n"
+                              "Squeezes the image toward mid-grey so each eye leaks less\n"
+                              "into the other. Try 0.95 first; go lower only if edges\n"
+                              "still ghost. Costs contrast across the whole image.");
+        }
+        if (ImGui::SliderFloat("Black Lift", &cfg.shader_ghost_lift, 0.0f, 0.15f, "%.3f")) dirty = true;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("0.0 = off.\n"
+                              "Raises the black floor. Only helps on displays that cancel\n"
+                              "crosstalk themselves (e.g. LeiaSR), where dark pixels clip\n"
+                              "and leave a ghost. Try 0.02-0.05; blacks turn grey fast above that.");
+        }
+    }
+
     if (ImGui::CollapsingHeader("Lift / Gamma / Gain",
                                  ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::SliderFloat3("RGB Lift",  cfg.shader_lift,  0.0f, 2.0f, "%.3f")) dirty = true;
@@ -900,6 +968,11 @@ void OsdMenu::Impl::DrawShaderTab() {
         cfg.shader_curve_off_low  = 0.0f;
         cfg.shader_curve_off_high = 0.0f;
         cfg.shader_curve_off_both = 0.0f;
+        cfg.shader_ghost_contrast = 1.0f;
+        cfg.shader_ghost_lift     = 0.0f;
+        cfg.sr_crosstalk_mode     = "default";
+        cfg.sr_crosstalk_strength = 1.0f;
+        cfg.sr_weaver_contrast    = 1.0f;
         dirty = true;
     }
 
