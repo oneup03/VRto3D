@@ -60,6 +60,7 @@ EOF
 [ -n "$STEAMVR" ] || die "SteamVR not found in any Steam library - install it from Steam first"
 
 DRIVER_DST="$STEAMVR/drivers/vrto3d"
+CTRL_DST="$STEAMVR/drivers/vrto3d_ctrl"   # optional emulated-controller driver
 VRSETTINGS="$STEAM_ROOT/config/steamvr.vrsettings"
 
 # --- steamvr.vrsettings editing (awk, no python/jq dependency) ----------------
@@ -158,7 +159,7 @@ strip_vrsettings() {
 
 # --- uninstall ----------------------------------------------------------------
 if [ "$UNINSTALL" = 1 ]; then
-    rm -rf "$DRIVER_DST"
+    rm -rf "$DRIVER_DST" "$CTRL_DST"
     [ -f "$VRSETTINGS" ] && strip_vrsettings
     echo "VRto3D removed from $STEAMVR"
     echo "(config/profiles left in $STEAM_ROOT/config/vrto3d - delete manually if unwanted)"
@@ -171,6 +172,12 @@ fi
 rm -rf "$DRIVER_DST"
 mkdir -p "$STEAMVR/drivers"
 cp -a "$SCRIPT_DIR/drivers/vrto3d" "$DRIVER_DST"
+# Emulated motion controllers (separate driver; off until enabled in the OSD
+# Controllers tab). Older packages don't ship it.
+rm -rf "$CTRL_DST"
+if [ -d "$SCRIPT_DIR/drivers/vrto3d_ctrl" ]; then
+    cp -a "$SCRIPT_DIR/drivers/vrto3d_ctrl" "$CTRL_DST"
+fi
 
 # Register as the forced HMD driver (the settings the README documents).
 if [ -f "$VRSETTINGS" ]; then

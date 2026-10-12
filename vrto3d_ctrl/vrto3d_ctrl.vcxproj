@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{33656F33-24E9-4FEE-A5C0-4FD779399F5B}</ProjectGuid>
+    <RootNamespace>vrto3d_ctrl</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\</OutDir>
+    <TargetName>driver_$(ProjectName)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\</OutDir>
+    <TargetName>driver_$(ProjectName)</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>src;include;..\external\VRto3DLib\include;..\external\json\include;..\external\openvr\headers</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4244;4305</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>ws2_32.lib;winmm.lib;Xinput.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>
+		XCOPY "$(ProjectDir)$(ProjectName)" "$(SolutionDir)output\drivers\$(ProjectName)" /S /Y /I
+		IF NOT EXIST "$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\plugins" MKDIR "$(SolutionDir)output\drivers\$(ProjectName)\bin\win$(PlatformArchitecture)\plugins"
+		XCOPY "$(SolutionDir)output\drivers\" "$(STEAM_PATH)\steamapps\common\SteamVR\drivers\" /S /Y /I
+</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\ctrl_driver_factory.cpp" />
+    <ClCompile Include="src\ctrl_device_provider.cpp" />
+    <ClCompile Include="src\ctrl_controller_device.cpp" />
+    <ClCompile Include="src\ctrl_config.cpp" />
+    <ClCompile Include="src\ctrl_platform.cpp" />
+    <ClCompile Include="src\ctrl_plugin_host.cpp" />
+    <ClCompile Include="src\ctrl_plugin_guard.cpp" />
+    <ClCompile Include="src\ctrl_opentrack.cpp" />
+    <ClCompile Include="src\plugins\kbm_plugin.cpp" />
+    <ClCompile Include="src\plugins\xinput_plugin.cpp" />
+    <ClCompile Include="src\plugins\remote_plugin.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\vrto3d_ctrl_plugin.h" />
+    <ClInclude Include="include\vrto3d_ctrl_remote.h" />
+    <ClInclude Include="include\vrto3d_ctrl_bridge.h" />
+    <ClInclude Include="src\ctrl_device_provider.h" />
+    <ClInclude Include="src\ctrl_controller_device.h" />
+    <ClInclude Include="src\ctrl_config.h" />
+    <ClInclude Include="src\ctrl_platform.h" />
+    <ClInclude Include="src\ctrl_plugin_host.h" />
+    <ClInclude Include="src\ctrl_plugin_guard.h" />
+    <ClInclude Include="src\ctrl_opentrack.h" />
+    <ClInclude Include="src\ctrl_math.h" />
+    <ClInclude Include="src\plugins\builtin_plugins.h" />
+    <ClInclude Include="src\plugins\plugin_util.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+    <None Include="vrto3d_ctrl\driver.vrdrivermanifest" />
+    <None Include="vrto3d_ctrl\resources\settings\default.vrsettings" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\external\VRto3DLib\VRto3DLib.v143.vcxproj">
+      <Project>{404cb76a-b1a8-456e-b805-bb3f9696947a}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

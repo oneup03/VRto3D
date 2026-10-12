@@ -121,7 +121,7 @@ struct MenuCallbacks {
     std::function<void(bool)>  set_auto_depth_logging;
 };
 
-// Renders the 5-tab configuration menu and the persistent chrome (title bar +
+// Renders the tabbed configuration menu and the persistent chrome (title bar +
 // footer). All ImGui calls happen between OsdRenderer's NewFrame/Render
 // bracket — this class only contributes widget code.
 class OsdMenu {

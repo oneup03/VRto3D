@@ -23,6 +23,8 @@
 
 #include "imgui.h"
 
+#include "osd/ctrl_bridge.h"
+#include "osd/osd_controllers_tab.h"
 #include "osd/osd_input.h"
 #include "hmd_device_driver.h"
 #include "platform.h"
@@ -72,6 +74,9 @@ struct OsdMenu::Impl {
     int  tracking_capture_target_ = 0;
     bool tracking_capture_combo_  = false;
 
+    // Controllers tab (emulated controller driver, via ctrl_bridge).
+    ControllersTab controllers_tab;
+
     // Footer height measured on the previous frame, used to reserve the
     // pinned bottom strip on the current frame. Zero on the first frame —
     // BuildUI falls back to a one-row estimate until we have a real number.
@@ -84,6 +89,8 @@ OsdMenu::OsdMenu(StereoDisplayComponent* component, MenuCallbacks callbacks)
     impl_->callbacks = std::move(callbacks);
     if (impl_->callbacks.load_menu_visible)
         impl_->visible.store(impl_->callbacks.load_menu_visible());
+    // Keyboard/mouse controller plugins must not act on menu navigation.
+    ctrl_bridge::SetInputSuppressed(impl_->visible.load());
 }
 
 OsdMenu::~OsdMenu() = default;
@@ -91,6 +98,7 @@ OsdMenu::~OsdMenu() = default;
 void OsdMenu::Impl::SetVisible(bool v) {
     const bool was = visible.exchange(v);
     if (v) monitors_refreshed = false;
+    ctrl_bridge::SetInputSuppressed(v);
     if (was != v && callbacks.save_menu_visible) callbacks.save_menu_visible(v);
 }
 
@@ -104,6 +112,10 @@ void OsdMenu::SetAppName(std::string a)  { impl_->app_name = std::move(a); }
 void OsdMenu::BuildUI(OsdInput& input) {
     auto& s = *impl_;
     if (!s.visible.load() || !s.component) return;
+
+    // The controller driver may finish loading after this menu opened;
+    // resolving it here pushes the remembered "menu open" suppression state.
+    ctrl_bridge::Available();
 
     // Default the menu to roughly half the OSD surface — comfortable at any
     // render resolution, leaves plenty of game visible around it, and the
@@ -170,6 +182,13 @@ void OsdMenu::BuildUI(OsdInput& input) {
         draw_tab("Stereo",       "##scroll_stereo", [&]{ s.DrawStereoTab(); });
         draw_tab("User Hotkeys", "##scroll_user",   [&]{ s.DrawUserHotkeysTab(input); });
         draw_tab("Tracking",     "##scroll_track",  [&]{ s.DrawTrackingTab(input); });
+        draw_tab("Controllers",  "##scroll_ctrl",   [&]{
+            const auto cfg = s.component->GetConfig();
+            ControllersTab::Hints hints;
+            hints.opentrack_enabled = cfg.use_open_track;
+            hints.xinput_head_look  = cfg.pitch_enable || cfg.yaw_enable;
+            s.controllers_tab.Draw(input, hints);
+        });
         draw_tab("Shader",       "##scroll_shader", [&]{ s.DrawShaderTab(); });
         draw_tab("System",       "##scroll_system", [&]{ s.DrawSystemTab(); });
         ImGui::EndTabBar();

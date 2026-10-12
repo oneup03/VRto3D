@@ -30,6 +30,7 @@
 #include "vrto3dlib/json_manager.h"
 #include "osd/osd_renderer.h"
 #include "osd/osd_menu.h"
+#include "osd/ctrl_bridge.h"
 #include "presenter/output_mode_effects.h"
 #include "vr_recenter.h"
 
@@ -1282,6 +1283,10 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         }
 
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(device_index_, pose, sizeof(vr::DriverPose_t));
+
+        // Emulated controllers (vrto3d_ctrl) re-place head-anchored hands
+        // against this exact pose right now, so they never trail the view.
+        vrto3d::osd::ctrl_bridge::NotifyHmdPose(&pose, sizeof(vr::DriverPose_t));
 
         // Pose update cadence: 2x display frequency.
         const float target_frequency = (config.display_frequency * 2.0f > 1.0f)
