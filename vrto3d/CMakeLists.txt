@@ -13,6 +13,8 @@ set(DRIVER_SOURCES
     src/device_provider.cpp
     src/vr_recenter.cpp
     src/osd/osd_menu.cpp
+    src/osd/osd_controllers_tab.cpp
+    src/osd/ctrl_bridge.cpp
 )
 
 set(IMGUI_DIR "${ROOT}/external/imgui")
@@ -74,6 +76,7 @@ target_include_directories(driver_vrto3d PRIVATE
     ${ROOT}/external/json/include
     ${ROOT}/external/openvr/headers
     ${ROOT}/utils/vrmath
+    ${ROOT}/vrto3d_ctrl/include
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
 )
@@ -284,3 +287,7 @@ else()
         COMMENT "Staging libopenvr_api.so next to driver_vrto3d"
     )
 endif()
+
+# Emulated motion-controller driver (separate SteamVR driver, staged next to
+# vrto3d under output/drivers/vrto3d_ctrl).
+add_subdirectory("${ROOT}/vrto3d_ctrl" "${CMAKE_BINARY_DIR}/vrto3d_ctrl")

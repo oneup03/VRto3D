@@ -1,0 +1,8 @@
+{
+	"alwaysActivate": true,
+	"name" : "vrto3d_ctrl",
+	"directory" : "",
+	"resourceOnly" : false,
+	"prefersUpperDeviceIndices" : true,
+	"hmd_presence" : []
+}

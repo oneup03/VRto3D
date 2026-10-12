@@ -369,9 +369,9 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
     - Click `Edit` on the `Desktop Layout` and then select `Disable Steam Input`
     - On SteamVR's library page, click the `Controller Icon` and select `Disable Steam Input`
     - Generally you need to start SteamVR first and separately from the game for Steam Input to work
-- This project is primarily targeted for VR mods of flatscreen games, not full VR games. As such, there is currently no VR controller emulation
+- This project is primarily targeted for VR mods of flatscreen games. For VR-only games, VRto3D ships optional [emulated motion controllers](#emulated-motion-controllers) driven by keyboard + mouse, a gamepad, or another app
 - You can setup a Lighthouse + Vive Tracker + tracked controllers with VRto3D for a seated play area. See [this guide](https://oneup03.github.io/VRto3D/wiki/Motion-Controls-&-Tracking) for details
-- Several VR controller only games can be made to work by using <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR Vive controller emulator. Games with mainly pointer controls work ok. Games with a lot of interaction/movement don't work well.
+- <a href="https://www.driver4vr.com/" target="_blank" rel="noopener noreferrer">Driver4VR</a>, a paid SteamVR controller emulator, supports more hardware (PS Move, Joy-Cons, Kinect...) if the built-in emulation doesn't cover yours
 - Optional XInput right-stick HMD Pitch / Yaw emulation can be turned on for games or mods that need it - configure it from the OSD `Tracking` tab (`Ctrl + Home` -> `XInput (Xbox) Controller`)
     - Tick `Pitch (right stick)` and / or `Yaw (right stick)` to map them
     - `Sensitivity`, `Stick Deadzone`, and `Pitch Radius` (curves the view along a semicircle - useful in 3rd-person games) all live in the same panel
@@ -384,6 +384,19 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - Track filtering of 6DoF/3DoF input can be enabled with `use_track_filter`
     - This filter is useful for reducing jitter while preserving responsiveness through sensitivity/deadzone tuning
     - Adjust filter sensitivities and deadzones from the OSD `Tracking` tab
+
+#### Emulated Motion Controllers
+VRto3D installs a second, optional SteamVR driver (`vrto3d_ctrl`) that adds a left and a right **Valve Index** (or **HTC Vive wand**) controller, so VR-only games get hands without any VR hardware. It is off until you enable it.
+- Open the OSD (`Ctrl + Home`) -> `Controllers` tab -> tick `Enable emulated controllers`, then tick the input sources you want
+- Sources are plugins. Higher in the list wins the hand pose; buttons from all enabled sources are combined. Reorder with the arrows
+    - **Keyboard + Mouse** (off by default) - the mouse turns your head, the right hand aims where you look, holding the right mouse button moves the left hand with the mouse, and gesture keys (`1`-`6`) reach for the backpack, wrist, mouth, chest or hip. Head look is sent to VRto3D over OpenTrack, so also tick `Enable OpenTrack` on the `Tracking` tab. Inspired by r57zone's <a href="https://github.com/r57zone/Half-Life-Alyx-novr" target="_blank" rel="noopener noreferrer">Half-Life: Alyx NoVR</a>. Windows only
+    - **Gamepad (XInput)** - left half of the pad drives the left hand, right half the right hand (triggers, bumpers as grip, sticks, `X`/`Y` and `A`/`B` as each hand's buttons). The right stick can aim the right hand instead. Rumble follows the game's haptics. Turn off XInput Pitch/Yaw on the `Tracking` tab when using it
+    - **Remote (UDP)** - lets another app (VertoXR, a phone app, a tracker bridge, a script) send full 6DoF poses and buttons per hand on UDP port `4243`. The packet layout is in <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d_ctrl/include/vrto3d_ctrl_remote.h" target="_blank" rel="noopener noreferrer">vrto3d_ctrl_remote.h</a> and <a href="https://github.com/oneup03/VRto3D/blob/main/tools/remote_controller_test.py" target="_blank" rel="noopener noreferrer">tools/remote_controller_test.py</a> is a working sender
+- Every key binding, sensitivity, hand position and gesture is editable in the same tab. `Save Default Controllers` writes `Steam\config\vrto3d\controllers.json`; `Save <game> Controllers` writes only the changes for the current game to `<game>.exe_controllers.json`, which loads automatically when that game starts
+- Switching between Index and Vive emulation needs a SteamVR restart. Index emulation suits most games; try Vive if a game misbehaves
+- Hands aim at the centre of the view, so a game's laser or gun sight lines up with your 3D crosshair. Per-hand position / rotation offsets are under `Hands`
+- Third parties can add new input hardware as a plugin DLL dropped into `SteamVR\drivers\vrto3d_ctrl\bin\win64\plugins`. See the <a href="https://github.com/oneup03/VRto3D/blob/main/vrto3d_ctrl/README.md" target="_blank" rel="noopener noreferrer">plugin guide</a>
+- To remove it, disable `vrto3d_ctrl` in SteamVR's `Manage Add-ons` (or delete the folder). VRto3D works the same without it
 
 #### User Presets (via OSD)
 - Press `Ctrl + Home` (or `Start + D-Pad Down` on a gamepad) to open the OSD menu and select the `User Hotkeys` tab
@@ -446,7 +459,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - Clone the code and initialize submodules
 - Define `STEAM_PATH` environment variable with the path to your main Steam folder
 - Open Solution in Visual Studio 2022 or VSCode
-- Use the solution to build this driver
+- Use the solution to build this driver (it builds both `vrto3d` and the `vrto3d_ctrl` controller driver)
 - Build output is automatically copied to your `SteamVR\drivers` folder
 
 #### Linux

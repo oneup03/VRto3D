@@ -539,6 +539,7 @@ end;
 procedure TaskInstallVRto3D;
 var
   ZipPath, ExtractDir, SrcDir, DestDir, ChannelUrl, Channel, LocalZip: String;
+  CtrlSrc, CtrlDest: String;
 begin
   if SteamVRPath = '' then
   begin
@@ -608,6 +609,23 @@ begin
   ForceDirectories(PathCombine(SteamVRPath, 'drivers'));
   CopyFolderRecursive(SrcDir, DestDir);
   LogLine('Installed VRto3D driver to ' + DestDir);
+
+  // Emulated motion controllers: a second, optional SteamVR driver that sits
+  // next to vrto3d. Off until enabled from the OSD Controllers tab. Older
+  // zips don't contain it, which is fine.
+  CtrlSrc := PathCombine(ExtractDir, 'drivers\vrto3d_ctrl');
+  if not DirExists(CtrlSrc) then
+    CtrlSrc := PathCombine(ExtractDir, 'vrto3d_ctrl');
+  CtrlDest := PathCombine(SteamVRPath, 'drivers\vrto3d_ctrl');
+  if DirExists(CtrlSrc) then
+  begin
+    if DirExists(CtrlDest) then
+      DeleteFolderRecursive(CtrlDest);
+    CopyFolderRecursive(CtrlSrc, CtrlDest);
+    LogLine('Installed VRto3D controller driver to ' + CtrlDest);
+  end
+  else
+    LogLine('TaskInstallVRto3D: no vrto3d_ctrl folder in this zip; controller driver not installed');
 end;
 
 procedure DeleteReShadePresetGlob(const Bin64: String);
@@ -698,7 +716,7 @@ procedure TaskCleanDrivers;
 var
   DriversRoot, VrSettings, ItemPath, NameLower: String;
   Rec: TFindRec;
-  Allow: array[0..11] of String;
+  Allow: array[0..12] of String;
   Keep, Found: Boolean;
   I: Integer;
 begin
@@ -726,6 +744,7 @@ begin
   Allow[9]  := 'tundra_labs';
   Allow[10] := 'vrlink';
   Allow[11] := 'vrto3d';
+  Allow[12] := 'vrto3d_ctrl';
 
   Found := FindFirst(PathCombine(DriversRoot, '*'), Rec);
   if Found then
@@ -735,7 +754,7 @@ begin
       if (Rec.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then Continue;
       NameLower := LowerCase(Rec.Name);
       Keep := False;
-      for I := 0 to 11 do
+      for I := 0 to 12 do
         if NameLower = Allow[I] then
         begin
           Keep := True;
@@ -1102,7 +1121,8 @@ begin
   if WizardIsTaskSelected('install') then
   begin
     S := S + 'Install / update VRto3D driver:' + NewLine +
-         Space + SteamVRPath + '\drivers\vrto3d' + NewLine;
+         Space + SteamVRPath + '\drivers\vrto3d' + NewLine +
+         Space + SteamVRPath + '\drivers\vrto3d_ctrl (emulated controllers, off by default)' + NewLine;
     if WizardIsTaskSelected('install\local') then
       S := S + Space + 'Channel: local zip next to installer' + NewLine
     else if WizardIsTaskSelected('install\prerelease') then
@@ -1123,7 +1143,7 @@ begin
   begin
     S := S + 'Remove third-party SteamVR drivers under:' + NewLine +
          Space + SteamVRPath + '\drivers' + NewLine +
-         Space + '(default Valve drivers and vrto3d are kept)' + NewLine;
+         Space + '(default Valve drivers, vrto3d and vrto3d_ctrl are kept)' + NewLine;
     if SteamPath <> '' then
       S := S + Space + 'Also reset: ' + SteamPath + '\config\steamvr.vrsettings' + NewLine +
            Space + '(moved to ' + SteamPath + '\config\steamvr_cfg_mgr, restorable with SteamVR Config Manager)' + NewLine;

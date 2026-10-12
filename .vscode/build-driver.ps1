@@ -51,6 +51,13 @@ if ($Target -in @('Build', 'Rebuild')) {
         exit $LASTEXITCODE
     }
 
+    # Emulated motion-controller driver (separate SteamVR driver).
+    & xcopy 'vrto3d_ctrl\vrto3d_ctrl' 'output\drivers\vrto3d_ctrl' /S /Y /I
+    if ($LASTEXITCODE -gt 1) {
+        exit $LASTEXITCODE
+    }
+    New-Item -ItemType Directory -Force 'output\drivers\vrto3d_ctrl\bin\win64\plugins' | Out-Null
+
     & xcopy 'output\drivers' (Join-Path $steamPath 'steamapps\common\SteamVR\drivers') /S /Y /I
     if ($LASTEXITCODE -gt 1) {
         exit $LASTEXITCODE
