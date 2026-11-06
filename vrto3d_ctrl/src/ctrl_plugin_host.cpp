@@ -17,6 +17,7 @@
 #include "ctrl_plugin_host.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <system_error>
