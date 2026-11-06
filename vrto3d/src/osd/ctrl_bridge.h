@@ -53,4 +53,8 @@ void SetInputSuppressed(bool suppressed);
 // controller driver is found (looked up at most every two seconds).
 void NotifyHmdPose(const void* driver_pose, uint32_t size);
 
+// True while the controller driver's mouse look is steering the HMD through
+// VRto3D's OpenTrack input. Lock-free; safe on the pose thread.
+bool HeadLookActive();
+
 }  // namespace vrto3d::osd::ctrl_bridge

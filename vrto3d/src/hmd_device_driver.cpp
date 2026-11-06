@@ -1164,6 +1164,20 @@ void MockControllerDeviceDriver::PoseUpdateThread()
         const auto config = stereo_display_component_->GetConfig();
         vr::DriverPose_t pose = { 0 };
 
+        // The track filter is for noisy tracker input (an OpenTrack sender,
+        // LeiaSR face tracking). Rotation the user drives directly - the
+        // XInput right stick, or mouse look from the emulated-controller
+        // driver - has no noise to remove; filtering it only adds lag and
+        // stops short of where the user turned. So only the OpenTrack part of
+        // the pose goes through the filter, with the stick rotation applied
+        // on top afterwards, and nothing is filtered while mouse look is the
+        // OpenTrack sender. With the stick centred this is exactly the old
+        // behaviour: the filter is unaffected by a constant rotation applied
+        // on top.
+        bool tracker_pose = false;
+        vr::HmdQuaternion_t tracker_rot = HmdQuaternion_Identity;  // OpenTrack rotation
+        vr::HmdQuaternion_t user_rot = HmdQuaternion_Identity;     // hmd_yaw * stick, never filtered
+
         // Monitor mode: static pose, skip VR tracking logic.
         if (stereo_display_component_->IsMonitorMode())
         {
@@ -1211,6 +1225,9 @@ void MockControllerDeviceDriver::PoseUpdateThread()
             {
                 std::lock_guard<std::mutex> lock(trk_mutex_);
                 pose.qRotation = HmdQuaternion_Normalize(final_controller_rotation * open_track_att_);
+                tracker_pose = true;
+                tracker_rot = open_track_att_;
+                user_rot = final_controller_rotation;
                 pose.vecPosition[0] += open_track_pos_[0];
                 pose.vecPosition[1] += open_track_pos_[1];
                 pose.vecPosition[2] += open_track_pos_[2];
@@ -1236,7 +1253,9 @@ void MockControllerDeviceDriver::PoseUpdateThread()
             pose.willDriftInYaw = false;
         }
 
-        if (config.use_track_filter)
+        const bool filter_tracker = config.use_track_filter && tracker_pose &&
+                                    !vrto3d::osd::ctrl_bridge::HeadLookActive();
+        if (filter_tracker)
         {
             // Reset on the disabled→enabled edge so the filter doesn't carry
             // stale state (potentially minutes old) into its first FilterPose
@@ -1251,9 +1270,11 @@ void MockControllerDeviceDriver::PoseUpdateThread()
                 pose.vecPosition[1],
                 pose.vecPosition[2]
             };
-            vr::HmdQuaternion_t filtered_rotation = pose.qRotation;
+            // Position needs no split: with OpenTrack on, the stick adds no
+            // position offset, so this is the base offset + tracker motion.
+            vr::HmdQuaternion_t filtered_rotation = tracker_rot;
             track_filter_.FilterPose(filtered_rotation, filtered_position, config);
-            pose.qRotation = filtered_rotation;
+            pose.qRotation = HmdQuaternion_Normalize(user_rot * filtered_rotation);
             pose.vecPosition[0] = filtered_position[0];
             pose.vecPosition[1] = filtered_position[1];
             pose.vecPosition[2] = filtered_position[2];

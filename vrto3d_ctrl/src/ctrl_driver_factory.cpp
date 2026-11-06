@@ -76,3 +76,8 @@ CTRL_DLL_EXPORT void Vrto3dCtrl_OnHmdPose(const void* driver_pose, uint32_t size
     if (!driver_pose || size < sizeof(vr::DriverPose_t)) return;
     g_provider.OnHmdPose(*static_cast<const vr::DriverPose_t*>(driver_pose));
 }
+
+CTRL_DLL_EXPORT int Vrto3dCtrl_IsHeadLookActive(void)
+{
+    return g_provider.HeadLookActive() ? 1 : 0;
+}

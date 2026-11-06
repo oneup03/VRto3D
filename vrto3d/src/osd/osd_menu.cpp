@@ -810,6 +810,11 @@ void OsdMenu::Impl::DrawTrackingTab(OsdInput& input) {
 
     if (ImGui::CollapsingHeader("Track Filter")) {
         if (ImGui::Checkbox("Enable Filter", &cfg.use_track_filter)) dirty = true;
+        ImGui::SameLine();
+        if (cfg.use_track_filter && ctrl_bridge::HeadLookActive())
+            ImGui::TextDisabled("(paused: mouse look is steering the view)");
+        else
+            ImGui::TextDisabled("(OpenTrack input only; stick and mouse look are never filtered)");
         ImGui::BeginDisabled(!cfg.use_track_filter);
         if (ImGui::SliderFloat("Rotation Sens",   &cfg.trk_flt_rot_sens,    0.0f, 5.0f, "%.2f")) dirty = true;
         if (ImGui::SliderFloat("Position Sens",   &cfg.trk_flt_pos_sens,    0.0f, 5.0f, "%.2f")) dirty = true;

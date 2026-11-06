@@ -147,30 +147,47 @@ void SetInputSuppressed(bool suppressed)
     if (ResolveLocked()) g_api.suppress(suppressed ? 1 : 0);
 }
 
+namespace {
+
+// Lazy, lock-free lookup for exports used on VRto3D's pose thread. Kept apart
+// from g_api/g_mutex: the pose thread runs at 2x the display rate and must
+// never wait on an OSD call. Retries at most every two seconds while the
+// controller driver is missing.
+template <typename Fn>
+Fn HotExport(std::atomic<Fn>& slot, std::atomic<int64_t>& next_try_ms, const char* name)
+{
+    Fn fn = slot.load(std::memory_order_acquire);
+    if (fn) return fn;
+    const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (now_ms < next_try_ms.load(std::memory_order_relaxed)) return nullptr;
+    next_try_ms.store(now_ms + 2000, std::memory_order_relaxed);
+#ifdef _WIN32
+    void* module = GetModuleHandleW(VRTO3D_CTRL_MODULE_NAME);
+#else
+    void* module = dlopen(VRTO3D_CTRL_MODULE_NAME, RTLD_NOW | RTLD_NOLOAD);
+#endif
+    if (!module) return nullptr;
+    fn = reinterpret_cast<Fn>(Lookup(module, name));
+    if (fn) slot.store(fn, std::memory_order_release);
+    return fn;
+}
+
+}  // namespace
+
 void NotifyHmdPose(const void* driver_pose, uint32_t size)
 {
-    // Separate from g_api/g_mutex: this runs on the pose thread at 2x the
-    // display rate and must never wait on an OSD call.
-    static std::atomic<Vrto3dCtrl_OnHmdPoseFn> hook{nullptr};
+    static std::atomic<Vrto3dCtrl_OnHmdPoseFn> slot{nullptr};
     static std::atomic<int64_t> next_try_ms{0};
+    if (auto fn = HotExport(slot, next_try_ms, VRTO3D_CTRL_EXPORT_ON_HMD_POSE)) fn(driver_pose, size);
+}
 
-    Vrto3dCtrl_OnHmdPoseFn fn = hook.load(std::memory_order_acquire);
-    if (!fn) {
-        const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
-        if (now_ms < next_try_ms.load(std::memory_order_relaxed)) return;
-        next_try_ms.store(now_ms + 2000, std::memory_order_relaxed);
-#ifdef _WIN32
-        void* module = GetModuleHandleW(VRTO3D_CTRL_MODULE_NAME);
-#else
-        void* module = dlopen(VRTO3D_CTRL_MODULE_NAME, RTLD_NOW | RTLD_NOLOAD);
-#endif
-        if (!module) return;
-        fn = reinterpret_cast<Vrto3dCtrl_OnHmdPoseFn>(Lookup(module, VRTO3D_CTRL_EXPORT_ON_HMD_POSE));
-        if (!fn) return;
-        hook.store(fn, std::memory_order_release);
-    }
-    fn(driver_pose, size);
+bool HeadLookActive()
+{
+    static std::atomic<Vrto3dCtrl_IsHeadLookActiveFn> slot{nullptr};
+    static std::atomic<int64_t> next_try_ms{0};
+    auto fn = HotExport(slot, next_try_ms, VRTO3D_CTRL_EXPORT_IS_HEAD_LOOK_ACTIVE);
+    return fn && fn() != 0;
 }
 
 }  // namespace vrto3d::osd::ctrl_bridge

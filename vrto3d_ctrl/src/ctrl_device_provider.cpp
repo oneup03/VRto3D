@@ -188,7 +188,16 @@ void CtrlDeviceProvider::RunFrame()
 bool CtrlDeviceProvider::SendOpenTrack(double x_cm, double y_cm, double z_cm,
                                        double yaw, double pitch, double roll)
 {
-    return opentrack_.Send(x_cm, y_cm, z_cm, yaw, pitch, roll);
+    const bool sent = opentrack_.Send(x_cm, y_cm, z_cm, yaw, pitch, roll);
+    if (sent) last_head_look_s_.store(platform::NowSeconds());
+    return sent;
+}
+
+bool CtrlDeviceProvider::HeadLookActive() const
+{
+    // Head-look plugins send every tick, so half a second of silence means
+    // the plugin, or the controllers as a whole, was switched off.
+    return platform::NowSeconds() - last_head_look_s_.load() < 0.5;
 }
 
 bool CtrlDeviceProvider::IsGameForeground()

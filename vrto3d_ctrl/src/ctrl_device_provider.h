@@ -65,6 +65,9 @@ public:
     void SetInputSuppressed(bool suppressed) { input_suppressed_.store(suppressed); }
     // VRto3D's pose thread, right after it published an HMD pose.
     void OnHmdPose(const vr::DriverPose_t& pose);
+    // True while a head-look plugin (mouse look) is steering the HMD. VRto3D
+    // checks this to keep its tracker smoothing filter off synthetic input.
+    bool HeadLookActive() const;
 
 private:
     struct HapticRequest {
@@ -111,6 +114,7 @@ private:
 
     std::atomic<uint32_t> game_pid_{0};
     std::atomic<bool> input_suppressed_{false};
+    std::atomic<double> last_head_look_s_{-1.0};
     uint32_t runframe_game_pid_ = 0;          // RunFrame-only bookkeeping
 };
 

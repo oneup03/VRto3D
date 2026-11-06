@@ -384,6 +384,7 @@ Per-output-mode Linux compatibility (including the LeiaSR / 3D Vision / WibbleWo
 - Track filtering of 6DoF/3DoF input can be enabled with `use_track_filter`
     - This filter is useful for reducing jitter while preserving responsiveness through sensitivity/deadzone tuning
     - Adjust filter sensitivities and deadzones from the OSD `Tracking` tab
+    - Only tracker input arriving over OpenTrack is filtered. XInput Pitch / Yaw and the emulated controllers' mouse look are never filtered, so they turn the view without lag
 
 #### Emulated Motion Controllers
 VRto3D installs a second, optional SteamVR driver (`vrto3d_ctrl`) that adds a left and a right **Valve Index** (or **HTC Vive wand**) controller, so VR-only games get hands without any VR hardware. It is off until you enable it.

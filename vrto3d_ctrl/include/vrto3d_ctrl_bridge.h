@@ -70,6 +70,12 @@ typedef void (*Vrto3dCtrl_SetInputSuppressedFn)(int suppressed);
 // thread.
 typedef void (*Vrto3dCtrl_OnHmdPoseFn)(const void* driver_pose, uint32_t size);
 
+// 1 while a head-look plugin (keyboard + mouse) is steering the HMD through
+// VRto3D's OpenTrack input. Those packets are the user's own mouse motion,
+// not a noisy tracker, so VRto3D keeps its track filter off them. Polled from
+// VRto3D's pose thread: lock-free on both sides.
+typedef int (*Vrto3dCtrl_IsHeadLookActiveFn)(void);
+
 }  // extern "C"
 
 #define VRTO3D_CTRL_EXPORT_GET_BRIDGE_VERSION "Vrto3dCtrl_GetBridgeVersion"
@@ -79,3 +85,4 @@ typedef void (*Vrto3dCtrl_OnHmdPoseFn)(const void* driver_pose, uint32_t size);
 #define VRTO3D_CTRL_EXPORT_RELOAD_CONFIG      "Vrto3dCtrl_ReloadConfig"
 #define VRTO3D_CTRL_EXPORT_SET_INPUT_SUPPRESSED "Vrto3dCtrl_SetInputSuppressed"
 #define VRTO3D_CTRL_EXPORT_ON_HMD_POSE        "Vrto3dCtrl_OnHmdPose"
+#define VRTO3D_CTRL_EXPORT_IS_HEAD_LOOK_ACTIVE "Vrto3dCtrl_IsHeadLookActive"

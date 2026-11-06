@@ -176,7 +176,9 @@ typedef struct Vrto3dCtrlHostApi {
     /* Steer the HMD by sending one OpenTrack packet (centimetres / degrees,
      * OpenTrack conventions) to VRto3D's OpenTrack UDP port. VRto3D must
      * have OpenTrack enabled. Only the highest-priority enabled plugin with
-     * VRTO3D_CAP_HEAD_LOOK is allowed; others get 0 back. */
+     * VRTO3D_CAP_HEAD_LOOK is allowed; others get 0 back. Call it every poll:
+     * while packets keep coming, VRto3D treats the view as user-driven and
+     * skips its tracker smoothing filter, which would only add lag. */
     int (*send_opentrack)(void* ctx, double x_cm, double y_cm, double z_cm,
                           double yaw_deg, double pitch_deg, double roll_deg);
 
