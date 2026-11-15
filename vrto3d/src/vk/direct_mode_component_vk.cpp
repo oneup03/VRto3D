@@ -95,7 +95,7 @@ void DirectModeComponentVk::CreateSwapTextureSet(uint32_t unPid,
         for (int i = 0; i < 3; ++i) {
             if (!ImportHandle(handles[i], unPid, desc->nWidth, desc->nHeight, desc->nFormat,
                               handles[0])) {
-                LOG() << "direct_mode_vk: dmabuf import failed for handle 0x" << std::hex
+                LOG() << "direct_mode_vk: import failed for handle 0x" << std::hex
                       << handles[i] << std::dec << " — set unusable";
             }
         }
@@ -127,13 +127,25 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
         return nullptr;
     }
 
-    // Same-driver dmabuf import: the image was allocated by vrserver's Vulkan
-    // device on the same GPU, so OPTIMAL tiling round-trips correctly on RADV.
+    // Same-driver import: the image was allocated by vrserver's Vulkan device
+    // on the same GPU, so OPTIMAL tiling round-trips correctly on RADV.
     // If a driver ever mismatches layouts here the
     // symptom is garbled sampling — the fallback would be
     // VK_EXT_image_drm_format_modifier with explicit modifiers.
+    //
+    // A dmabuf is seekable (lseek reports its size). NVIDIA's vrserver hands
+    // out an opaque Vulkan fd instead, which only imports as OPAQUE_FD into an
+    // image created like the exporter's (issue #34).
+    const off_t dmabuf_size = lseek(fd, 0, SEEK_END);
+    const bool opaque = dmabuf_size <= 0;
+    if (!opaque)
+        lseek(fd, 0, SEEK_SET);
+    const VkExternalMemoryHandleTypeFlagBits handle_type =
+        opaque ? VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT
+               : VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+
     VkExternalMemoryImageCreateInfo ext_img{VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO};
-    ext_img.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+    ext_img.handleTypes = handle_type;
 
     VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     ici.pNext = &ext_img;
@@ -145,6 +157,9 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
     ici.samples = VK_SAMPLE_COUNT_1_BIT;
     ici.tiling = VK_IMAGE_TILING_OPTIMAL;
     ici.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    // An opaque import must match NewSharedVulkanImage(bRenderable)'s usage.
+    if (opaque)
+        ici.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -163,14 +178,20 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
         (PFN_vkGetMemoryFdPropertiesKHR)vkGetDeviceProcAddr(ctx.device,
                                                             "vkGetMemoryFdPropertiesKHR");
     VkMemoryFdPropertiesKHR fd_props{VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR};
-    if (get_fd_props)
+    if (get_fd_props && !opaque)  // not valid for OPAQUE_FD handles
         get_fd_props(ctx.device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT, fd, &fd_props);
 
     uint32_t type_bits = reqs.memoryTypeBits & (fd_props.memoryTypeBits ? fd_props.memoryTypeBits
                                                                         : reqs.memoryTypeBits);
-    uint32_t mem_type = ctx.FindMemoryType(type_bits, 0);
+    // Prefer device-local: the first type that merely fits the bits can be a
+    // host type, which NVIDIA refuses for an import.
+    uint32_t mem_type = ctx.FindMemoryType(type_bits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (mem_type == UINT32_MAX)
+        mem_type = ctx.FindMemoryType(type_bits, 0);
+    LOG() << "direct_mode_vk: import " << (opaque ? "opaque fd" : "dmabuf") << " size="
+          << reqs.size << " type=" << mem_type;
     if (mem_type == UINT32_MAX) {
-        LOG() << "direct_mode_vk: no compatible memory type for dmabuf import";
+        LOG() << "direct_mode_vk: no compatible memory type for import";
         vkDestroyImage(ctx.device, image, nullptr);
         close(fd);
         rm->UnrefResource(handle);
@@ -181,7 +202,7 @@ DirectModeComponentVk::ImportedTexture* DirectModeComponentVk::ImportHandle(
     dedicated.image = image;
     VkImportMemoryFdInfoKHR import_info{VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR};
     import_info.pNext = &dedicated;
-    import_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+    import_info.handleType = handle_type;
     import_info.fd = fd;  // ownership transfers to Vulkan on success
 
     VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};

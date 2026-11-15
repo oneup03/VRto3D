@@ -18,9 +18,10 @@
 
 // Linux IVRDriverDirectModeComponent. Swap textures are allocated centrally
 // by vrserver via IVRIPCResourceManagerClient::NewSharedVulkanImage; the
-// compositor renders into them and we import each one once as a dmabuf
-// VkImage for sampling. On Linux the compositor pre-composites all layers
-// and submits exactly one layer pair per frame from its own pid, so
+// compositor renders into them and we import each one once as a dmabuf (or,
+// on NVIDIA, opaque-fd) VkImage for sampling. On Linux the compositor
+// pre-composites all layers and submits exactly one layer pair per frame from
+// its own pid, so
 // SubmitLayer/Present are much simpler than the Windows path — no
 // multi-layer accumulation or pid sorting.
 
@@ -64,7 +65,7 @@ private:
         uint32_t       set_next_index = 0;      // valid on the set_key entry
     };
 
-    // Import `handle` as a dmabuf-backed VkImage (RefResource ->
+    // Import `handle` as a dmabuf/opaque-fd-backed VkImage (RefResource ->
     // ReceiveSharedFd -> vkCreateImage+import+bind+view). Returns nullptr on
     // failure (entry not added).
     ImportedTexture* ImportHandle(vr::SharedTextureHandle_t handle, uint32_t pid,
