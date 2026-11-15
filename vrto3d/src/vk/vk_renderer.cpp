@@ -358,8 +358,8 @@ bool VkRenderer::EnsureRepackPipeline()
     return true;
 }
 
-void VkRenderer::RecordFrame(VkCommandBuffer cmd, const EyeLayer& left, const EyeLayer& right,
-                             const FrameTargetBits& target)
+void VkRenderer::RecordFrame(VkCommandBuffer cmd, int slot, const EyeLayer& left,
+                             const EyeLayer& right, const FrameTargetBits& target)
 {
     // Acquire the compositor's images (written on vrserver's own device;
     // implicit dmabuf sync orders those writes against this submission).
@@ -400,7 +400,7 @@ void VkRenderer::RecordFrame(VkCommandBuffer cmd, const EyeLayer& left, const Ey
     }
 
     // Screenshot readback happens pre-OSD, matching the Windows behavior.
-    MaybeSaveScreenshot(cmd);
+    MaybeSaveScreenshot(cmd, slot);
 
     // OSD pass (no-op inside when nothing to draw).
     VkImageMemoryBarrier to_color = ImageBarrier(
@@ -464,7 +464,7 @@ void VkRenderer::RecordFrame(VkCommandBuffer cmd, const EyeLayer& left, const Ey
     vkCmdEndRenderPass(cmd);
 }
 
-void VkRenderer::MaybeSaveScreenshot(VkCommandBuffer cmd)
+void VkRenderer::MaybeSaveScreenshot(VkCommandBuffer cmd, int slot)
 {
     bool want = false;
     {
@@ -516,6 +516,7 @@ void VkRenderer::MaybeSaveScreenshot(VkCommandBuffer cmd)
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                          0, nullptr, 0, nullptr, 1, &back);
     shot_inflight_ = true;
+    shot_slot_ = slot;
 }
 
 void VkRenderer::FinishScreenshot()
@@ -699,7 +700,9 @@ void VkRenderer::PresentThread()
         const int slot = frame_slot_;
         frame_slot_ = (frame_slot_ + 1) % kFramesInFlight;
         vkWaitForFences(ctx_.device, 1, &frame_fences_[slot], VK_TRUE, UINT64_MAX);
-        if (shot_inflight_)
+        // Only the fence of the slot that recorded the readback proves the copy
+        // landed; the other slot's fence can signal while it is still in flight.
+        if (shot_inflight_ && shot_slot_ == slot)
             FinishScreenshot();
 
         vrto3d::IVkPresenter::FrameTarget target{};
@@ -718,7 +721,7 @@ void VkRenderer::PresentThread()
         begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(cmd, &begin);
         FrameTargetBits bits{target.framebuffer, presenter_->Extent()};
-        RecordFrame(cmd, left, right, bits);
+        RecordFrame(cmd, slot, left, right, bits);
         vkEndCommandBuffer(cmd);
 
         VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;

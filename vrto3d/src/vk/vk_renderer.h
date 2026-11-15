@@ -105,9 +105,9 @@ private:
     void VsyncTickThread();
     bool EnsureOutputImage(uint32_t eye_w, uint32_t eye_h);
     bool EnsureRepackPipeline();
-    void RecordFrame(VkCommandBuffer cmd, const EyeLayer& left, const EyeLayer& right,
+    void RecordFrame(VkCommandBuffer cmd, int slot, const EyeLayer& left, const EyeLayer& right,
                      const struct FrameTargetBits& target);
-    void MaybeSaveScreenshot(VkCommandBuffer cmd);
+    void MaybeSaveScreenshot(VkCommandBuffer cmd, int slot);
     void FinishScreenshot();
 
     vrto3d::vk::DeviceCtx ctx_;
@@ -165,6 +165,7 @@ private:
     VkDeviceMemory shot_memory_ = VK_NULL_HANDLE;
     uint32_t       shot_w_ = 0, shot_h_ = 0;
     bool           shot_inflight_ = false;
+    int            shot_slot_ = 0;   // frame slot whose submit holds the readback
 
     std::thread present_thread_;
     std::thread vsync_thread_;
