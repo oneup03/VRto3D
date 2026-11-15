@@ -701,7 +701,6 @@ void VkRenderer::PresentThread()
         vkWaitForFences(ctx_.device, 1, &frame_fences_[slot], VK_TRUE, UINT64_MAX);
         if (shot_inflight_)
             FinishScreenshot();
-        vkResetFences(ctx_.device, 1, &frame_fences_[slot]);
 
         vrto3d::IVkPresenter::FrameTarget target{};
         if (!presenter_->AcquireNext(&target, acquire_sems_[slot])) {
@@ -709,6 +708,9 @@ void VkRenderer::PresentThread()
             // new render pass on the next round if the presenter recreated it.
             continue;
         }
+        // Reset only once a submit is certain: a fence reset on a skipped frame
+        // is never signaled, and the next wait on this slot blocks forever.
+        vkResetFences(ctx_.device, 1, &frame_fences_[slot]);
 
         VkCommandBuffer cmd = cmd_bufs_[slot];
         vkResetCommandBuffer(cmd, 0);
