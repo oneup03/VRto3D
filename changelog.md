@@ -1,5 +1,62 @@
 # Changelog
 
+## V5.1.0 (V5.1.0) - 2026-11-16
+
+# VRto3D — Motion Controls Beta
+
+VR-only games can now have hands: a new optional driver emulates motion controllers from your keyboard and mouse, a gamepad, or another app. This release also adds ghost-reduction controls, a SteamVR Config Manager, and a round of fixes.
+
+## 🎮 Emulated motion controllers (beta)
+- New optional **vrto3d_ctrl** driver, installed alongside VRto3D, emulates a pair of **Valve Index controllers** or **HTC Vive wands**
+- Off by default — switch it on with **Enable emulated controllers** in the new **Controllers** tab of the OSD, where everything is edited live
+- Input sources:
+  - **Keyboard + mouse** (Windows), in the style of Half-Life: Alyx NoVR: the mouse turns your head, the right hand aims at the centre of the view, the right mouse button moves the left hand, and the number keys reach for backpack, wrist, mouth, chest and hip
+  - **Gamepad**: each half of an XInput pad drives one hand, with rumble
+  - **Remote**: a UDP protocol for external apps (e.g. VertoXR, phone apps); `tools/remote_controller_test.py` is a reference sender
+  - Third-party plugin DLLs dropped into `bin/<platform>/plugins`
+- Settings live in `Steam\config\vrto3d\controllers.json`, with per-game `<Game>.exe_controllers.json` overrides
+
+## 👻 Ghost reduction
+- Two new global controls at the top of the **Shader** tab reduce ghosting/crosstalk on any stereo display: **Contrast** (squeezes toward mid-grey) and **Black Lift** (raises the black floor). Both default to off, so existing profiles look the same
+- **LeiaSR anti-crosstalk**: mode (Display Default / Off / Static / Dynamic), strength (0–300%) and weaver contrast (50–100%). A good starting point is SR Anti-Crosstalk 130%, SR Contrast 97%, Contrast 0.95. These appear only while LeiaSR is the output and the installed SR runtime supports them
+
+## 🛠️ SteamVR Config Manager (new)
+- New **SteamVR Config Manager** app: switch the forced HMD driver, enable or disable drivers, clear safe mode, and save/restore named copies of your `steamvr.vrsettings`, which is handy for switching between VRto3D and a real headset. It backs up automatically before every change
+- Installed by default (with an optional desktop shortcut), and also available as `steamvr_cfg_mgr.zip`
+- The installer's cleanup option no longer deletes `steamvr.vrsettings`; it moves it to `Steam\config\steamvr_cfg_mgr\`, so settings such as Dashboard on the system button, resolution and base-station power management can be restored
+
+## 🖥️ OSD & screenshots
+- The OSD menu now **opens on first launch** and remembers if you close it; the title bar shows the toggle hotkeys. It opens once more after each update
+- Screenshots are saved as **90% JPG** (~176 KB instead of ~1.4 MB PNG), easier to drag into forums and GitHub
+- **Display Frequency** is now labelled as the per-eye rate, with a tooltip explaining frame-sequential modes
+
+## 🎯 Head tracking
+- The track filter now applies only to OpenTrack input; mouse look and XInput right-stick turning are no longer lagged by it
+
+## 🟩 NvidiaDX9
+- Now paced off the display and paired with **Fast Sync**, so frames are no longer over-submitted and dropped. Fast Sync is set up when you pick the mode in the OSD and takes effect after the restart that changing mode already needs
+
+## 🐧 Linux
+- Fixed the output window freezing, with SteamVR then refusing to quit, after the window was resized or clicked on KDE Wayland (#33)
+- NVIDIA: shared textures now import correctly. Output on NVIDIA still doesn't work because SteamVR's compositor crashes; testing help is welcome in #34. Thanks @MGEB-droid for the patch!
+- Fixed a race that could save a screenshot before its frame finished
+
+## 🔧 Fixes
+- **OpenGL games** (e.g. Vivecraft) no longer display upside down
+- Games with a broken or unused VR plugin (e.g. an Unreal Engine OpenXR plugin) are no longer closed when their VR session fails; VRto3D gets out of the way and the game keeps running in 2D
+- Saving the default config in NvidiaDX9/WibbleWobble no longer halves the display frequency again on every launch (120 → 60 → 30)
+- Fixed the cursor in Virtual Desktop mode
+- Fixed Auto-Depth getting reset
+- Installer: the LeiaSR PATH option no longer duplicates and truncates your user PATH
+
+## 🎲 Profiles
+- New: Red Dead Redemption 2, Mafia: Definitive Edition
+
+Thanks @bo3b for the suggestions in #32!
+
+**Full Changelog**: https://github.com/oneup03/VRto3D/compare/V5.0.0...V5.1.0
+
+
 ## V5.0.0 (V5.0.0) - 2026-07-18T00:31:19Z
 
 # VRto3D — Direct Mode Release
